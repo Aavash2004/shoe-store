@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #F5F2EB;
+  --color-cream-alt: #EFECE6;
+  --color-accent: #89B4D9;
+  --color-accent-secondary: #A2C2E1;
+  --color-navy: #1E2A38;
+  --color-sand: #E6E0D4;
+
+  --font-display: "Playfair Display", serif;
+  --font-body: "Inter", sans-serif;
+
+  /* shadcn semantic tokens mapped to our palette */
+  --color-background: var(--color-cream);
+  --color-foreground: var(--color-navy);
+
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: #FFFFFF;
+
+  --color-secondary: var(--color-sand);
+  --color-secondary-foreground: var(--color-navy);
+
+  --color-muted: var(--color-cream-alt);
+  --color-muted-foreground: color-mix(in srgb, var(--color-navy) 60%, transparent);
+
+  --color-accent-shadcn: var(--color-accent-secondary);
+  --color-accent-foreground: var(--color-navy);
+
+  --color-border: var(--color-sand);
+  --color-input: var(--color-sand);
+  --color-ring: var(--color-accent);
+
+  --radius: 0.5rem;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+}
