@@ -1,53 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
+import { gsap } from "@/lib/gsap";
 
-interface ProductGalleryProps {
-  images: string[];
-  alt?: string;
-}
-
-export function ProductGallery({ images, alt = "Product image" }: ProductGalleryProps) {
+export function ProductGallery({ images }: { images: string[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const mainImageRef = useRef<HTMLDivElement>(null);
 
-  // Fallback if no images are provided
-  const safeImages = images?.length > 0 ? images : ["/images/placeholder-shoe.jpg"];
+  function selectImage(index: number) {
+    if (index === activeIndex) return;
+
+    gsap.to(mainImageRef.current, {
+      opacity: 0,
+      duration: 0.15,
+      onComplete: () => {
+        setActiveIndex(index);
+        gsap.to(mainImageRef.current, { opacity: 1, duration: 0.25 });
+      },
+    });
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Main image */}
-      <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-[var(--color-cream-alt)]">
+      <div
+        ref={mainImageRef}
+        className="relative aspect-square w-full overflow-hidden rounded-lg bg-sand"
+      >
         <Image
-          src={safeImages[activeIndex]}
-          alt={`${alt} - view ${activeIndex + 1}`}
+          src={images[activeIndex]}
+          alt="Product image"
           fill
+          className="object-cover"
           priority
-          sizes="(max-width: 768px) 100vw, 50vw"
-          className="object-contain p-6 transition-opacity duration-300"
         />
       </div>
 
-      {/* Thumbnails */}
-      {safeImages.length > 1 && (
-        <div className="flex gap-3 overflow-x-auto pb-1">
-          {safeImages.map((src, index) => (
+      {images.length > 1 && (
+        <div className="flex gap-3">
+          {images.map((img, index) => (
             <button
-              key={src + index}
-              onClick={() => setActiveIndex(index)}
-              className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
-                index === activeIndex
-                  ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/20"
-                  : "border-[var(--color-sand)] hover:border-[var(--color-navy)]/30"
+              key={img}
+              onClick={() => selectImage(index)}
+              className={`relative h-20 w-20 overflow-hidden rounded-md border-2 transition-colors ${
+                index === activeIndex ? "border-accent" : "border-sand"
               }`}
             >
-              <Image
-                src={src}
-                alt={`${alt} thumbnail ${index + 1}`}
-                fill
-                sizes="80px"
-                className="object-contain p-1.5"
-              />
+              <Image src={img} alt={`Thumbnail ${index + 1}`} fill className="object-cover" />
             </button>
           ))}
         </div>

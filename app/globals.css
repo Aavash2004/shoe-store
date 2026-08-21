@@ -1,41 +1,69 @@
 @import "tailwindcss";
 
+/* ========================================
+   Design Tokens
+======================================== */
 @theme {
+  /* Brand colors */
   --color-cream: #F5F2EB;
   --color-cream-alt: #EFECE6;
-  --color-accent: #89B4D9;
-  --color-accent-secondary: #A2C2E1;
+  --color-sky: #89B4D9;
+  --color-sky-secondary: #A2C2E1;
   --color-navy: #1E2A38;
   --color-sand: #E6E0D4;
 
-  --font-display: "Playfair Display", serif;
-  --font-body: "Inter", sans-serif;
+  /* Fonts */
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
 
-  /* shadcn semantic tokens mapped to our palette */
+  /* Semantic colors */
   --color-background: var(--color-cream);
   --color-foreground: var(--color-navy);
 
-  --color-primary: var(--color-accent);
-  --color-primary-foreground: #FFFFFF;
+  --color-primary: var(--color-navy);               /* changed to navy for stronger CTAs */
+  --color-primary-foreground: var(--color-cream);
 
   --color-secondary: var(--color-sand);
   --color-secondary-foreground: var(--color-navy);
 
   --color-muted: var(--color-cream-alt);
-  --color-muted-foreground: color-mix(in srgb, var(--color-navy) 60%, transparent);
+  --color-muted-foreground: color-mix(in srgb, var(--color-navy) 55%, transparent);
 
-  --color-accent-shadcn: var(--color-accent-secondary);
+  --color-accent: var(--color-sky);
   --color-accent-foreground: var(--color-navy);
 
   --color-border: var(--color-sand);
   --color-input: var(--color-sand);
-  --color-ring: var(--color-accent);
+  --color-ring: var(--color-sky);
 
   --radius: 0.5rem;
 }
 
-body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-body);
+/* ========================================
+   Base Styles
+======================================== */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body);
+  }
+
+  /* Better default focus styles */
+  :focus-visible {
+    outline: 2px solid var(--color-sky);
+    outline-offset: 2px;
+  }
+
+  /* Selection color */
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-sky) 35%, transparent);
+    color: var(--color-navy);
+  }
 }

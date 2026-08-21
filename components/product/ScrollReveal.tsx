@@ -10,24 +10,37 @@ export function ScrollReveal({ children }: { children: ReactNode }) {
     const container = containerRef.current;
     if (!container) return;
 
-    const cards = container.children;
+    // Target the actual product cards (not the wrapper)
+    const cards = container.querySelectorAll("[data-product-card]");
 
-    gsap.from(cards, {
-      y: 30,
-      opacity: 0,
-      duration: 0.6,
-      stagger: 0.08,
-      ease: "power2.out",
-      scrollTrigger: {
-        trigger: container,
-        start: "top 85%",
-      },
-    });
+    // Fallback: if no cards found, just show the content
+    if (cards.length === 0) {
+      gsap.set(container, { opacity: 1 });
+      return;
+    }
 
-    return () => {
-      ScrollTrigger.getAll().forEach((t) => t.kill());
-    };
+    const ctx = gsap.context(() => {
+      gsap.from(cards, {
+        y: 24,
+        opacity: 0,
+        duration: 0.55,
+        stagger: 0.07,
+        ease: "power2.out",
+        clearProps: "all", // important – removes inline styles after animation
+        scrollTrigger: {
+          trigger: container,
+          start: "top 88%",
+          once: true, // only animate once
+        },
+      });
+    }, container);
+
+    return () => ctx.revert();
   }, []);
 
-  return <div ref={containerRef}>{children}</div>;
+  return (
+    <div ref={containerRef} className="w-full">
+      {children}
+    </div>
+  );
 }
