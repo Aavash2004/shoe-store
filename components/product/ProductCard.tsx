@@ -19,8 +19,8 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
 
       <div className="p-4">
         <p className="text-xs uppercase tracking-wide text-[var(--color-navy)]/60">
-          {product.category}
-        </p>
+  {product.brand} · {product.category}
+</p>
         <h3 className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--color-navy)]">
           {product.name}
         </h3>
