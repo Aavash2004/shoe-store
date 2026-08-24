@@ -1,51 +1,102 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export function Footer() {
   return (
-    <footer className="border-t border-[var(--color-sand)] bg-[var(--color-cream-alt)]">
-      <div className="mx-auto max-w-7xl px-6 py-12">
-        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-          <div>
-            <h3 className="font-[family-name:var(--font-display)] text-xl text-[var(--color-navy)]">
-              Shoe Store
-            </h3>
-            <p className="mt-2 text-sm text-[var(--color-navy)]/70">
-              Premium shoes, thoughtfully made.
-            </p>
-          </div>
+    <footer className="relative mx-4 mb-4 overflow-hidden rounded-t-3xl px-5 pt-10 pb-5 text-center">
+  <Image
+    src="/images/Shoes/fo.avif"
+    alt="Shoe display"
+    fill
+    priority={false}
+    className="object-cover object-center scale-105"
+  />
+  {/* Soft gradient overlay for depth + better text readability */}
+  <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-navy)] via-[var(--color-navy)]/85 to-[var(--color-navy)]/70" />
 
-          <div>
-            <h4 className="text-sm font-semibold text-[var(--color-navy)]">Shop</h4>
-            <ul className="mt-3 space-y-2 text-sm text-[var(--color-navy)]/70">
-              <li><Link href="/shop">All shoes</Link></li>
-              <li><Link href="/shop?category=running">Running</Link></li>
-              <li><Link href="/shop?category=lifestyle">Lifestyle</Link></li>
-            </ul>
-          </div>
+  <div className="relative z-10">
+    <h2 className="font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-cream)] md:text-4xl">
+      Step Into
+    </h2>
+    <h2 className="font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-accent)] md:text-4xl">
+      Something Bold
+    </h2>
 
-          <div>
-            <h4 className="text-sm font-semibold text-[var(--color-navy)]">Account</h4>
-            <ul className="mt-3 space-y-2 text-sm text-[var(--color-navy)]/70">
-              <li><Link href="/account/orders">Orders</Link></li>
-              <li><Link href="/account/wishlist">Wishlist</Link></li>
-              <li><Link href="/track-order">Track order</Link></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-semibold text-[var(--color-navy)]">Support</h4>
-            <ul className="mt-3 space-y-2 text-sm text-[var(--color-navy)]/70">
-              <li><Link href="#">Contact</Link></li>
-              <li><Link href="#">Shipping</Link></li>
-              <li><Link href="#">Returns</Link></li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-10 border-t border-[var(--color-sand)] pt-6 text-center text-xs text-[var(--color-navy)]/60">
-          © {new Date().getFullYear()} Shoe Store. All rights reserved.
-        </div>
+    <div className="mt-7 flex flex-col justify-between gap-6 text-left sm:flex-row sm:gap-8">
+      <div>
+        <p className="text-xs uppercase tracking-wider text-[var(--color-cream)]/50">
+          Shop
+        </p>
+        <ul className="mt-2 space-y-1.5 text-sm text-[var(--color-cream)]">
+          <li>
+            <Link href="/shop" className="hover:text-[var(--color-accent)] transition-colors">
+              All shoes
+            </Link>
+          </li>
+          <li>
+            <Link href="/shop?category=running" className="hover:text-[var(--color-accent)] transition-colors">
+              Running
+            </Link>
+          </li>
+          <li>
+            <Link href="/shop?category=lifestyle" className="hover:text-[var(--color-accent)] transition-colors">
+              Lifestyle
+            </Link>
+          </li>
+        </ul>
       </div>
-    </footer>
+
+      <div>
+        <p className="text-xs uppercase tracking-wider text-[var(--color-cream)]/50">
+          Account
+        </p>
+        <ul className="mt-2 space-y-1.5 text-sm text-[var(--color-cream)]">
+          <li>
+            <Link href="/account/orders" className="hover:text-[var(--color-accent)] transition-colors">
+              Orders
+            </Link>
+          </li>
+          <li>
+            <Link href="/account/wishlist" className="hover:text-[var(--color-accent)] transition-colors">
+              Wishlist
+            </Link>
+          </li>
+          <li>
+            <Link href="/track-order" className="hover:text-[var(--color-accent)] transition-colors">
+              Track order
+            </Link>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <p className="text-xs uppercase tracking-wider text-[var(--color-cream)]/50">
+          Support
+        </p>
+        <ul className="mt-2 space-y-1.5 text-sm text-[var(--color-cream)]">
+          <li>
+            <Link href="#" className="hover:text-[var(--color-accent)] transition-colors">
+              Contact
+            </Link>
+          </li>
+          <li>
+            <Link href="#" className="hover:text-[var(--color-accent)] transition-colors">
+              Shipping
+            </Link>
+          </li>
+          <li>
+            <Link href="#" className="hover:text-[var(--color-accent)] transition-colors">
+              Returns
+            </Link>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div className="mt-8 border-t border-[var(--color-cream)]/15 pt-4 text-[11px] text-[var(--color-cream)]/45">
+      © {new Date().getFullYear()} Shoe Store. All rights reserved.
+    </div>
+  </div>
+</footer>
   );
 }
