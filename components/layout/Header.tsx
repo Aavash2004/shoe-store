@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ShoppingBag, Heart, User, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSession, signOut } from "next-auth/react";
 
 const links = [
   { href: "/shop", label: "Shop", category: null },
@@ -22,7 +23,7 @@ export function Header() {
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get("category");
   const cartCount = useCartCount();
-
+const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close the mobile menu on route/query change.
@@ -88,12 +89,19 @@ export function Header() {
 
         {/* Icons */}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex">
-            <Link href="/account/wishlist" aria-label="Wishlist">
-              <Heart className="h-5 w-5" strokeWidth={1.5} />
-            </Link>
-          </Button>
-
+          {session?.user ? (
+  <Button variant="ghost" size="icon" asChild>
+    <Link href="/account">
+      <User className="h-5 w-5" />
+    </Link>
+  </Button>
+) : (
+  <Button variant="ghost" size="icon" asChild>
+    <Link href="/auth/login">
+      <User className="h-5 w-5" />
+    </Link>
+  </Button>
+)}
           <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex">
             <Link href="/account" aria-label="Account">
               <User className="h-5 w-5" strokeWidth={1.5} />
