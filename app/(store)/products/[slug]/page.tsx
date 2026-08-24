@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { placeholderProducts } from "@/lib/placeholder-data";
+import { prisma } from "@/lib/db/prisma";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductDetailInteractive } from "@/components/product/ProductDetailInteractive";
 
@@ -10,37 +9,54 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = placeholderProducts.find((p) => p.slug === slug);
+
+  const product = await prisma.product.findFirst({
+    where: { slug, isActive: true, deletedAt: null },
+    include: {
+      category: true,
+      images: { orderBy: { position: "asc" } },
+      variants: { where: { isActive: true } },
+    },
+  });
 
   if (!product) {
     notFound();
   }
 
+  const sizes = Array.from(new Set(product.variants.map((v) => v.size))).sort();
+  const colors = Array.from(new Set(product.variants.map((v) => v.color)));
+  const minPrice = product.variants.length
+    ? Math.min(...product.variants.map((v) => Number(v.price)))
+    : 0;
+
   return (
-    <div className="mx-auto max-w-7xl px-6 py-10 md:py-16">
-      {/* Breadcrumb */}
-      <nav className="mb-8 text-sm text-[var(--color-navy)]/50">
-        <Link href="/shop" className="hover:text-[var(--color-navy)] transition-colors">
-          Shop
-        </Link>
-        <span className="mx-2">/</span>
-        <span className="text-[var(--color-navy)]/70">{product.category}</span>
-        <span className="mx-2">/</span>
-        <span className="text-[var(--color-navy)]">{product.name}</span>
-      </nav>
-
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
-        {/* Gallery */}
-        <div className="min-h-[400px] md:min-h-[540px]">
-          <ProductGallery
-            images={product.images}
-          />
-        </div>
-
-        {/* Product info */}
-        <div className="flex flex-col justify-center lg:sticky lg:top-28 lg:self-start">
-          <ProductDetailInteractive product={product} />
-        </div>
+    <div className="mx-auto max-w-6xl px-6 py-12">
+      <div className="grid grid-cols-1 gap-12 md:grid-cols-2">
+        <ProductGallery
+          images={product.images.map((img) => img.url)}
+        />
+        <ProductDetailInteractive
+          product={{
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            price: minPrice,
+            image: product.images[0]?.url ?? "",
+            category: product.category.name,
+            brand: product.brand ?? "Unknown",
+            description: product.description,
+            images: product.images.map((img) => img.url),
+            sizes,
+            colors,
+              variants: product.variants.map((v) => ({
+      id: v.id,
+      size: v.size,
+      color: v.color,
+      price: Number(v.price),
+      stock: v.stock,
+              })),
+          }}
+        />
       </div>
     </div>
   );

@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
+import { SessionProviderWrapper } from "@/components/layout/SessionProviderWrapper";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-display",
   weight: ["400", "600", "700"],
 });
-
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-body",
@@ -26,7 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${playfair.variable} ${inter.variable} antialiased`}>
-        {children}
+        <SessionProviderWrapper>{children}</SessionProviderWrapper>
       </body>
     </html>
   );

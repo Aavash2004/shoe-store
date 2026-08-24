@@ -5,14 +5,14 @@ export function Footer() {
   return (
     <footer className="relative mx-4 mb-4 overflow-hidden rounded-t-3xl px-5 pt-10 pb-5 text-center">
   <Image
-    src="/images/Shoes/fo.avif"
+    src="/images/Shoes/f.avif"
     alt="Shoe display"
     fill
     priority={false}
     className="object-cover object-center scale-105"
   />
   {/* Soft gradient overlay for depth + better text readability */}
-  <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-navy)] via-[var(--color-navy)]/85 to-[var(--color-navy)]/70" />
+  <div className="absolute inset-0 bg-gradient-to-t from-black" />
 
   <div className="relative z-10">
     <h2 className="font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-cream)] md:text-4xl">

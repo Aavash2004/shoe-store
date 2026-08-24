@@ -115,6 +115,7 @@ model Product {
 
   metaTitle       String?
   metaDescription String?
+  brand String?
   ogImage         String?
 
   isActive  Boolean   @default(true)
