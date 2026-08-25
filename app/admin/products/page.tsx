@@ -1,9 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/db/prisma";
-import { Plus, Search, Package } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
 
 type ProductWithRelations = {
   id: string;
@@ -14,6 +13,7 @@ type ProductWithRelations = {
   images: { url: string }[];
   variants: { price: any; stock: number }[];
 };
+
 export default async function AdminProductsPage() {
   const products = await prisma.product.findMany({
     where: { deletedAt: null },
@@ -21,10 +21,7 @@ export default async function AdminProductsPage() {
     include: {
       category: { select: { name: true } },
       images: { where: { isPrimary: true }, take: 1 },
-      variants: {
-        where: { isActive: true },
-        select: { price: true, stock: true },
-      },
+      variants: { where: { isActive: true }, select: { price: true, stock: true } },
     },
   });
 
@@ -33,18 +30,16 @@ export default async function AdminProductsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/55">
-            Catalog
-          </span>
-          <h1 className="mt-0.5 font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)]">
+          <p className="text-xs uppercase tracking-[0.15em] text-navy/50">Catalog</p>
+          <h1 className="mt-1 font-[family-name:var(--font-display)] text-4xl text-navy">
             Products
           </h1>
-          <p className="mt-1 text-xs text-[var(--color-navy)]/60">
+          <p className="mt-1 text-sm text-navy/50">
             {products.length} product{products.length !== 1 ? "s" : ""} in catalog
           </p>
         </div>
 
-        <Button asChild className="h-11 rounded-xl px-5">
+        <Button asChild size="lg">
           <Link href="/admin/products/new">
             <Plus className="mr-2 h-4 w-4" />
             Add Product
@@ -52,19 +47,15 @@ export default async function AdminProductsPage() {
         </Button>
       </div>
 
-      {/* Products Table / Cards */}
+      {/* Empty state */}
       {products.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] py-20 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-sand)]/60">
-            <Package className="h-6 w-6 text-[var(--color-navy)]/50" />
-          </div>
-          <h2 className="font-[family-name:var(--font-display)] text-xl text-[var(--color-navy)]">
+        <div className="flex flex-col items-center justify-center border-y border-sand py-20 text-center">
+          <Package className="h-8 w-8 text-navy/30" />
+          <h2 className="mt-4 font-[family-name:var(--font-display)] text-xl text-navy">
             No products yet
           </h2>
-          <p className="mt-1 text-sm text-[var(--color-navy)]/60">
-            Start by adding your first product.
-          </p>
-          <Button asChild className="mt-6 rounded-xl">
+          <p className="mt-1 text-sm text-navy/50">Start by adding your first product.</p>
+          <Button asChild className="mt-6">
             <Link href="/admin/products/new">
               <Plus className="mr-2 h-4 w-4" />
               Add Product
@@ -72,86 +63,58 @@ export default async function AdminProductsPage() {
           </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]">
-          {/* Desktop Table */}
+        <>
+          {/* Desktop table */}
           <div className="hidden md:block">
-            <table className="w-full text-left">
+            <table className="w-full border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-sand)] text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/55">
-                  <th className="px-6 py-4">Product</th>
-                  <th className="px-6 py-4">Category</th>
-                  <th className="px-6 py-4 text-right">Price</th>
-                  <th className="px-6 py-4 text-right">Stock</th>
-                  <th className="px-6 py-4 text-right">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                <tr className="border-b border-sand text-xs uppercase tracking-wide text-navy/45">
+                  <th className="py-3 font-medium">Product</th>
+                  <th className="py-3 font-medium">Category</th>
+                  <th className="py-3 text-right font-medium">Price</th>
+                  <th className="py-3 text-right font-medium">Stock</th>
+                  <th className="py-3 text-right font-medium">Status</th>
+                  <th className="py-3 text-right font-medium"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--color-sand)]/70">
+              <tbody className="divide-y divide-sand">
                 {products.map((product: ProductWithRelations) => {
-  const imageUrl = product.images[0]?.url || "/images/Shoes/s05.avif";
-  const prices = product.variants.map((v) => Number(v.price));
-  const minPrice = prices.length ? Math.min(...prices) : 0;
-  const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
-                    0
-                  
+                  const imageUrl = product.images[0]?.url || "/images/Shoes/s05.avif";
+                  const prices = product.variants.map((v) => Number(v.price));
+                  const minPrice = prices.length ? Math.min(...prices) : 0;
+                  const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
                   return (
-                    <tr
-                      key={product.id}
-                      className="transition-colors hover:bg-[var(--color-sand)]/20"
-                    >
-                      <td className="px-6 py-4">
+                    <tr key={product.id}>
+                      <td className="py-4">
                         <div className="flex items-center gap-4">
-                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-[var(--color-sand)] bg-stone-100">
-                            <Image
-                              src={imageUrl}
-                              alt={product.name}
-                              fill
-                              className="object-cover"
-                            />
+                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-sand">
+                            <Image src={imageUrl} alt={product.name} fill className="object-cover" />
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate font-medium text-[var(--color-navy)]">
+                            <p className="truncate font-[family-name:var(--font-display)] text-navy">
                               {product.name}
                             </p>
-                            <p className="text-xs text-[var(--color-navy)]/50">
-                              {product.brand || "—"}
-                            </p>
+                            <p className="text-xs text-navy/45">{product.brand || "—"}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-[var(--color-navy)]/70">
-                        {product.category?.name || "—"}
-                      </td>
-                      <td className="px-6 py-4 text-right text-sm font-medium text-[var(--color-navy)]">
+                      <td className="py-4 text-navy/60">{product.category?.name || "—"}</td>
+                      <td className="py-4 text-right font-medium text-navy">
                         ${minPrice.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span
-                          className={`text-sm font-medium ${
-                            totalStock <= 5
-                              ? "text-rose-600"
-                              : "text-[var(--color-navy)]"
-                          }`}
-                        >
+                      <td className="py-4 text-right">
+                        <span className={totalStock <= 5 ? "text-rose-600" : "text-navy"}>
                           {totalStock}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                            product.isActive
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-stone-100 text-stone-500"
-                          }`}
-                        >
-                          {product.isActive ? "Active" : "Draft"}
-                        </span>
+                      <td className="py-4 text-right text-navy/60">
+                        {product.isActive ? "Active" : "Draft"}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="py-4 text-right">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="text-sm font-medium text-[var(--color-navy)] hover:text-[var(--color-accent)]"
+                          className="text-navy hover:text-accent"
                         >
                           Edit
                         </Link>
@@ -163,40 +126,31 @@ export default async function AdminProductsPage() {
             </table>
           </div>
 
-          {/* Mobile Cards */}
-          <div className="divide-y divide-[var(--color-sand)]/70 md:hidden">
-           {products.map((product: ProductWithRelations) => {
-  const imageUrl = product.images[0]?.url || "/images/Shoes/s05.avif";
-  const prices = product.variants.map((v) => Number(v.price));
-  const minPrice = prices.length ? Math.min(...prices) : 0;
-  const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
+          {/* Mobile cards */}
+          <div className="flex flex-col divide-y divide-sand md:hidden">
+            {products.map((product: ProductWithRelations) => {
+              const imageUrl = product.images[0]?.url || "/images/Shoes/s05.avif";
+              const prices = product.variants.map((v) => Number(v.price));
+              const minPrice = prices.length ? Math.min(...prices) : 0;
+              const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
               return (
                 <Link
                   key={product.id}
                   href={`/admin/products/${product.id}`}
-                  className="flex items-center gap-4 p-4 transition-colors hover:bg-[var(--color-sand)]/20"
+                  className="flex items-center gap-4 py-4"
                 >
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-[var(--color-sand)] bg-stone-100">
-                    <Image
-                      src={imageUrl}
-                      alt={product.name}
-                      fill
-                      className="object-cover"
-                    />
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md bg-sand">
+                    <Image src={imageUrl} alt={product.name} fill className="object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-[var(--color-navy)]">
+                    <p className="truncate font-[family-name:var(--font-display)] text-navy">
                       {product.name}
                     </p>
-                    <p className="mt-0.5 text-xs text-[var(--color-navy)]/50">
+                    <p className="mt-0.5 text-xs text-navy/45">
                       {product.category?.name || "—"} · ${minPrice.toFixed(2)}
                     </p>
-                    <p
-                      className={`mt-1 text-xs font-medium ${
-                        totalStock <= 5 ? "text-rose-600" : "text-[var(--color-navy)]/60"
-                      }`}
-                    >
+                    <p className={`mt-1 text-xs ${totalStock <= 5 ? "text-rose-600" : "text-navy/50"}`}>
                       {totalStock} in stock
                     </p>
                   </div>
@@ -204,7 +158,7 @@ export default async function AdminProductsPage() {
               );
             })}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
