@@ -1,11 +1,49 @@
-import { PrismaClient } from "@/app/generated/prisma/client";
+import "dotenv/config";
+import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
-import  slugify  from "slugify";
+import slugify from "slugify";
+import bcrypt from "bcryptjs";
 
-const adapter = new PrismaNeon ({connectionString: process.env. DATABASE_URL });
-const prisma =new PrismaClient({adapter});
+const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  // 1. Seed Admin User
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (adminEmail && adminPassword) {
+    const existingAdmin = await prisma.user.findUnique({
+      where: { email: adminEmail },
+    });
+
+    if (!existingAdmin) {
+      const hashedPassword = await bcrypt.hash(adminPassword, 10);
+      await prisma.user.create({
+        data: {
+          name: "System Administrator",
+          email: adminEmail,
+          password: hashedPassword,
+          role: "ADMIN",
+        },
+      });
+      console.log(`Admin account created: ${adminEmail}`);
+    } else {
+      if (existingAdmin.role !== "ADMIN") {
+        await prisma.user.update({
+          where: { email: adminEmail },
+          data: { role: "ADMIN" },
+        });
+        console.log(`Updated existing user ${adminEmail} to ADMIN role`);
+      } else {
+        console.log(`Admin account already exists: ${adminEmail}`);
+      }
+    }
+  } else {
+    console.warn("ADMIN_EMAIL or ADMIN_PASSWORD not found in env.");
+  }
+
+  // 2. Seed Catalog Data
   const running = await prisma.category.upsert({
     where: { slug: "running" },
     update: {},

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
@@ -9,6 +9,7 @@ import { z } from "zod";
 import { useCartStore } from "@/stores/cart-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Lock, Package, Truck } from "lucide-react";
 
 const formSchema = z.object({
   guestEmail: z.string().email().optional().or(z.literal("")),
@@ -40,16 +41,18 @@ export default function CheckoutPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(formSchema), mode: "onChange" });
+  } = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    mode: "onChange",
+  });
 
-  // fetch DB cart on mount if logged in
-  useState(() => {
+  useEffect(() => {
     if (isLoggedIn) {
       fetch("/api/cart")
         .then((res) => res.json())
         .then((data) => setDbItems(data.items ?? []));
     }
-  });
+  }, [isLoggedIn]);
 
   const items = isLoggedIn
     ? dbItems.map((i) => ({
@@ -66,6 +69,8 @@ export default function CheckoutPage() {
       }));
 
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const shipping = subtotal > 75 ? 0 : 8.5;
+  const total = subtotal + shipping;
 
   async function onSubmit(data: FormData) {
     setError("");
@@ -78,7 +83,10 @@ export default function CheckoutPage() {
         ...data,
         guestEmail: isLoggedIn ? undefined : data.guestEmail,
         guestName: isLoggedIn ? undefined : data.guestName,
-        items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+        items: items.map((i) => ({
+          variantId: i.variantId,
+          quantity: i.quantity,
+        })),
       }),
     });
 
@@ -98,11 +106,20 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-24 text-center">
-        <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
+      <div className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-6 text-center">
+        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-sand)]/50">
+          <Package className="h-7 w-7 text-[var(--color-navy)]/60" />
+        </div>
+        <h1 className="font-[family-name:var(--font-display)] text-3xl text-[var(--color-navy)]">
           Your cart is empty
         </h1>
-        <Button className="mt-6" onClick={() => router.push("/shop")}>
+        <p className="mt-2 text-[var(--color-navy)]/60">
+          Looks like you haven’t added anything yet.
+        </p>
+        <Button
+          className="mt-8 h-12 rounded-xl px-8"
+          onClick={() => router.push("/shop")}
+        >
           Continue Shopping
         </Button>
       </div>
@@ -110,60 +127,236 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-12">
-      <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">Checkout</h1>
+    <div className="min-h-screen bg-[var(--color-cream)]">
+      <div className="mx-auto max-w-6xl px-4 py-10 md:px-6 md:py-14">
+        {/* Header */}
+        <div className="mb-10">
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--color-navy)]/50">
+            Secure checkout
+          </p>
+          <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-[var(--color-navy)] md:text-4xl">
+            Checkout
+          </h1>
+        </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_380px]">
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          {!isLoggedIn && (
-            <>
-              <h2 className="text-sm font-medium text-navy">Contact</h2>
-              <Input placeholder="Email" {...register("guestEmail")} />
-              {errors.guestEmail && <p className="text-xs text-red-600">{errors.guestEmail.message}</p>}
-              <Input placeholder="Full name (for guest record)" {...register("guestName")} />
-            </>
-          )}
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_400px] lg:gap-14">
+          {/* Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+            {/* Contact (guest only) */}
+            {!isLoggedIn && (
+              <section className="rounded-2xl border border-[var(--color-sand)] bg-white/70 p-6 shadow-sm">
+                <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-[var(--color-navy)]">
+                  Contact
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <Input
+                      placeholder="Email address"
+                      {...register("guestEmail")}
+                      className="h-12 rounded-xl"
+                    />
+                    {errors.guestEmail && (
+                      <p className="mt-1.5 text-xs text-red-600">
+                        {errors.guestEmail.message}
+                      </p>
+                    )}
+                  </div>
+                  <Input
+                    placeholder="Full name"
+                    {...register("guestName")}
+                    className="h-12 rounded-xl"
+                  />
+                </div>
+              </section>
+            )}
 
-          <h2 className="mt-4 text-sm font-medium text-navy">Shipping Address</h2>
-          <Input placeholder="Full name" {...register("fullName")} />
-          {errors.fullName && <p className="text-xs text-red-600">{errors.fullName.message}</p>}
-
-          <Input placeholder="Phone" {...register("phone")} />
-          {errors.phone && <p className="text-xs text-red-600">{errors.phone.message}</p>}
-
-          <Input placeholder="Address line 1" {...register("line1")} />
-          {errors.line1 && <p className="text-xs text-red-600">{errors.line1.message}</p>}
-
-          <Input placeholder="Address line 2 (optional)" {...register("line2")} />
-
-          <div className="grid grid-cols-2 gap-4">
-            <Input placeholder="City" {...register("city")} />
-            <Input placeholder="State" {...register("state")} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input placeholder="Postal code" {...register("postalCode")} />
-            <Input placeholder="Country" {...register("country")} />
-          </div>
-
-          {error && <div className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</div>}
-
-          <Button type="submit" size="lg" disabled={loading} className="mt-4">
-            {loading ? "Placing order..." : "Place Order"}
-          </Button>
-        </form>
-
-        <div className="rounded-lg border border-sand bg-cream-alt p-6">
-          <h2 className="font-medium text-navy">Order Summary</h2>
-          <div className="mt-4 flex flex-col gap-2">
-            {items.map((item) => (
-              <div key={item.variantId} className="flex justify-between text-sm text-navy/80">
-                <span>{item.productName} × {item.quantity}</span>
-                <span>${(item.price * item.quantity).toFixed(2)}</span>
+            {/* Shipping */}
+            <section className="rounded-2xl border border-[var(--color-sand)] bg-white/70 p-6 shadow-sm">
+              <div className="mb-5 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-[var(--color-navy)]/70" />
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-navy)]">
+                  Shipping Address
+                </h2>
               </div>
-            ))}
-          </div>
-          <div className="mt-4 border-t border-sand pt-4 text-lg font-medium text-navy">
-            Subtotal: ${subtotal.toFixed(2)}
+
+              <div className="space-y-4">
+                <div>
+                  <Input
+                    placeholder="Full name"
+                    {...register("fullName")}
+                    className="h-12 rounded-xl"
+                  />
+                  {errors.fullName && (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {errors.fullName.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Input
+                    placeholder="Phone number"
+                    {...register("phone")}
+                    className="h-12 rounded-xl"
+                  />
+                  {errors.phone && (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {errors.phone.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Input
+                    placeholder="Address line 1"
+                    {...register("line1")}
+                    className="h-12 rounded-xl"
+                  />
+                  {errors.line1 && (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {errors.line1.message}
+                    </p>
+                  )}
+                </div>
+
+                <Input
+                  placeholder="Address line 2 (optional)"
+                  {...register("line2")}
+                  className="h-12 rounded-xl"
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <Input
+                      placeholder="City"
+                      {...register("city")}
+                      className="h-12 rounded-xl"
+                    />
+                    {errors.city && (
+                      <p className="mt-1.5 text-xs text-red-600">
+                        {errors.city.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="State / Province"
+                      {...register("state")}
+                      className="h-12 rounded-xl"
+                    />
+                    {errors.state && (
+                      <p className="mt-1.5 text-xs text-red-600">
+                        {errors.state.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <Input
+                      placeholder="Postal code"
+                      {...register("postalCode")}
+                      className="h-12 rounded-xl"
+                    />
+                    {errors.postalCode && (
+                      <p className="mt-1.5 text-xs text-red-600">
+                        {errors.postalCode.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="Country"
+                      {...register("country")}
+                      className="h-12 rounded-xl"
+                    />
+                    {errors.country && (
+                      <p className="mt-1.5 text-xs text-red-600">
+                        {errors.country.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {error && (
+              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="h-13 w-full rounded-xl bg-[var(--color-navy)] text-base font-medium text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 disabled:opacity-60"
+            >
+              {loading ? "Placing order..." : "Place Order"}
+            </Button>
+
+            <p className="flex items-center justify-center gap-2 text-xs text-[var(--color-navy)]/50">
+              <Lock className="h-3.5 w-3.5" />
+              Secure checkout · Encrypted end-to-end
+            </p>
+          </form>
+
+          {/* Order Summary */}
+          <div className="lg:sticky lg:top-28 lg:self-start">
+            <div className="rounded-2xl border border-[var(--color-sand)] bg-white/80 p-6 shadow-sm backdrop-blur-sm">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-navy)]">
+                Order Summary
+              </h2>
+
+              <div className="mt-5 space-y-4">
+                {items.map((item) => (
+                  <div
+                    key={item.variantId}
+                    className="flex items-start justify-between gap-4 text-sm"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-[var(--color-navy)]">
+                        {item.productName}
+                      </p>
+                      <p className="mt-0.5 text-[var(--color-navy)]/50">
+                        Qty {item.quantity}
+                      </p>
+                    </div>
+                    <p className="font-medium text-[var(--color-navy)]">
+                      ${(item.price * item.quantity).toFixed(2)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 space-y-2 border-t border-[var(--color-sand)] pt-5 text-sm">
+                <div className="flex justify-between text-[var(--color-navy)]/70">
+                  <span>Subtotal</span>
+                  <span>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-[var(--color-navy)]/70">
+                  <span>Shipping</span>
+                  <span>
+                    {shipping === 0 ? (
+                      <span className="text-emerald-600">Free</span>
+                    ) : (
+                      `$${shipping.toFixed(2)}`
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-between border-t border-[var(--color-sand)] pt-4 text-base font-semibold text-[var(--color-navy)]">
+                <span>Total</span>
+                <span>${total.toFixed(2)}</span>
+              </div>
+
+              {subtotal < 75 && (
+                <p className="mt-4 rounded-lg bg-[var(--color-sand)]/40 px-3 py-2 text-xs text-[var(--color-navy)]/70">
+                  Add ${(75 - subtotal).toFixed(2)} more for free shipping
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

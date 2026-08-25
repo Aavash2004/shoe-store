@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { PlaceholderProduct } from "@/types";
+import { WishlistButton } from "@/components/product/WishlistButton";
 
 export function ProductCard({ product }: { product: PlaceholderProduct }) {
   // Optional: cycle through richer backgrounds if you want variety
@@ -32,6 +33,11 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
           fill
           className="object-cover transition-transform duration-500 group-hover:scale-110"
         />
+
+        {/* Wishlist Button */}
+        <div className="absolute top-3 right-3 z-10">
+          <WishlistButton productId={product.id} />
+        </div>
 
         {/* Subtle gradient overlay for depth */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />

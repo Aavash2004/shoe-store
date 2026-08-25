@@ -5,12 +5,12 @@ import Image from "next/image";
 import { gsap } from "@/lib/gsap";
 
 export function ProductGallery({ images }: { images: string[] }) {
+  const safeImages = images?.length ? images : ["/images/Shoes/s05.avif"]; // fallback
   const [activeIndex, setActiveIndex] = useState(0);
   const mainImageRef = useRef<HTMLDivElement>(null);
 
   function selectImage(index: number) {
     if (index === activeIndex) return;
-
     gsap.to(mainImageRef.current, {
       opacity: 0,
       duration: 0.15,
@@ -25,10 +25,10 @@ export function ProductGallery({ images }: { images: string[] }) {
     <div className="flex flex-col gap-4">
       <div
         ref={mainImageRef}
-        className="relative aspect-square w-full overflow-hidden rounded-lg bg-sand"
+        className="relative aspect-square w-full overflow-hidden rounded-lg bg-[var(--color-sand)]"
       >
         <Image
-          src={images[activeIndex]}
+          src={safeImages[activeIndex]}
           alt="Product image"
           fill
           className="object-cover"
@@ -36,17 +36,24 @@ export function ProductGallery({ images }: { images: string[] }) {
         />
       </div>
 
-      {images.length > 1 && (
+      {safeImages.length > 1 && (
         <div className="flex gap-3">
-          {images.map((img, index) => (
+          {safeImages.map((img, index) => (
             <button
-              key={img}
+              key={img + index}
               onClick={() => selectImage(index)}
               className={`relative h-20 w-20 overflow-hidden rounded-md border-2 transition-colors ${
-                index === activeIndex ? "border-accent" : "border-sand"
+                index === activeIndex
+                  ? "border-[var(--color-accent)]"
+                  : "border-[var(--color-sand)]"
               }`}
             >
-              <Image src={img} alt={`Thumbnail ${index + 1}`} fill className="object-cover" />
+              <Image
+                src={img}
+                alt={`Thumbnail ${index + 1}`}
+                fill
+                className="object-cover"
+              />
             </button>
           ))}
         </div>
