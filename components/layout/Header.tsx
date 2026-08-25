@@ -5,7 +5,9 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ShoppingBag, Heart, User, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { useCartStore } from "@/stores/cart-store";
+
 
 const links = [
   { href: "/shop", label: "Shop", category: null },
@@ -13,25 +15,49 @@ const links = [
   { href: "/shop?category=Lifestyle", label: "Lifestyle", category: "Lifestyle" },
 ];
 
-// Swap in your real cart count (context, store, server data, etc).
-function useCartCount() {
-  return 0;
-}
 
 export function Header() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get("category");
-  const cartCount = useCartCount();
-const { data: session } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: session, status } = useSession();
+const isLoggedIn = status === "authenticated";
 
-  // Close the mobile menu on route/query change.
+const localCount = useCartStore((state) =>
+  state.items.reduce((sum, item) => sum + item.quantity, 0)
+);
+
+const [dbCount, setDbCount] = useState(0);
+
+useEffect(() => {
+  if (!isLoggedIn) return;
+
+  function fetchCount() {
+    fetch("/api/cart")
+      .then((res) => res.json())
+      .then((data) => {
+        const count = (data.items ?? []).reduce(
+          (sum: number, item: { quantity: number }) => sum + item.quantity,
+          0
+        );
+        setDbCount(count);
+      });
+  }
+
+  fetchCount();
+  window.addEventListener("cart-updated", fetchCount);
+  return () => window.removeEventListener("cart-updated", fetchCount);
+}, [isLoggedIn]);
+
+const cartCount = isLoggedIn ? dbCount : localCount;
+
+  // Close mobile menu on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname, searchParams]);
 
-  // Lock body scroll while the mobile menu is open.
+  // Lock body scroll when mobile menu is open
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
     return () => {
@@ -39,7 +65,7 @@ const { data: session } = useSession();
     };
   }, [mobileOpen]);
 
-  // Close on Escape.
+  // Close on Escape
   useEffect(() => {
     if (!mobileOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -89,27 +115,34 @@ const { data: session } = useSession();
 
         {/* Icons */}
         <div className="flex items-center gap-1">
-          {session?.user ? (
-  <Button variant="ghost" size="icon" asChild>
-    <Link href="/account">
-      <User className="h-5 w-5" />
-    </Link>
-  </Button>
-) : (
-  <Button variant="ghost" size="icon" asChild>
-    <Link href="/auth/login">
-      <User className="h-5 w-5" />
-    </Link>
-  </Button>
-)}
-          <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex">
-            <Link href="/account" aria-label="Account">
+          {/* Wishlist */}
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="hidden sm:inline-flex"
+          >
+            <Link href="/account/wishlist" aria-label="Wishlist">
+              <Heart className="h-5 w-5" strokeWidth={1.5} />
+            </Link>
+          </Button>
+
+          {/* Account / Login */}
+          <Button variant="ghost" size="icon" asChild>
+            <Link
+              href={session?.user ? "/account" : "/auth/login"}
+              aria-label={session?.user ? "Account" : "Log in"}
+            >
               <User className="h-5 w-5" strokeWidth={1.5} />
             </Link>
           </Button>
 
+          {/* Cart */}
           <Button variant="ghost" size="icon" asChild className="relative">
-            <Link href="/cart" aria-label={`Cart${cartCount ? `, ${cartCount} items` : ""}`}>
+            <Link
+              href="/cart"
+              aria-label={`Cart${cartCount ? `, ${cartCount} items` : ""}`}
+            >
               <ShoppingBag className="h-5 w-5" strokeWidth={1.5} />
               {cartCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-navy)] px-1 text-[10px] font-semibold leading-none text-[var(--color-cream)]">
@@ -174,11 +207,11 @@ const { data: session } = useSession();
             </Link>
             <span className="text-[var(--color-navy)]/30">·</span>
             <Link
-              href="/account"
+              href={session?.user ? "/account" : "/auth/login"}
               className="flex items-center gap-2 text-sm font-medium text-[var(--color-navy)]/70"
             >
               <User className="h-4 w-4" strokeWidth={1.5} />
-              Account
+              {session?.user ? "Account" : "Log in"}
             </Link>
           </div>
         </nav>

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/stores/cart-store";
+import { useSession } from "next-auth/react";
+
 
 type Variant = {
   id: string;
@@ -36,16 +38,24 @@ export function ProductDetailInteractive({
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
   const addItem = useCartStore((state) => state.addItem);
-
+const { status } = useSession();
+const isLoggedIn = status === "authenticated";
   const canAddToCart = selectedSize && selectedColor;
 
   const matchedVariant = product.variants.find(
     (v) => v.size === selectedSize && v.color === selectedColor
   );
 
-  function handleAddToCart() {
-    if (!matchedVariant) return;
+  async function handleAddToCart() {
+  if (!matchedVariant) return;
 
+  if (isLoggedIn) {
+    await fetch("/api/cart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variantId: matchedVariant.id, quantity: 1 }),
+    });
+  } else {
     addItem({
       variantId: matchedVariant.id,
       productId: product.id,
@@ -57,10 +67,13 @@ export function ProductDetailInteractive({
       price: matchedVariant.price,
       quantity: 1,
     });
-
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1500);
   }
+
+  window.dispatchEvent(new Event("cart-updated"));
+
+  setAdded(true);
+  setTimeout(() => setAdded(false), 1500);
+}
 
   return (
     <div className="flex flex-col">

@@ -6,6 +6,8 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { gsap } from "@/lib/gsap";
 
+
+
 export function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -53,7 +55,7 @@ export function Hero() {
       {/* Background */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/images/hero/bg.avif"
+          src="/images/shoes/f.avif"
           alt="Shoe store background"
           fill
           priority
@@ -61,7 +63,8 @@ export function Hero() {
           sizes="100vw"
         />
         <div className="absolute inset-0 bg-black/65" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
+        <div className="absolute inset-0
+        -to-r from-black/80 via-black/50 to-black/20" />
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center gap-14 px-6 py-20 md:flex-row md:items-center md:justify-between md:gap-12 md:py-0">

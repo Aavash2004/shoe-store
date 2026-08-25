@@ -5,7 +5,7 @@ export function Footer() {
   return (
     <footer className="relative mx-4 mb-4 overflow-hidden rounded-t-3xl px-5 pt-10 pb-5 text-center">
   <Image
-    src="/images/Shoes/f.avif"
+    src="/images/hero/bg.avif"
     alt="Shoe display"
     fill
     priority={false}
