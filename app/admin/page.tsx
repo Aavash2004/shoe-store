@@ -80,9 +80,6 @@ export default async function AdminDashboardPage() {
         <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)] mt-0.5">
           Welcome back, {adminName}
         </h1>
-        <p className="text-xs text-[var(--color-navy)]/60 mt-1">
-          Here's what's happening with your store today.
-        </p>
       </div>
 
       {/* 2. Compact Horizontal Store Metrics Bar */}
