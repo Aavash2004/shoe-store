@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import slugify from "slugify";
 import bcrypt from "bcryptjs";
@@ -103,6 +103,51 @@ async function main() {
         { size: "41", color: "Navy", price: 89, stock: 9 },
       ],
     },
+      {
+      name: "Ultraboost Flow",
+      category: running.id,
+      brand: "Adidas",
+      description: "Responsive cushioning built for long-distance comfort.",
+      images: ["/images/Shoes/a01.avif"],
+      variants: [
+        { size: "41", color: "Black", price: 179, stock: 8 },
+        { size: "42", color: "Black", price: 179, stock: 5 },
+        ],
+    },
+    {
+      name: "Court Vintage",
+      category: lifestyle.id,
+      brand: "Nike",
+      description: "Retro-inspired court sneaker with premium leather.",
+      images: ["/images/Shoes/so2.webp"],
+      variants: [
+        { size: "40", color: "White", price: 109, stock: 10 },
+        { size: "41", color: "White", price: 109, stock: 6 },
+      ],
+    },
+    {
+      name: "Ridge Runner",
+      category: running.id,
+      brand: "Nike",
+      description: "All-terrain grip with a breathable mesh upper.",
+      images: ["/images/Shoes/s06.avif"],
+      variants: [
+        { size: "39", color: "Grey", price: 139, stock: 9 },
+        { size: "40", color: "Grey", price: 139, stock: 7 },
+      ],
+    },
+    {
+      name: "Metro Slip",
+      category: lifestyle.id,
+      brand: "Adidas",
+      description: "Slip-on comfort with a clean minimal profile.",
+      images: ["/images/Shoes/so4.avif"],
+      variants: [
+        { size: "38", color: "Cream", price: 79, stock: 11 },
+        { size: "39", color: "Navy", price: 79, stock: 6 },
+      ],
+    },
+    
   ]; 
     
   for ( const p of products){

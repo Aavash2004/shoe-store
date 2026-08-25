@@ -3,14 +3,39 @@ import { Hero } from "@/components/layout/Hero";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { placeholderProducts } from "@/lib/placeholder-data";
+import { prisma } from "@/lib/db/prisma";
+import { features } from "process";
+
 
 const perks = [
   { label: "Free shipping", detail: "On orders over $75" },
   { label: "Easy returns", detail: "30-day window" },
   { label: "Secure checkout", detail: "Encrypted end to end" },
 ];
+export default async function HomePage() {
+  const products = await prisma.product.findMany({
+    where: { isActive: true, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+    include: {
+      category: true,
+      images: { orderBy: { position: "asc" } },
+      variants: { where: { isActive: true } },
+    },
+  });
 
-export default function HomePage() {
+ const featured = products.map((p: (typeof products)[number]) => ({
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+   price: p.variants.length
+  ? Math.min(...p.variants.map((v: (typeof p.variants)[number]) => Number(v.price)))
+  : 0,
+    image: p.images[0]?.url ?? "",
+    category: p.category.name,
+    brand: p.brand ?? "Unknown",
+  }));
+
   return (
     <>
       <Hero />
@@ -54,7 +79,7 @@ export default function HomePage() {
 
         <div className="mt-10 md:mt-12">
           <ScrollReveal>
-            <ProductGrid products={placeholderProducts} />
+            <ProductGrid products={featured} />
           </ScrollReveal>
         </div>
 
