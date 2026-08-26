@@ -18,6 +18,13 @@ const links = [
 export function AdminNav({ email }: { email: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogout() {
+    setLoading(true);
+    await signOut({ callbackUrl: "/admin/login" });
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-sand bg-cream/95 backdrop-blur-sm">
@@ -57,7 +64,7 @@ export function AdminNav({ email }: { email: string }) {
         {/* Desktop right side */}
         <div className="hidden items-center gap-4 md:flex">
           <button
-            onClick={() => signOut({ callbackUrl: "/admin/login" })}
+            onClick={() => setShowLogoutConfirm(true)}
             className="flex items-center gap-1.5 text-sm font-medium text-navy hover:text-accent"
           >
             Sign Out <LogOut className="h-3.5 w-3.5" />
@@ -99,7 +106,7 @@ export function AdminNav({ email }: { email: string }) {
 
           <div className="flex items-center justify-between py-3">
             <button
-              onClick={() => signOut({ callbackUrl: "/admin/login" })}
+              onClick={() => setShowLogoutConfirm(true)}
               className="flex items-center gap-1.5 text-sm font-medium text-navy"
             >
               Sign Out <LogOut className="h-3.5 w-3.5" />
@@ -107,6 +114,33 @@ export function AdminNav({ email }: { email: string }) {
           </div>
         </nav>
       </div>
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
+            <h2 className="text-lg font-medium text-[var(--color-navy)]">Sign out?</h2>
+            <p className="mt-2 text-sm text-[var(--color-navy)]/60">
+              You&apos;ll need to sign in again to access the admin dashboard.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                disabled={loading}
+                className="rounded-md border border-sand px-4 py-2 text-sm text-[var(--color-navy)] hover:bg-cream-alt disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                disabled={loading}
+                className="rounded-md bg-[var(--color-navy)] px-4 py-2 text-sm text-cream hover:opacity-90 disabled:opacity-60"
+              >
+                {loading ? "Signing out..." : "Sign Out"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
