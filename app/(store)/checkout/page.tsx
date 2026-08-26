@@ -12,17 +12,93 @@ import { Input } from "@/components/ui/input";
 import { Lock, Package, Truck } from "lucide-react";
 
 const formSchema = z.object({
-  guestEmail: z.string().email().optional().or(z.literal("")),
-  guestName: z.string().optional(),
-  fullName: z.string().min(1, "Required"),
-  phone: z.string().min(7, "Required"),
-  line1: z.string().min(1, "Required"),
-  line2: z.string().optional(),
-  city: z.string().min(1, "Required"),
-  state: z.string().min(1, "Required"),
-  postalCode: z.string().min(1, "Required"),
-  country: z.string().min(1, "Required"),
+  guestEmail: z
+    .string()
+    .trim()
+    .email("Please enter a valid email address.")
+    .optional()
+    .or(z.literal("")),
+
+  guestName: z
+    .string()
+    .trim()
+    .max(100, "Name must be less than 100 characters.")
+    .optional(),
+
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Full name must be at least 2 characters.")
+    .max(100, "Full name must be less than 100 characters.")
+    .regex(
+      /^[\p{L}\p{M}]+(?:[\s'-][\p{L}\p{M}]+)*$/u,
+      "Please enter a valid name."
+    ),
+
+  phone: z
+    .string()
+    .trim()
+    .min(7, "Phone number must be at least 7 digits.")
+    .max(20, "Phone number is too long.")
+    .regex(
+      /^\+?[0-9\s\-()]+$/,
+      "Please enter a valid phone number."
+    )
+    .refine(
+      (value) => value.replace(/\D/g, "").length >= 7,
+      "Phone number must contain at least 7 digits."
+    ),
+
+  line1: z
+    .string()
+    .trim()
+    .min(5, "Address must be at least 5 characters.")
+    .max(200, "Address must be less than 200 characters."),
+
+  line2: z
+    .string()
+    .trim()
+    .max(100, "Address line 2 must be less than 100 characters.")
+    .optional()
+    .or(z.literal("")),
+
+  city: z
+    .string()
+    .trim()
+    .min(2, "City must be at least 2 characters.")
+    .max(100, "City must be less than 100 characters.")
+    .regex(
+      /^[\p{L}\p{M}]+(?:[\s'-][\p{L}\p{M}]+)*$/u,
+      "Please enter a valid city name."
+    ),
+
+  state: z
+    .string()
+    .trim()
+    .min(2, "State / province must be at least 2 characters.")
+    .max(100, "State / province must be less than 100 characters.")
+    .regex(
+      /^[\p{L}\p{M}0-9]+(?:[\s.'-][\p{L}\p{M}0-9]+)*$/u,
+      "Please enter a valid state or province."
+    ),
+
+  postalCode: z
+    .string()
+    .trim()
+    .min(3, "Postal code must be at least 3 characters.")
+    .max(12, "Postal code is too long.")
+    .regex(
+      /^[A-Za-z0-9][A-Za-z0-9\s-]*$/,
+      "Please enter a valid postal code."
+    ),
+
+  country: z
+    .string()
+    .trim()
+    .min(2, "Please select a country.")
+    .max(100, "Country name is too long."),
 });
+
 
 type FormData = z.infer<typeof formSchema>;
 

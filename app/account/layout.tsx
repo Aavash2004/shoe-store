@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth/auth";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { AccountNav } from "@/components/account/AccountNav";
+import { Toast } from "@/components/ui/Toast";  
+
 
 export default async function AccountLayout({
   children,

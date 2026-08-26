@@ -4,8 +4,7 @@ import type { PlaceholderProduct } from "@/types";
 import { WishlistButton } from "@/components/product/WishlistButton";
 
 export function ProductCard({ product }: { product: PlaceholderProduct }) {
-  // Optional: cycle through richer backgrounds if you want variety
-  // You can also drive this from the product data later
+
   const bgVariants = [
     "bg-zinc-950",
     "bg-gradient-to-br from-cyan-900 via-teal-800 to-teal-900",
@@ -25,21 +24,19 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
     >
       {/* Image area – richer background */}
       <div
-        className={`relative aspect-square w-full overflow-hidden ${bgVariants[bgIndex]}`}
+        className={`relative aspect-square overflow-hidden ${bgVariants[bgIndex]}`}
       >
         <Image
           src={product.image}
           alt={product.name}
           fill
-          className="object-cover transition-transform duration-500 group-hover:scale-110"
+          className="object-cover transition-transform duration-500 group-hover:scale-100"
         />
 
         {/* Wishlist Button */}
-        <div className="absolute top-3 right-3 z-10">
+        <div className="absolute top-3 right-3 z-8">
           <WishlistButton productId={product.id} />
         </div>
-
-        {/* Subtle gradient overlay for depth */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       </div>
 

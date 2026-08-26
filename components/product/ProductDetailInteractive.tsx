@@ -70,6 +70,8 @@ const isLoggedIn = status === "authenticated";
   }
 
   window.dispatchEvent(new Event("cart-updated"));
+  window.dispatchEvent(new CustomEvent("show-toast",{detail:'added to cart'}));
+
 
   setAdded(true);
   setTimeout(() => setAdded(false), 1500);

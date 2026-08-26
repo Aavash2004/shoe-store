@@ -67,9 +67,6 @@ export default async function AccountPage() {
     <div className="space-y-10">
       {/* Header Banner */}
       <div>
-        <p className="text-xs uppercase tracking-widest text-[var(--color-navy)]/60 font-semibold">
-          {greeting}, {userName.toUpperCase()}
-        </p>
         <h1 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl text-[var(--color-navy)] font-bold mt-1">
           Your account at a glance.
         </h1>
