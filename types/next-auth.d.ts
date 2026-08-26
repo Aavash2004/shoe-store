@@ -1,4 +1,4 @@
-import { UserRole } from "@prisma/client";
+import { UserRole } from "@/lib/generated/prisma/client";
 import { DefaultSession } from "next-auth";
 import { JWT } from "next-auth/jwt";
 

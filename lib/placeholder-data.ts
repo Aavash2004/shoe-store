@@ -60,12 +60,12 @@ export const placeholderProducts: PlaceholderProductDetail[] = [
   },
   {
     id: "4",
-    name: "Superstar Classic",
-    slug: "superstar-classic",
+    name: "Travis Scott moca",
+    slug: "moca dunks",
     price: 89,
-    image: "/images/Shoes/a01.avif",
+    image: "/images/Shoes/trav.avif",
     category: "Lifestyle",
-    brand: "Adidas",
+    brand: "Nike",
     description:
       "A timeless low-top silhouette that pairs with everything.",
     images: [

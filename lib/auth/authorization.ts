@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth/auth";
-import { UserRole } from "@prisma/client";
+import { UserRole } from "@/lib/generated/prisma/client";
 
 export async function getSession() {
   return await auth();

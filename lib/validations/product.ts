@@ -37,3 +37,8 @@ export const createProductSchema = z.object({
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
+export const updateProductSchema = createProductSchema.partial().extend({
+  id: z.string().min(1),
+});
+
+export type UpdateProductInput = z.infer<typeof updateProductSchema>;

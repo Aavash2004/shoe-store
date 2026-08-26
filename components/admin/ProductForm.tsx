@@ -12,6 +12,8 @@ import {
   Image as ImageIcon,
   Search,
   Settings,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +25,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createProduct } from "@/app/admin/products/new/actions";
+import { updateProduct } from "@/app/admin/products/[id]/actions";
 import type { CreateProductInput } from "@/lib/validations/product";
 
 type Category = { id: string; name: string };
+
+type ExistingProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  brand: string | null;
+  categoryId: string;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  isActive: boolean;
+  images: { url: string; altText: string | null; isPrimary: boolean }[];
+  variants: { size: string; color: string; sku: string; price: any; stock: number }[];
+};
 
 interface ImageField {
   url: string;
@@ -48,27 +65,49 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export function ProductForm({ categories }: { categories: Category[] }) {
+export function ProductForm({
+  categories,
+  product,
+}: {
+  categories: Category[];
+  product?: ExistingProduct;
+}) {
+  const isEditMode = !!product;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugEdited, setSlugEdited] = useState(false);
-  const [description, setDescription] = useState("");
-  const [brand, setBrand] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [metaTitle, setMetaTitle] = useState("");
-  const [metaDescription, setMetaDescription] = useState("");
-  const [isActive, setIsActive] = useState(true);
+  const [name, setName] = useState(product?.name ?? "");
+  const [slug, setSlug] = useState(product?.slug ?? "");
+  const [slugEdited, setSlugEdited] = useState(isEditMode);
+  const [description, setDescription] = useState(product?.description ?? "");
+  const [brand, setBrand] = useState(product?.brand ?? "");
+  const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
+  const [metaTitle, setMetaTitle] = useState(product?.metaTitle ?? "");
+  const [metaDescription, setMetaDescription] = useState(product?.metaDescription ?? "");
+  const [isActive, setIsActive] = useState(product?.isActive ?? true);
 
-  const [images, setImages] = useState<ImageField[]>([
-    { url: "", altText: "", isPrimary: true },
-  ]);
-  const [variants, setVariants] = useState<VariantField[]>([
-    { size: "", color: "", sku: "", price: "", stock: "0" },
-  ]);
+  const [images, setImages] = useState<ImageField[]>(
+    product?.images.length
+      ? product.images.map((img) => ({
+          url: img.url,
+          altText: img.altText ?? "",
+          isPrimary: img.isPrimary,
+        }))
+      : [{ url: "", altText: "", isPrimary: true }]
+  );
+  const [variants, setVariants] = useState<VariantField[]>(
+    product?.variants.length
+      ? product.variants.map((v) => ({
+          size: v.size,
+          color: v.color,
+          sku: v.sku,
+          price: String(v.price),
+          stock: String(v.stock),
+        }))
+      : [{ size: "", color: "", sku: "", price: "", stock: "0" }]
+  );
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
 
   function handleNameChange(val: string) {
     setName(val);
@@ -83,10 +122,7 @@ export function ProductForm({ categories }: { categories: Category[] }) {
   }
 
   function addImage() {
-    setImages((prev) => [
-      ...prev,
-      { url: "", altText: "", isPrimary: false },
-    ]);
+    setImages((prev) => [...prev, { url: "", altText: "", isPrimary: false }]);
   }
 
   function removeImage(index: number) {
@@ -94,22 +130,38 @@ export function ProductForm({ categories }: { categories: Category[] }) {
   }
 
   function updateImage(index: number, field: keyof ImageField, value: string | boolean) {
-    setImages((prev) =>
-      prev.map((img, i) => (i === index ? { ...img, [field]: value } : img))
-    );
+    setImages((prev) => prev.map((img, i) => (i === index ? { ...img, [field]: value } : img)));
   }
 
   function setPrimaryImage(index: number) {
-    setImages((prev) =>
-      prev.map((img, i) => ({ ...img, isPrimary: i === index }))
-    );
+    setImages((prev) => prev.map((img, i) => ({ ...img, isPrimary: i === index })));
+  }
+
+  async function uploadImage(index: number, file: File) {
+    if (!file.type.startsWith("image/")) return;
+
+    setUploadingIndex(index);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+
+      const { url } = await res.json();
+      updateImage(index, "url", url);
+      if (!images[index].altText) {
+        updateImage(index, "altText", file.name.replace(/\.[^.]+$/, ""));
+      }
+    } catch {
+      console.error("Failed to upload image");
+    } finally {
+      setUploadingIndex(null);
+    }
   }
 
   function addVariant() {
-    setVariants((prev) => [
-      ...prev,
-      { size: "", color: "", sku: "", price: "", stock: "0" },
-    ]);
+    setVariants((prev) => [...prev, { size: "", color: "", sku: "", price: "", stock: "0" }]);
   }
 
   function removeVariant(index: number) {
@@ -117,9 +169,7 @@ export function ProductForm({ categories }: { categories: Category[] }) {
   }
 
   function updateVariant(index: number, field: keyof VariantField, value: string) {
-    setVariants((prev) =>
-      prev.map((v, i) => (i === index ? { ...v, [field]: value } : v))
-    );
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -155,7 +205,9 @@ export function ProductForm({ categories }: { categories: Category[] }) {
     };
 
     startTransition(async () => {
-      const result = await createProduct(payload);
+      const result = isEditMode
+        ? await updateProduct({ ...payload, id: product!.id })
+        : await createProduct(payload);
       if (result && !result.success) {
         setErrors(result.error);
       }
@@ -164,7 +216,6 @@ export function ProductForm({ categories }: { categories: Category[] }) {
 
   return (
     <div className="max-w-4xl">
-      {/* Header */}
       <div className="mb-8">
         <Link
           href="/admin/products"
@@ -174,15 +225,14 @@ export function ProductForm({ categories }: { categories: Category[] }) {
           Back to Products
         </Link>
         <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-navy">
-          Add New Product
+          {isEditMode ? "Edit Product" : "Add New Product"}
         </h1>
         <p className="mt-1 text-sm text-navy/60">
-          Create a new product listing for your store.
+          {isEditMode ? "Update this product listing." : "Create a new product listing for your store."}
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* General Info */}
         <Section icon={Package} title="General Information">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -247,7 +297,6 @@ export function ProductForm({ categories }: { categories: Category[] }) {
           </div>
         </Section>
 
-        {/* Images */}
         <Section icon={ImageIcon} title="Product Images">
           <div className="space-y-3">
             {images.map((img, i) => (
@@ -257,47 +306,79 @@ export function ProductForm({ categories }: { categories: Category[] }) {
               >
                 <div className="flex items-center gap-2 text-navy/30">
                   <GripVertical className="h-4 w-4" />
-                  <span className="text-xs font-medium text-navy/40">
-                    {i + 1}
-                  </span>
+                  <span className="text-xs font-medium text-navy/40">{i + 1}</span>
                 </div>
                 <div className="flex-1 grid gap-3 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <Input
-                      value={img.url}
-                      onChange={(e) => updateImage(i, "url", e.target.value)}
-                      placeholder="Image URL (https://...)"
-                      className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
-                    />
-                  </div>
-                  <Input
-                    value={img.altText}
-                    onChange={(e) => updateImage(i, "altText", e.target.value)}
-                    placeholder="Alt text (optional)"
-                    className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
-                  />
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPrimaryImage(i)}
-                      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                        img.isPrimary
-                          ? "bg-navy text-cream"
-                          : "border border-sand text-navy/60 hover:bg-sand/40"
-                      }`}
-                    >
-                      {img.isPrimary ? "Primary" : "Set Primary"}
-                    </button>
-                    {images.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeImage(i)}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-rose-500 hover:bg-rose-50 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                    {img.url ? (
+                      <div className="relative group">
+                        <img
+                          src={img.url}
+                          alt={img.altText || `Product image ${i + 1}`}
+                          className="h-40 w-full rounded-lg border border-sand object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateImage(i, "url", "")}
+                          className="absolute top-2 right-2 rounded-full bg-white/90 p-1.5 text-rose-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-sand bg-white transition-colors hover:border-navy/30">
+                        {uploadingIndex === i ? (
+                          <Loader2 className="h-6 w-6 text-navy/40 animate-spin" />
+                        ) : (
+                          <Upload className="h-6 w-6 text-navy/30" />
+                        )}
+                        <span className="text-xs text-navy/50">
+                          {uploadingIndex === i ? "Uploading..." : "Click to upload image"}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) uploadImage(i, file);
+                          }}
+                        />
+                      </label>
                     )}
                   </div>
+                  {img.url && (
+                    <>
+                      <Input
+                        value={img.altText}
+                        onChange={(e) => updateImage(i, "altText", e.target.value)}
+                        placeholder="Alt text (optional)"
+                        className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
+                      />
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setPrimaryImage(i)}
+                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                            img.isPrimary
+                              ? "bg-navy text-cream"
+                              : "border border-sand text-navy/60 hover:bg-sand/40"
+                          }`}
+                        >
+                          {img.isPrimary ? "Primary" : "Set Primary"}
+                        </button>
+                        {images.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeImage(i)}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-rose-500 hover:bg-rose-50 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -308,6 +389,7 @@ export function ProductForm({ categories }: { categories: Category[] }) {
             size="sm"
             onClick={addImage}
             className="mt-4"
+            disabled={uploadingIndex !== null}
           >
             <Plus className="h-4 w-4" />
             Add Image
@@ -315,7 +397,6 @@ export function ProductForm({ categories }: { categories: Category[] }) {
           {errors.images && <ErrorMsg msg={errors.images} />}
         </Section>
 
-        {/* Variants */}
         <Section icon={Package} title="Variants">
           <div className="space-y-3">
             {variants.map((v, i) => (
@@ -325,9 +406,7 @@ export function ProductForm({ categories }: { categories: Category[] }) {
               >
                 <div className="flex items-center gap-2 text-navy/30">
                   <GripVertical className="h-4 w-4" />
-                  <span className="text-xs font-medium text-navy/40">
-                    {i + 1}
-                  </span>
+                  <span className="text-xs font-medium text-navy/40">{i + 1}</span>
                 </div>
                 <div className="flex-1 grid gap-3 grid-cols-2 sm:grid-cols-5">
                   <Input
@@ -380,20 +459,13 @@ export function ProductForm({ categories }: { categories: Category[] }) {
               </div>
             ))}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={addVariant}
-            className="mt-4"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={addVariant} className="mt-4">
             <Plus className="h-4 w-4" />
             Add Variant
           </Button>
           {errors.variants && <ErrorMsg msg={errors.variants} />}
         </Section>
 
-        {/* SEO */}
         <Section icon={Search} title="SEO">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -418,7 +490,6 @@ export function ProductForm({ categories }: { categories: Category[] }) {
           </div>
         </Section>
 
-        {/* Status */}
         <Section icon={Settings} title="Status">
           <div className="flex items-center gap-3">
             <button
@@ -440,10 +511,15 @@ export function ProductForm({ categories }: { categories: Category[] }) {
           </div>
         </Section>
 
-        {/* Actions */}
         <div className="flex items-center gap-3 border-t border-sand pt-6">
           <Button type="submit" size="lg" disabled={isPending}>
-            {isPending ? "Creating..." : "Create Product"}
+            {isPending
+              ? isEditMode
+                ? "Saving..."
+                : "Creating..."
+              : isEditMode
+                ? "Save Changes"
+                : "Create Product"}
           </Button>
           <Button
             type="button"

@@ -75,6 +75,8 @@ export default async function HomePage() {
               </span>
             </Link>
           </div>
+
+          
         </ScrollReveal>
 
         <div className="mt-10 md:mt-12">

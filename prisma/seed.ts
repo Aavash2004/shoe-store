@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient } from "../app/generated/prisma/client";
+import { PrismaClient } from "../lib/generated/prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import slugify from "slugify";
 import bcrypt from "bcryptjs";
@@ -97,7 +97,7 @@ async function main() {
       category: lifestyle.id,
       brand: "Adidas",
       description: "A timeless low-top silhouette that pairs with everything.",
-      images: ["/images/Shoes/a01.avif"],
+      images: ["/images/Shoes/trav.avif"],
       variants: [
         { size: "40", color: "Cream", price: 89, stock: 15 },
         { size: "41", color: "Navy", price: 89, stock: 9 },
