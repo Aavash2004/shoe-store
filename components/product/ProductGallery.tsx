@@ -5,7 +5,7 @@ import Image from "next/image";
 import { gsap } from "@/lib/gsap";
 
 export function ProductGallery({ images }: { images: string[] }) {
-  const safeImages = images?.length ? images : ["/images/Shoes/s05.avif"]; // fallback
+  const safeImages = images?.length ? images : ["/images/Shoes/gmm.jpeg"]; // fallback
   const [activeIndex, setActiveIndex] = useState(0);
   const mainImageRef = useRef<HTMLDivElement>(null);
 

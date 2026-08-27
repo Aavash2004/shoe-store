@@ -193,7 +193,7 @@ export default async function AccountPage() {
               const firstItem = order.items[0];
               const firstImg =
                 firstItem?.variant?.product?.images?.[0]?.url ||
-                "/images/Shoes/s05.avif";
+                "/images/Shoes/gmm.jpeg";
 
               return (
                 <div

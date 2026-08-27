@@ -63,7 +63,7 @@ async function main() {
             category: running.id,
             brand: "Nike",
              description: "A lightweight running shoe built for daily mileage.",
-      images: ["/images/Shoes/s05.avif", "/images/Shoes/s06.avif"],
+      images: ["/images/Shoes/gmm.jpeg", "/images/Shoes/s06.avif"],
       variants: [
         { size: "40", color: "Blue", price: 129, stock: 10 },
         { size: "41", color: "Blue", price: 129, stock: 8 },

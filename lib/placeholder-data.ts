@@ -6,13 +6,13 @@ export const placeholderProducts: PlaceholderProductDetail[] = [
     name: "Air Zoom Pulse",
     slug: "air-zoom-pulse",
     price: 129,
-    image: "/images/Shoes/s05.avif",
+    image: "/images/Shoes/gmm.jpeg",
     category: "Running",
     brand: "Nike",
     description:
       "A lightweight running shoe built for daily mileage, with responsive cushioning and a breathable knit upper.",
     images: [
-      "/images/Shoes/s05.avif",
+      "/images/Shoes/gmm.jpeg",
       "/images/Shoes/s06.avif",
       "/images/Shoes/so3.avif",
       "/images/Shoes/a01.avif",
@@ -34,7 +34,7 @@ export const placeholderProducts: PlaceholderProductDetail[] = [
       "/images/Shoes/so1.webp",
       "/images/Shoes/so2.webp",
       "/images/Shoes/so4.avif",
-      "/images/Shoes/s05.avif",
+      "/images/Shoes/gmm.jpeg",
     ],
     sizes: ["38", "39", "40", "41"],
     colors: ["White", "Black"],
@@ -71,7 +71,7 @@ export const placeholderProducts: PlaceholderProductDetail[] = [
     images: [
       "/images/Shoes/a01.avif",
       "/images/Shoes/so2.webp",
-      "/images/Shoes/s05.avif",
+      "/images/Shoes/gmm.jpeg",
       "/images/Shoes/so3.avif",
     ],
     sizes: ["38", "39", "40", "41", "42"],

@@ -43,7 +43,7 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
       {/* Info */}
       <div className="p-4">
         <p className="text-xs uppercase tracking-wider text-[var(--color-navy)]/55">
-          {product.brand} · {product.category}
+          {product.brand} || {product.category}
         </p>
         <h3 className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--color-navy)] transition-colors group-hover:text-[var(--color-accent)]">
           {product.name}

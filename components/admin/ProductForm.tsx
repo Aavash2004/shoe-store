@@ -82,7 +82,7 @@ export function ProductForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
-
+const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [name, setName] = useState(product?.name ?? "");
   const [slug, setSlug] = useState(product?.slug ?? "");
   const [slugEdited, setSlugEdited] = useState(isEditMode);
@@ -629,32 +629,91 @@ export function ProductForm({
           </div>
         </section>
 
-        {/* ── Sticky Footer ── */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1E2A38]/10 bg-[#F5F2EB]/95 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-[1100px] items-center justify-end gap-3 px-6 py-3.5">
-            <button
-              type="button"
-              onClick={() => router.push("/admin/products")}
-              disabled={isPending}
-              className="h-10 rounded-md px-5 text-[13px] font-medium text-[#1E2A38]/60 transition hover:text-[#1E2A38] disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <Button
-              type="submit"
-              disabled={isPending}
-              className="h-10 rounded-md bg-[#1E2A38] px-6 text-[13px] font-medium text-[#F5F2EB] transition hover:bg-[#89B4D9] hover:text-[#1E2A38] disabled:opacity-60"
-            >
-              {isPending
-                ? isEditMode
-                  ? "Saving…"
-                  : "Creating…"
-                : isEditMode
-                  ? "Save Changes"
-                  : "Create Product"}
-            </Button>
-          </div>
-        </div>
+   {/* ── Sticky Footer ── */}
+<div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1E2A38]/10 bg-[#F5F2EB]/95 backdrop-blur-sm">
+  <div className="mx-auto flex max-w-[1100px] items-center justify-between px-6 py-3.5">
+    {isEditMode ? (
+      <button
+        type="button"
+        onClick={() => setShowDeleteConfirm(true)}
+        disabled={isPending}
+        className="h-10 rounded-md px-4 text-[13px] font-medium text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+      >
+        Delete Product
+      </button>
+    ) : (
+      <span />
+    )}
+
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => router.push("/admin/products")}
+        disabled={isPending}
+        className="h-10 rounded-md px-5 text-[13px] font-medium text-[#1E2A38]/60 transition hover:text-[#1E2A38] disabled:opacity-50"
+      >
+        Cancel
+      </button>
+      <Button
+        type="submit"
+        disabled={isPending}
+        className="h-10 rounded-md bg-[#1E2A38] px-6 text-[13px] font-medium text-[#F5F2EB] transition hover:bg-[#89B4D9] hover:text-[#1E2A38] disabled:opacity-60"
+      >
+        {isPending
+          ? isEditMode
+            ? "Saving…"
+            : "Creating…"
+          : isEditMode
+            ? "Save Changes"
+            : "Create Product"}
+      </Button>
+    </div>
+  </div>
+</div>
+
+{/* ── Delete Confirmation Dialog ── */}
+{isEditMode && (
+  <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+    <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[#F5F2EB] p-0 shadow-lg">
+      <div className="px-6 pt-6 pb-5">
+        <DialogHeader className="space-y-2 text-left">
+          <DialogTitle className="font-[family-name:var(--font-display)] text-[20px] font-semibold tracking-tight text-[#1E2A38]">
+            Delete this product?
+          </DialogTitle>
+          <DialogDescription className="text-[13px] leading-relaxed text-[#1E2A38]/60">
+            This will remove{" "}
+            <span className="font-medium text-[#1E2A38]">{name}</span> from
+            the store. It won’t be permanently deleted past orders
+            referencing it will remain intact.
+          </DialogDescription>
+        </DialogHeader>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[#EFECE6]/60 px-6 py-3.5">
+        <button
+          type="button"
+          onClick={() => setShowDeleteConfirm(false)}
+          disabled={isPending}
+          className="h-9 rounded-md px-4 text-[13px] font-medium text-[#1E2A38]/60 transition hover:text-[#1E2A38] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => {
+            startTransition(async () => {
+              await deleteProduct(product!.id);
+            });
+          }}
+          className="h-9 rounded-md bg-rose-600 px-4 text-[13px] font-medium text-white transition hover:bg-rose-700 disabled:opacity-60"
+        >
+          {isPending ? "Deleting…" : "Delete Product"}
+        </button>
+      </div>
+    </DialogContent>
+  </Dialog>
+)}
       </form>
     </div>
   );

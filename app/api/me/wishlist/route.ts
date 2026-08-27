@@ -86,7 +86,7 @@ export async function GET() {
       brand: prod?.brand || "ShoeStore",
       category: prod?.category?.name || "Footwear",
       price: firstVariant ? Number(firstVariant.price) : 0,
-      image: primaryImg?.url || "/images/Shoes/s05.avif",
+      image: primaryImg?.url || "/images/Shoes/gmm.jpeg",
       stock: firstVariant ? firstVariant.stock : 0,
       variants: prod?.variants || [],
       createdAt: item.createdAt,

@@ -210,7 +210,7 @@ export default function CustomerOrdersPage() {
                     {order.items.map((item) => {
                       const imgUrl =
                         item.variant?.product?.images?.[0]?.url ||
-                        "/images/Shoes/s05.avif";
+                        "/images/Shoes/gmm.jpeg";
                       return (
                         <div
                           key={item.id}

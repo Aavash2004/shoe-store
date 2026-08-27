@@ -191,7 +191,7 @@ export default async function AdminDashboardPage() {
             ) : (
               <div className="mt-4 flex flex-col divide-y divide-sand">
                {recentProducts.map((prod: (typeof recentProducts)[number]) => {
-                  const imgUrl = prod.images[0]?.url || "/images/Shoes/s05.avif";
+                  const imgUrl = prod.images[0]?.url || "/images/Shoes/gmm.jpeg";
                   const price = prod.variants[0]?.price ? Number(prod.variants[0].price) : 0;
                   return (
                     <div key={prod.id} className="flex items-center gap-4 py-3">
@@ -232,7 +232,7 @@ export default async function AdminDashboardPage() {
             ) : (
               <div className="mt-4 flex flex-col gap-4">
                 {lowStockItems.map((item: (typeof lowStockItems)[number]) => {
-                  const imgUrl = item.product.images?.[0]?.url || "/images/Shoes/s05.avif";
+                  const imgUrl = item.product.images?.[0]?.url || "/images/Shoes/gmm.jpeg";
                   const urgent = item.stock <= 2;
                   return (
                     <div key={item.id} className="flex items-center gap-3">

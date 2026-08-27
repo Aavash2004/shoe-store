@@ -79,7 +79,7 @@ export default async function AdminProductsPage() {
               </thead>
               <tbody className="divide-y divide-sand">
                 {products.map((product: ProductWithRelations) => {
-                  const imageUrl = product.images[0]?.url || "/images/Shoes/s05.avif";
+                  const imageUrl = product.images[0]?.url || "/images/Shoes/gmm.jpeg";
                   const prices = product.variants.map((v) => Number(v.price));
                   const minPrice = prices.length ? Math.min(...prices) : 0;
                   const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
@@ -129,7 +129,7 @@ export default async function AdminProductsPage() {
           {/* Mobile cards */}
           <div className="flex flex-col divide-y divide-sand md:hidden">
             {products.map((product: ProductWithRelations) => {
-              const imageUrl = product.images[0]?.url || "/images/Shoes/s05.avif";
+              const imageUrl = product.images[0]?.url || "/images/Shoes/gmm.jpeg";
               const prices = product.variants.map((v) => Number(v.price));
               const minPrice = prices.length ? Math.min(...prices) : 0;
               const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
