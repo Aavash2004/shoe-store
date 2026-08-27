@@ -7,13 +7,9 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
-  GripVertical,
-  Package,
-  Image as ImageIcon,
-  Search,
-  Settings,
   Upload,
   Loader2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +23,16 @@ import {
 import { createProduct } from "@/app/admin/products/new/actions";
 import { updateProduct } from "@/app/admin/products/[id]/actions";
 import type { CreateProductInput } from "@/lib/validations/product";
+import { deleteProduct } from "@/app/admin/products/[id]/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 
 type Category = { id: string; name: string };
 
@@ -84,7 +90,9 @@ export function ProductForm({
   const [brand, setBrand] = useState(product?.brand ?? "");
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
   const [metaTitle, setMetaTitle] = useState(product?.metaTitle ?? "");
-  const [metaDescription, setMetaDescription] = useState(product?.metaDescription ?? "");
+  const [metaDescription, setMetaDescription] = useState(
+    product?.metaDescription ?? ""
+  );
   const [isActive, setIsActive] = useState(product?.isActive ?? true);
 
   const [images, setImages] = useState<ImageField[]>(
@@ -96,6 +104,7 @@ export function ProductForm({
         }))
       : [{ url: "", altText: "", isPrimary: true }]
   );
+
   const [variants, setVariants] = useState<VariantField[]>(
     product?.variants.length
       ? product.variants.map((v) => ({
@@ -107,13 +116,12 @@ export function ProductForm({
         }))
       : [{ size: "", color: "", sku: "", price: "", stock: "0" }]
   );
+
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
 
   function handleNameChange(val: string) {
     setName(val);
-    if (!slugEdited) {
-      setSlug(slugify(val));
-    }
+    if (!slugEdited) setSlug(slugify(val));
   }
 
   function handleSlugChange(val: string) {
@@ -126,15 +134,29 @@ export function ProductForm({
   }
 
   function removeImage(index: number) {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length && !next.some((img) => img.isPrimary)) {
+        next[0].isPrimary = true;
+      }
+      return next;
+    });
   }
 
-  function updateImage(index: number, field: keyof ImageField, value: string | boolean) {
-    setImages((prev) => prev.map((img, i) => (i === index ? { ...img, [field]: value } : img)));
+  function updateImage(
+    index: number,
+    field: keyof ImageField,
+    value: string | boolean
+  ) {
+    setImages((prev) =>
+      prev.map((img, i) => (i === index ? { ...img, [field]: value } : img))
+    );
   }
 
   function setPrimaryImage(index: number) {
-    setImages((prev) => prev.map((img, i) => ({ ...img, isPrimary: i === index })));
+    setImages((prev) =>
+      prev.map((img, i) => ({ ...img, isPrimary: i === index }))
+    );
   }
 
   async function uploadImage(index: number, file: File) {
@@ -161,15 +183,24 @@ export function ProductForm({
   }
 
   function addVariant() {
-    setVariants((prev) => [...prev, { size: "", color: "", sku: "", price: "", stock: "0" }]);
+    setVariants((prev) => [
+      ...prev,
+      { size: "", color: "", sku: "", price: "", stock: "0" },
+    ]);
   }
 
   function removeVariant(index: number) {
     setVariants((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function updateVariant(index: number, field: keyof VariantField, value: string) {
-    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)));
+  function updateVariant(
+    index: number,
+    field: keyof VariantField,
+    value: string
+  ) {
+    setVariants((prev) =>
+      prev.map((v, i) => (i === index ? { ...v, [field]: value } : v))
+    );
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -214,62 +245,96 @@ export function ProductForm({
     });
   }
 
+  const inputClass =
+    "h-11 w-full rounded-md border border-[#1E2A38]/10 bg-[#EFECE6] px-3.5 text-sm text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]";
+  const labelClass =
+    "mb-1.5 block text-[11px] font-medium tracking-wide text-[#1E2A38]";
+
   return (
-    <div className="max-w-4xl">
-      <div className="mb-8">
+    <div className="mx-auto max-w-[1100px] pb-28">
+      {/* ── Header ── */}
+      <div className="mb-10">
         <Link
           href="/admin/products"
-          className="inline-flex items-center gap-1.5 text-sm text-navy/50 hover:text-navy transition-colors mb-4"
+          className="mb-5 inline-flex items-center gap-1.5 text-[13px] text-[#1E2A38]/50 transition hover:text-[#1E2A38]"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Products
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Products
         </Link>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-navy">
+
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#1E2A38]/45">
+          Products / {isEditMode ? "Edit" : "New Product"}
+        </p>
+        <h1 className="mt-1 font-[family-name:var(--font-display)] text-[36px] leading-tight tracking-tight text-[#1E2A38] md:text-[40px]">
           {isEditMode ? "Edit Product" : "Add New Product"}
         </h1>
-        <p className="mt-1 text-sm text-navy/60">
-          {isEditMode ? "Update this product listing." : "Create a new product listing for your store."}
+        <p className="mt-2 max-w-lg text-[14px] leading-relaxed text-[#1E2A38]/55">
+          {isEditMode
+            ? "Update this product listing."
+            : "Create a new product for your store."}
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <Section icon={Package} title="General Information">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Label>Product Name</Label>
+      <form onSubmit={handleSubmit} className="space-y-14">
+        {/* ── Product Information ── */}
+        <section>
+          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1E2A38]">
+            Product Information
+          </h2>
+          <div className="mb-6 h-px bg-[#1E2A38]/10" />
+
+          <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className={labelClass}>
+                Product Name <span className="text-[#1E2A38]/40">*</span>
+              </label>
               <Input
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="e.g. Classic Leather Oxford"
-                className="mt-1.5 h-11 border-sand bg-cream-alt/60 px-4 text-navy placeholder:text-navy/35 focus-visible:ring-accent"
+                placeholder="e.g. Air Zoom Pulse"
+                className={inputClass}
                 required
+                aria-invalid={!!errors.name}
               />
-              {errors.name && <ErrorMsg msg={errors.name} />}
+              {errors.name && <FieldError msg={errors.name} />}
             </div>
-            <div className="sm:col-span-2">
-              <Label>Slug</Label>
+
+            <div>
+              <label className={labelClass}>
+                Slug <span className="text-[#1E2A38]/40">*</span>
+              </label>
               <Input
                 value={slug}
                 onChange={(e) => handleSlugChange(e.target.value)}
-                placeholder="classic-leather-oxford"
-                className="mt-1.5 h-11 border-sand bg-cream-alt/60 px-4 text-navy font-mono text-xs placeholder:text-navy/35 focus-visible:ring-accent"
+                placeholder="air-zoom-pulse"
+                className={`${inputClass} font-mono text-[13px]`}
                 required
+                aria-invalid={!!errors.slug}
               />
-              {errors.slug && <ErrorMsg msg={errors.slug} />}
+              {errors.slug && <FieldError msg={errors.slug} />}
             </div>
+
             <div>
-              <Label>Brand</Label>
+              <label className={labelClass}>Brand</label>
               <Input
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
                 placeholder="e.g. Nike"
-                className="mt-1.5 h-11 border-sand bg-cream-alt/60 px-4 text-navy placeholder:text-navy/35 focus-visible:ring-accent"
+                className={inputClass}
               />
             </div>
+
             <div>
-              <Label>Category</Label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
-                <SelectTrigger className="mt-1.5 h-11 w-full border-sand bg-cream-alt/60 px-4 text-navy focus-visible:ring-accent">
+              <label className={labelClass}>
+                Category <span className="text-[#1E2A38]/40">*</span>
+              </label>
+              <Select
+                value={categoryId}
+                onValueChange={(v) => setCategoryId(v ?? "")}
+              >
+                <SelectTrigger
+                  className={`${inputClass} data-[placeholder]:text-[#1E2A38]/35`}
+                >
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -280,290 +345,325 @@ export function ProductForm({
                   ))}
                 </SelectContent>
               </Select>
-              {errors.categoryId && <ErrorMsg msg={errors.categoryId} />}
+              {errors.categoryId && <FieldError msg={errors.categoryId} />}
             </div>
-            <div className="sm:col-span-2">
-              <Label>Description</Label>
+
+            <div className="md:col-span-2">
+              <label className={labelClass}>
+                Description <span className="text-[#1E2A38]/40">*</span>
+              </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                placeholder="Detailed product description..."
-                className="mt-1.5 w-full rounded-lg border border-sand bg-cream-alt/60 px-4 py-3 text-sm text-navy placeholder:text-navy/35 outline-none focus-visible:ring-2 focus-visible:ring-accent resize-none"
+                rows={5}
+                placeholder="Detailed product description…"
+                className="w-full resize-none rounded-md border border-[#1E2A38]/10 bg-[#EFECE6] px-3.5 py-3 text-sm leading-relaxed text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]"
                 required
+                aria-invalid={!!errors.description}
               />
-              {errors.description && <ErrorMsg msg={errors.description} />}
+              {errors.description && <FieldError msg={errors.description} />}
             </div>
           </div>
-        </Section>
+        </section>
 
-        <Section icon={ImageIcon} title="Product Images">
-          <div className="space-y-3">
+        {/* ── Product Images ── */}
+        <section>
+          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1E2A38]">
+            Product Images
+          </h2>
+          <div className="mb-6 h-px bg-[#1E2A38]/10" />
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {images.map((img, i) => (
-              <div
-                key={i}
-                className="flex flex-col gap-3 rounded-lg border border-sand/60 bg-cream-alt/30 p-4 sm:flex-row sm:items-start"
-              >
-                <div className="flex items-center gap-2 text-navy/30">
-                  <GripVertical className="h-4 w-4" />
-                  <span className="text-xs font-medium text-navy/40">{i + 1}</span>
-                </div>
-                <div className="flex-1 grid gap-3 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    {img.url ? (
-                      <div className="relative group">
-                        <img
-                          src={img.url}
-                          alt={img.altText || `Product image ${i + 1}`}
-                          className="h-40 w-full rounded-lg border border-sand object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateImage(i, "url", "")}
-                          className="absolute top-2 right-2 rounded-full bg-white/90 p-1.5 text-rose-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-sand bg-white transition-colors hover:border-navy/30">
-                        {uploadingIndex === i ? (
-                          <Loader2 className="h-6 w-6 text-navy/40 animate-spin" />
-                        ) : (
-                          <Upload className="h-6 w-6 text-navy/30" />
-                        )}
-                        <span className="text-xs text-navy/50">
-                          {uploadingIndex === i ? "Uploading..." : "Click to upload image"}
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) uploadImage(i, file);
-                          }}
-                        />
-                      </label>
+              <div key={i} className="group relative">
+                {img.url ? (
+                  <div className="relative aspect-square overflow-hidden rounded-md border border-[#1E2A38]/10 bg-[#EFECE6]">
+                    <img
+                      src={img.url}
+                      alt={img.altText || `Product image ${i + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    {img.isPrimary && (
+                      <span className="absolute left-2 top-2 rounded bg-[#1E2A38]/85 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[#F5F2EB]">
+                        MAIN
+                      </span>
                     )}
-                  </div>
-                  {img.url && (
-                    <>
-                      <Input
-                        value={img.altText}
-                        onChange={(e) => updateImage(i, "altText", e.target.value)}
-                        placeholder="Alt text (optional)"
-                        className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
-                      />
-                      <div className="flex items-center gap-3">
+                    <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/40 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+                      {!img.isPrimary && (
                         <button
                           type="button"
                           onClick={() => setPrimaryImage(i)}
-                          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                            img.isPrimary
-                              ? "bg-navy text-cream"
-                              : "border border-sand text-navy/60 hover:bg-sand/40"
-                          }`}
+                          className="rounded bg-white/90 px-2 py-1 text-[10px] font-medium text-[#1E2A38]"
                         >
-                          {img.isPrimary ? "Primary" : "Set Primary"}
+                          Set main
                         </button>
-                        {images.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeImage(i)}
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-rose-500 hover:bg-rose-50 transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        className="ml-auto rounded bg-white/90 p-1 text-rose-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#1E2A38]/15 bg-[#EFECE6] transition hover:border-[#89B4D9]/60 hover:bg-[#E6E0D4]/40">
+                    {uploadingIndex === i ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-[#1E2A38]/40" />
+                    ) : (
+                      <Upload className="h-5 w-5 text-[#1E2A38]/30" />
+                    )}
+                    <span className="text-[11px] text-[#1E2A38]/45">
+                      {uploadingIndex === i ? "Uploading…" : "Upload"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadImage(i, file);
+                      }}
+                    />
+                  </label>
+                )}
+
+                {img.url && (
+                  <Input
+                    value={img.altText}
+                    onChange={(e) => updateImage(i, "altText", e.target.value)}
+                    placeholder="Alt text"
+                    className="mt-1.5 h-8 rounded border border-[#1E2A38]/10 bg-transparent px-2 text-[12px] text-[#1E2A38] placeholder:text-[#1E2A38]/30 focus:border-[#89B4D9] focus:ring-0"
+                  />
+                )}
+              </div>
+            ))}
+
+            {/* Add image slot */}
+            <button
+              type="button"
+              onClick={addImage}
+              disabled={uploadingIndex !== null}
+              className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-[#1E2A38]/15 text-[#1E2A38]/40 transition hover:border-[#89B4D9]/50 hover:text-[#89B4D9]"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="text-[11px]">Add image</span>
+            </button>
+          </div>
+          {errors.images && <FieldError msg={errors.images} />}
+        </section>
+
+        {/* ── Variants ── */}
+        <section>
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1E2A38]">
+              Variants
+            </h2>
+          </div>
+          <div className="mb-4 h-px bg-[#1E2A38]/10" />
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-[#1E2A38]/10 text-[10px] font-semibold uppercase tracking-wider text-[#1E2A38]/50">
+                  <th className="pb-2.5 pr-3 font-medium">Size</th>
+                  <th className="pb-2.5 pr-3 font-medium">Color</th>
+                  <th className="pb-2.5 pr-3 font-medium">SKU</th>
+                  <th className="pb-2.5 pr-3 font-medium">Price</th>
+                  <th className="pb-2.5 pr-3 font-medium">Stock</th>
+                  <th className="w-10 pb-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {variants.map((v, i) => (
+                  <tr
+                    key={i}
+                    className="border-b border-[#1E2A38]/06 last:border-0"
+                  >
+                    <td className="py-2.5 pr-3">
+                      <Input
+                        value={v.size}
+                        onChange={(e) =>
+                          updateVariant(i, "size", e.target.value)
+                        }
+                        placeholder="42"
+                        className="h-9 rounded border border-[#1E2A38]/10 bg-[#EFECE6] px-2.5 text-sm text-[#1E2A38] focus:border-[#89B4D9] focus:ring-0"
+                      />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Input
+                        value={v.color}
+                        onChange={(e) =>
+                          updateVariant(i, "color", e.target.value)
+                        }
+                        placeholder="White"
+                        className="h-9 rounded border border-[#1E2A38]/10 bg-[#EFECE6] px-2.5 text-sm text-[#1E2A38] focus:border-[#89B4D9] focus:ring-0"
+                      />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Input
+                        value={v.sku}
+                        onChange={(e) =>
+                          updateVariant(i, "sku", e.target.value)
+                        }
+                        placeholder="SHOE-42-W"
+                        className="h-9 rounded border border-[#1E2A38]/10 bg-[#EFECE6] px-2.5 font-mono text-[13px] text-[#1E2A38] focus:border-[#89B4D9] focus:ring-0"
+                      />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-[#1E2A38]/40">
+                          $
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={v.price}
+                          onChange={(e) =>
+                            updateVariant(i, "price", e.target.value)
+                          }
+                          placeholder="129.00"
+                          className="h-9 rounded border border-[#1E2A38]/10 bg-[#EFECE6] pl-6 pr-2.5 text-sm text-[#1E2A38] focus:border-[#89B4D9] focus:ring-0"
+                        />
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={v.stock}
+                        onChange={(e) =>
+                          updateVariant(i, "stock", e.target.value)
+                        }
+                        placeholder="0"
+                        className="h-9 rounded border border-[#1E2A38]/10 bg-[#EFECE6] px-2.5 text-sm text-[#1E2A38] focus:border-[#89B4D9] focus:ring-0"
+                      />
+                    </td>
+                    <td className="py-2.5">
+                      {variants.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeVariant(i)}
+                          className="rounded p-1.5 text-[#1E2A38]/30 transition hover:bg-rose-50 hover:text-rose-600"
+                          aria-label="Remove variant"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <Button
+
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            onClick={addImage}
-            className="mt-4"
-            disabled={uploadingIndex !== null}
+            onClick={addVariant}
+            className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1E2A38]/55 transition hover:text-[#89B4D9]"
           >
-            <Plus className="h-4 w-4" />
-            Add Image
-          </Button>
-          {errors.images && <ErrorMsg msg={errors.images} />}
-        </Section>
-
-        <Section icon={Package} title="Variants">
-          <div className="space-y-3">
-            {variants.map((v, i) => (
-              <div
-                key={i}
-                className="flex flex-col gap-3 rounded-lg border border-sand/60 bg-cream-alt/30 p-4 sm:flex-row sm:items-start"
-              >
-                <div className="flex items-center gap-2 text-navy/30">
-                  <GripVertical className="h-4 w-4" />
-                  <span className="text-xs font-medium text-navy/40">{i + 1}</span>
-                </div>
-                <div className="flex-1 grid gap-3 grid-cols-2 sm:grid-cols-5">
-                  <Input
-                    value={v.size}
-                    onChange={(e) => updateVariant(i, "size", e.target.value)}
-                    placeholder="Size (e.g. 10)"
-                    className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
-                  />
-                  <Input
-                    value={v.color}
-                    onChange={(e) => updateVariant(i, "color", e.target.value)}
-                    placeholder="Color (e.g. Black)"
-                    className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
-                  />
-                  <Input
-                    value={v.sku}
-                    onChange={(e) => updateVariant(i, "sku", e.target.value)}
-                    placeholder="SKU"
-                    className="h-10 border-sand bg-white px-3 text-sm text-navy font-mono placeholder:text-navy/30 focus-visible:ring-accent"
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={v.price}
-                    onChange={(e) => updateVariant(i, "price", e.target.value)}
-                    placeholder="Price"
-                    className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    value={v.stock}
-                    onChange={(e) => updateVariant(i, "stock", e.target.value)}
-                    placeholder="Stock"
-                    className="h-10 border-sand bg-white px-3 text-sm text-navy placeholder:text-navy/30 focus-visible:ring-accent"
-                  />
-                </div>
-                <div className="flex items-center sm:mt-0">
-                  {variants.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeVariant(i)}
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-rose-500 hover:bg-rose-50 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={addVariant} className="mt-4">
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add Variant
-          </Button>
-          {errors.variants && <ErrorMsg msg={errors.variants} />}
-        </Section>
+          </button>
+          {errors.variants && <FieldError msg={errors.variants} />}
+        </section>
 
-        <Section icon={Search} title="SEO">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Label>Meta Title</Label>
+        {/* ── SEO ── */}
+        <section>
+          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1E2A38]">
+            SEO
+          </h2>
+          <div className="mb-6 h-px bg-[#1E2A38]/10" />
+
+          <div className="grid grid-cols-1 gap-5">
+            <div>
+              <label className={labelClass}>Meta Title</label>
               <Input
                 value={metaTitle}
                 onChange={(e) => setMetaTitle(e.target.value)}
                 placeholder="Page title for search engines"
-                className="mt-1.5 h-11 border-sand bg-cream-alt/60 px-4 text-navy placeholder:text-navy/35 focus-visible:ring-accent"
+                className={inputClass}
               />
             </div>
-            <div className="sm:col-span-2">
-              <Label>Meta Description</Label>
+            <div>
+              <label className={labelClass}>Meta Description</label>
               <textarea
                 value={metaDescription}
                 onChange={(e) => setMetaDescription(e.target.value)}
                 rows={2}
                 placeholder="Brief description for search results"
-                className="mt-1.5 w-full rounded-lg border border-sand bg-cream-alt/60 px-4 py-3 text-sm text-navy placeholder:text-navy/35 outline-none focus-visible:ring-2 focus-visible:ring-accent resize-none"
+                className="w-full resize-none rounded-md border border-[#1E2A38]/10 bg-[#EFECE6] px-3.5 py-3 text-sm text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]"
               />
             </div>
           </div>
-        </Section>
+        </section>
 
-        <Section icon={Settings} title="Status">
+        {/* ── Status ── */}
+        <section>
+          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1E2A38]">
+            Status
+          </h2>
+          <div className="mb-5 h-px bg-[#1E2A38]/10" />
+
           <div className="flex items-center gap-3">
             <button
               type="button"
+              role="switch"
+              aria-checked={isActive}
               onClick={() => setIsActive(!isActive)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                isActive ? "bg-navy" : "bg-sand"
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${
+                isActive ? "bg-[#1E2A38]" : "bg-[#1E2A38]/20"
               }`}
             >
               <span
-                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${
-                  isActive ? "translate-x-5" : "translate-x-0"
+                className={`pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  isActive ? "translate-x-4" : "translate-x-0"
                 }`}
               />
             </button>
-            <span className="text-sm text-navy">
+            <span className="text-[13px] text-[#1E2A38]/70">
               {isActive ? "Active — visible on store" : "Draft — hidden from store"}
             </span>
           </div>
-        </Section>
+        </section>
 
-        <div className="flex items-center gap-3 border-t border-sand pt-6">
-          <Button type="submit" size="lg" disabled={isPending}>
-            {isPending
-              ? isEditMode
-                ? "Saving..."
-                : "Creating..."
-              : isEditMode
-                ? "Save Changes"
-                : "Create Product"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="lg"
-            onClick={() => router.push("/admin/products")}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
+        {/* ── Sticky Footer ── */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1E2A38]/10 bg-[#F5F2EB]/95 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-[1100px] items-center justify-end gap-3 px-6 py-3.5">
+            <button
+              type="button"
+              onClick={() => router.push("/admin/products")}
+              disabled={isPending}
+              className="h-10 rounded-md px-5 text-[13px] font-medium text-[#1E2A38]/60 transition hover:text-[#1E2A38] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="h-10 rounded-md bg-[#1E2A38] px-6 text-[13px] font-medium text-[#F5F2EB] transition hover:bg-[#89B4D9] hover:text-[#1E2A38] disabled:opacity-60"
+            >
+              {isPending
+                ? isEditMode
+                  ? "Saving…"
+                  : "Creating…"
+                : isEditMode
+                  ? "Save Changes"
+                  : "Create Product"}
+            </Button>
+          </div>
         </div>
       </form>
     </div>
   );
 }
 
-function Section({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  children: React.ReactNode;
-}) {
+function FieldError({ msg }: { msg: string[] }) {
   return (
-    <div className="rounded-xl border border-sand bg-white p-6 shadow-xs">
-      <div className="flex items-center gap-2.5 mb-5">
-        <Icon className="h-4.5 w-4.5 text-navy/40" />
-        <h2 className="text-sm font-semibold text-navy">{title}</h2>
-      </div>
-      {children}
-    </div>
+    <p className="mt-1.5 text-[12px] text-rose-600" role="alert">
+      {msg.join(", ")}
+    </p>
   );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <label className="text-xs font-medium uppercase tracking-wider text-navy/60">
-      {children}
-    </label>
-  );
-}
-
-function ErrorMsg({ msg }: { msg: string[] }) {
-  return <p className="mt-1 text-xs text-red-600">{msg.join(", ")}</p>;
 }

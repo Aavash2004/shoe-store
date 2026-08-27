@@ -24,7 +24,15 @@ export default async function EditProductPage({
     }),
   ]);
 
-  if (!product) notFound();
+ if (!product)  notFound();
+ const serializedProduct ={
+  ...product,
+  variants: product.variants.map((v)=> ({
+    ...v,
+    price: Number(v.price),
+  })),
+ };
 
-  return <ProductForm categories={categories} product={product} />;
+ return<ProductForm categories={categories}product={serializedProduct} />;
+
 }
