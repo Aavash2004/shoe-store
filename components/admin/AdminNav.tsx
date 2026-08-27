@@ -5,6 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut, Menu, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const links = [
   { href: "/admin", label: "Dashboard" },
@@ -115,32 +122,40 @@ export function AdminNav({ email }: { email: string }) {
         </nav>
       </div>
 
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
-            <h2 className="text-lg font-medium text-[var(--color-navy)]">Sign out?</h2>
-            <p className="mt-2 text-sm text-[var(--color-navy)]/60">
-              You&apos;ll need to sign in again to access the admin dashboard.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                disabled={loading}
-                className="rounded-md border border-sand px-4 py-2 text-sm text-[var(--color-navy)] hover:bg-cream-alt disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleLogout}
-                disabled={loading}
-                className="rounded-md bg-[var(--color-navy)] px-4 py-2 text-sm text-cream hover:opacity-90 disabled:opacity-60"
-              >
-                {loading ? "Signing out..." : "Sign Out"}
-              </button>
-            </div>
+      <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[#F5F2EB] p-0 shadow-lg">
+          <div className="px-6 pt-6 pb-5">
+            <DialogHeader className="space-y-2 text-left">
+              <DialogTitle className="font-[family-name:var(--font-display)] text-[20px] font-semibold tracking-tight text-[#1E2A38]">
+                Sign out?
+              </DialogTitle>
+              <DialogDescription className="text-[13px] leading-relaxed text-[#1E2A38]/60">
+                You&apos;ll need to sign in again to access the admin
+                dashboard.
+              </DialogDescription>
+            </DialogHeader>
           </div>
-        </div>
-      )}
+
+          <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[#EFECE6]/60 px-6 py-3.5">
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(false)}
+              disabled={loading}
+              className="h-9 rounded-md px-4 text-[13px] font-medium text-[#1E2A38]/60 transition hover:text-[#1E2A38] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loading}
+              className="h-9 rounded-md bg-rose-600 px-4 text-[13px] font-medium text-white transition hover:bg-rose-700 disabled:opacity-60"
+            >
+              {loading ? "Signing out…" : "Sign Out"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

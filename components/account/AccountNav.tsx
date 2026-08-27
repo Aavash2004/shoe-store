@@ -11,6 +11,13 @@ import {
   User,
   LogOut,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function AccountNav() {
   const pathname = usePathname();
@@ -59,7 +66,7 @@ export function AccountNav() {
   return (
     <>
       {/* Mobile Horizontal Navigation Bar */}
-      <div className="md:hidden overflow-x-auto no-scrollbar -mx-4 px-4 pb-2 mb-6 border-b border-[var(--color-sand)] flex gap-2">
+      <div className="md:hidden -mx-4 px-4 pb-2 mb-6 border-b border-[var(--color-sand)] flex flex-wrap gap-2">
         {navItems.map((item) => {
           const active = isLinkActive(item);
           const Icon = item.icon;
@@ -139,32 +146,39 @@ export function AccountNav() {
         </div>
       </aside>
 
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
-            <h2 className="text-lg font-medium text-[var(--color-navy)]">Log out?</h2>
-            <p className="mt-2 text-sm text-[var(--color-navy)]/60">
-              You&apos;ll need to sign in again to access your account.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                disabled={loading}
-                className="rounded-md border border-[var(--color-sand)] px-4 py-2 text-sm text-[var(--color-navy)] hover:bg-[var(--color-cream-alt)] disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleLogout}
-                disabled={loading}
-                className="rounded-md bg-[var(--color-navy)] px-4 py-2 text-sm text-[var(--color-cream)] hover:opacity-90 disabled:opacity-60"
-              >
-                {loading ? "Logging out..." : "Log Out"}
-              </button>
-            </div>
+      <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[#F5F2EB] p-0 shadow-lg">
+          <div className="px-6 pt-6 pb-5">
+            <DialogHeader className="space-y-2 text-left">
+              <DialogTitle className="font-[family-name:var(--font-display)] text-[20px] font-semibold tracking-tight text-[#1E2A38]">
+                Log out?
+              </DialogTitle>
+              <DialogDescription className="text-[13px] leading-relaxed text-[#1E2A38]/60">
+                You&apos;ll need to sign in again to access your account.
+              </DialogDescription>
+            </DialogHeader>
           </div>
-        </div>
-      )}
+
+          <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[#EFECE6]/60 px-6 py-3.5">
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(false)}
+              disabled={loading}
+              className="h-9 rounded-md px-4 text-[13px] font-medium text-[#1E2A38]/60 transition hover:text-[#1E2A38] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loading}
+              className="h-9 rounded-md bg-[#1E2A38] px-4 text-[13px] font-medium text-[#F5F2EB] transition hover:opacity-90 disabled:opacity-60"
+            >
+              {loading ? "Logging out…" : "Log Out"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
