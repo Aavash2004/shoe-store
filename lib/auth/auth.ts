@@ -1,10 +1,21 @@
 
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/prisma";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { authConfig } from "./auth.config";
+
+// Custom error classes — Auth.js v5 surfaces these as res.code on the client
+class InvalidCredentialsError extends CredentialsSignin {
+  code = "invalid_credentials";
+}
+class AdminOnCustomerLoginError extends CredentialsSignin {
+  code = "admin_use_admin_login";
+}
+class CustomerOnAdminLoginError extends CredentialsSignin {
+  code = "unauthorized_admin";
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -20,14 +31,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password are required");
+          throw new InvalidCredentialsError();
         }
 
         const email = (credentials.email as string).trim().toLowerCase();
         const user = await prisma.user.findUnique({ where: { email } });
 
         if (!user || !user.password) {
-          throw new Error("Invalid email or password");
+          throw new InvalidCredentialsError();
         }
 
         const isValid = await bcrypt.compare(
@@ -36,19 +47,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
 
         if (!isValid) {
-          throw new Error("Invalid email or password");
+          throw new InvalidCredentialsError();
         }
 
         const loginType = (credentials.loginType as string) || "customer";
 
         // Admin accounts cannot log into customer login
         if (loginType === "customer" && user.role === "ADMIN") {
-          throw new Error("Admin accounts must use the admin login");
+          throw new AdminOnCustomerLoginError();
         }
 
         // Customer accounts cannot log into admin login
         if (loginType === "admin" && user.role !== "ADMIN") {
-          throw new Error("Unauthorized admin account");
+          throw new CustomerOnAdminLoginError();
         }
 
         return {

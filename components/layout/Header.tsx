@@ -128,8 +128,20 @@ function HeaderInner() {
           {/* Account / Login */}
           <Button variant="ghost" size="icon" asChild>
             <Link
-              href={session?.user ? "/account" : "/login"}
-              aria-label={session?.user ? "Account" : "Log in"}
+              href={
+                session?.user
+                  ? session.user.role === "ADMIN"
+                    ? "/admin"
+                    : "/account"
+                  : "/login"
+              }
+              aria-label={
+                session?.user
+                  ? session.user.role === "ADMIN"
+                    ? "Admin Console"
+                    : "Account"
+                  : "Log in"
+              }
             >
               <User className="h-5 w-5" strokeWidth={1.5} />
             </Link>
@@ -205,11 +217,21 @@ function HeaderInner() {
             </Link>
             <span className="text-[var(--color-navy)]/30">·</span>
             <Link
-              href={session?.user ? "/account" : "/login"}
+              href={
+                session?.user
+                  ? session.user.role === "ADMIN"
+                    ? "/admin"
+                    : "/account"
+                  : "/login"
+              }
               className="flex items-center gap-2 text-sm font-medium text-[var(--color-navy)]/70"
             >
               <User className="h-4 w-4" strokeWidth={1.5} />
-              {session?.user ? "Account" : "Log in"}
+              {session?.user
+                ? session.user.role === "ADMIN"
+                  ? "Admin Console"
+                  : "Account"
+                : "Log in"}
             </Link>
           </div>
         </nav>

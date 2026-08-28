@@ -41,53 +41,41 @@ export default function CustomerLoginPage() {
     setServerError("");
     setLoading(true);
 
-    try {
-      const res = await signIn("credentials", {
-        email: data.email.trim().toLowerCase(),
-        password: data.password,
-        loginType: "customer",
-        redirect: false,
-      });
+    const res = await signIn("credentials", {
+      email: data.email.trim().toLowerCase(),
+      password: data.password,
+      loginType: "customer",
+      redirect: false,
+    });
 
-      setLoading(false);
+    setLoading(false);
 
-      if (res?.error) {
-        if (
-          res.error.includes("Admin accounts must use the admin login") ||
-          (res as any).code === "Admin accounts must use the admin login"
-        ) {
-          setServerError("Admin accounts must use the admin login");
-        } else {
-          setServerError("Invalid email or password");
-        }
-        return;
-      }
-
-      if (cartItems.length > 0) {
-        await fetch("/api/cart/merge", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: cartItems.map((item) => ({
-              variantId: item.variantId,
-              quantity: item.quantity,
-            })),
-          }),
-        });
-        clearCart();
-      }
-
-      // Hard navigate to trigger Next.js layout & session sync
-      window.location.href = "/account";
-    } catch (err: any) {
-      setLoading(false);
-      const msg = err?.message || "";
-      if (msg.includes("Admin accounts must use the admin login")) {
-        setServerError("Admin accounts must use the admin login");
+    if (res?.error) {
+      // Auth.js v5 surfaces CredentialsSignin subclass codes via res.code
+      const code = (res as any).code as string | undefined;
+      if (code === "admin_use_admin_login") {
+        setServerError("Admin accounts must use the admin login page.");
       } else {
-        setServerError("Invalid email or password");
+        setServerError("Invalid email or password.");
       }
+      return;
     }
+
+    if (cartItems.length > 0) {
+      await fetch("/api/cart/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cartItems.map((item) => ({
+            variantId: item.variantId,
+            quantity: item.quantity,
+          })),
+        }),
+      });
+      clearCart();
+    }
+
+    window.location.href = "/account";
   }
 
   return (

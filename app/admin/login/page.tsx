@@ -33,40 +33,27 @@ function AdminLoginForm() {
 
   const onSubmit = async (data: AdminLoginInput) => {
     setServerError(null);
-    try {
-      const res = await signIn("credentials", {
-        email: data.email.trim().toLowerCase(),
-        password: data.password,
-        loginType: "admin",
-        redirect: false,
-      });
 
-      if (res?.error) {
-        if (
-          res.error.includes("Unauthorized admin account") ||
-          (res as any).code === "Unauthorized admin account"
-        ) {
-          setServerError("Unauthorized admin account");
-        } else {
-          setServerError("Invalid email or password.");
-        }
-        return;
-      }
+    const res = await signIn("credentials", {
+      email: data.email.trim().toLowerCase(),
+      password: data.password,
+      loginType: "admin",
+      redirect: false,
+    });
 
-      // Hard navigate to ensure new session cookies are sent to middleware & layout
-      window.location.href = callbackUrl;
-    } catch (err: any) {
-      if (err?.message?.includes("NEXT_REDIRECT")) {
-        window.location.href = callbackUrl;
-        return;
-      }
-      const msg = err?.message || "";
-      if (msg.includes("Unauthorized admin account")) {
-        setServerError("Unauthorized admin account");
+    if (res?.error) {
+      // Auth.js v5 surfaces CredentialsSignin subclass codes via res.code
+      const code = (res as any).code as string | undefined;
+      if (code === "unauthorized_admin") {
+        setServerError("Unauthorized admin account.");
       } else {
         setServerError("Invalid email or password.");
       }
+      return;
     }
+
+    // Hard navigate to ensure new session cookies are sent to middleware & layout
+    window.location.href = callbackUrl;
   };
 
   return (
