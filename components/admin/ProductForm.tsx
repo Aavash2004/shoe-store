@@ -10,6 +10,7 @@ import {
   Upload,
   Loader2,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -328,23 +329,24 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
               <label className={labelClass}>
                 Category <span className="text-[#1E2A38]/40">*</span>
               </label>
-              <Select
-                value={categoryId}
-                onValueChange={(v) => setCategoryId(v ?? "")}
-              >
-                <SelectTrigger
-                  className={`${inputClass} data-[placeholder]:text-[#1E2A38]/35`}
+              <div className="relative">
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className={`${inputClass} appearance-none pr-10 cursor-pointer`}
+                  required
                 >
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
+                  <option value="" disabled className="text-[#1E2A38]/35">
+                    Select category
+                  </option>
                   {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
+                    <option key={cat.id} value={cat.id} className="text-[#1E2A38]">
                       {cat.name}
-                    </SelectItem>
+                    </option>
                   ))}
-                </SelectContent>
-              </Select>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1E2A38]/50" />
+              </div>
               {errors.categoryId && <FieldError msg={errors.categoryId} />}
             </div>
 
