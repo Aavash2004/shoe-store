@@ -121,7 +121,7 @@ export function WishlistButton({
 
             <div className="pt-2 flex flex-col gap-2">
               <Link
-                href={`/auth/login?callbackUrl=${encodeURIComponent(
+                href={`/login?callbackUrl=${encodeURIComponent(
                   typeof window !== "undefined" ? window.location.pathname : "/account/wishlist"
                 )}`}
                 className="w-full py-3 px-4 bg-[var(--color-navy)] hover:bg-[var(--color-navy)]/90 text-[var(--color-cream)] font-medium text-sm rounded-xl text-center transition-colors shadow-md flex items-center justify-center gap-2"

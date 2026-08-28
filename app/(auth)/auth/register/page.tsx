@@ -55,7 +55,7 @@ export default function RegisterPage() {
       return;
     }
 
-    router.push("/auth/login");
+    router.push("/login");
   }
 
   return (
@@ -189,7 +189,7 @@ export default function RegisterPage() {
 
           <p className="mt-8 text-center text-sm text-navy/60">
             Already have an account?{" "}
-            <Link href="/auth/login" className="font-medium text-accent hover:underline">
+            <Link href="/login" className="font-medium text-accent hover:underline">
               Log in
             </Link>
           </p>

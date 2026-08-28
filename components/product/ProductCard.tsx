@@ -1,54 +1,54 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import type { PlaceholderProduct } from "@/types";
 import { WishlistButton } from "@/components/product/WishlistButton";
 
 export function ProductCard({ product }: { product: PlaceholderProduct }) {
+  const hasValidBrand =
+    product.brand &&
+    product.brand.trim().toUpperCase() !== "UNKNOWN" &&
+    product.brand.trim() !== "";
 
-  const bgVariants = [
-    "bg-zinc-950",
-    "bg-gradient-to-br from-cyan-900 via-teal-800 to-teal-900",
-    "bg-gradient-to-br from-stone-300 via-amber-100 to-orange-100",
-    "bg-gradient-to-br from-indigo-950 via-blue-900 to-slate-900",
-  ];
-
-  // Simple hash so each product gets a consistent background
-  const bgIndex =
-    product.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) %
-    bgVariants.length;
+  const metadata = hasValidBrand
+    ? `${product.brand.toUpperCase()} · ${product.category.toUpperCase()}`
+    : product.category.toUpperCase();
 
   return (
     <Link
       href={`/products/${product.slug}`}
-      className="group block overflow-hidden rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5"
+      className="group block overflow-hidden rounded-xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)]/60 transition-all duration-300 hover:border-[var(--color-navy)]/30 hover:shadow-sm"
     >
-      {/* Image area – richer background */}
-      <div
-        className={`relative aspect-square overflow-hidden ${bgVariants[bgIndex]}`}
-      >
+      {/* Image Container */}
+      <div className="relative aspect-square overflow-hidden bg-stone-200/60">
         <Image
-          src={product.image}
+          src={product.image || "/images/Shoes/s05.avif"}
           alt={product.name}
           fill
-          className="object-cover transition-transform duration-500 group-hover:scale-100"
+          className="object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
         />
 
-        {/* Wishlist Button */}
-        <div className="absolute top-3 right-3 z-8">
-          <WishlistButton productId={product.id} />
+        {/* Subtle Wishlist Button */}
+        <div className="absolute top-2.5 right-2.5 z-10" onClick={(e) => e.preventDefault()}>
+          <div className="p-1 rounded-full bg-[var(--color-cream)]/85 backdrop-blur-xs border border-[var(--color-sand)]/60 shadow-xs transition-transform hover:scale-105">
+            <WishlistButton productId={product.id} />
+          </div>
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       </div>
 
-      {/* Info */}
-      <div className="p-4">
-        <p className="text-xs uppercase tracking-wider text-[var(--color-navy)]/55">
-          {product.brand} || {product.category}
+      {/* Info Section */}
+      <div className="p-3.5 sm:p-4 space-y-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-navy)]/55 truncate">
+          {metadata}
         </p>
-        <h3 className="mt-1 font-[family-name:var(--font-display)] text-lg text-[var(--color-navy)] transition-colors group-hover:text-[var(--color-accent)]">
+
+        <h3 className="font-[family-name:var(--font-display)] text-sm sm:text-base font-bold text-[var(--color-navy)] transition-colors group-hover:text-[var(--color-sky)] truncate">
           {product.name}
         </h3>
-        <p className="mt-2 text-sm font-medium text-[var(--color-navy)]">
+
+        <p className="text-xs sm:text-sm font-semibold text-[var(--color-navy)] pt-0.5">
           ${product.price.toFixed(2)}
         </p>
       </div>

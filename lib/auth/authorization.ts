@@ -31,6 +31,19 @@ export async function requireAdmin() {
 }
 
 /**
+ * Ensures user is authenticated AND has CUSTOMER role (not ADMIN).
+ * Throws an Error if unauthorized or forbidden.
+ * Used in server-side functions / server components.
+ */
+export async function requireCustomer() {
+  const session = await requireAuth();
+  if (session.user.role === UserRole.ADMIN || (session.user.role as string) === "ADMIN") {
+    throw new Error("Forbidden: Customers only");
+  }
+  return session;
+}
+
+/**
  * Specialized helper for API route handlers.
  * Returns an object with status code and error message if unauthorized/forbidden,
  * or the session if authorized.

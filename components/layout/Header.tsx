@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ShoppingBag, Heart, User, Menu, X } from "lucide-react";
@@ -8,49 +8,47 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
 
-
 const links = [
   { href: "/shop", label: "Shop", category: null },
   { href: "/shop?category=Running", label: "Running", category: "Running" },
   { href: "/shop?category=Lifestyle", label: "Lifestyle", category: "Lifestyle" },
 ];
 
-
-export function Header() {
+function HeaderInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get("category");
   const [mobileOpen, setMobileOpen] = useState(false);
   const { data: session, status } = useSession();
-const isLoggedIn = status === "authenticated";
+  const isLoggedIn = status === "authenticated";
 
-const localCount = useCartStore((state) =>
-  state.items.reduce((sum, item) => sum + item.quantity, 0)
-);
+  const localCount = useCartStore((state) =>
+    state.items.reduce((sum, item) => sum + item.quantity, 0)
+  );
 
-const [dbCount, setDbCount] = useState(0);
+  const [dbCount, setDbCount] = useState(0);
 
-useEffect(() => {
-  if (!isLoggedIn) return;
+  useEffect(() => {
+    if (!isLoggedIn) return;
 
-  function fetchCount() {
-    fetch("/api/cart")
-      .then((res) => res.json())
-      .then((data) => {
-        const count = (data.items ?? []).reduce(
-          (sum: number, item: { quantity: number }) => sum + item.quantity,
-          0
-        );
-        setDbCount(count);
-      });
-  }
+    function fetchCount() {
+      fetch("/api/cart")
+        .then((res) => res.json())
+        .then((data) => {
+          const count = (data.items ?? []).reduce(
+            (sum: number, item: { quantity: number }) => sum + item.quantity,
+            0
+          );
+          setDbCount(count);
+        });
+    }
 
-  fetchCount();
-  window.addEventListener("cart-updated", fetchCount);
-  return () => window.removeEventListener("cart-updated", fetchCount);
-}, [isLoggedIn]);
+    fetchCount();
+    window.addEventListener("cart-updated", fetchCount);
+    return () => window.removeEventListener("cart-updated", fetchCount);
+  }, [isLoggedIn]);
 
-const cartCount = isLoggedIn ? dbCount : localCount;
+  const cartCount = isLoggedIn ? dbCount : localCount;
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -130,7 +128,7 @@ const cartCount = isLoggedIn ? dbCount : localCount;
           {/* Account / Login */}
           <Button variant="ghost" size="icon" asChild>
             <Link
-              href={session?.user ? "/account" : "/auth/login"}
+              href={session?.user ? "/account" : "/login"}
               aria-label={session?.user ? "Account" : "Log in"}
             >
               <User className="h-5 w-5" strokeWidth={1.5} />
@@ -207,7 +205,7 @@ const cartCount = isLoggedIn ? dbCount : localCount;
             </Link>
             <span className="text-[var(--color-navy)]/30">·</span>
             <Link
-              href={session?.user ? "/account" : "/auth/login"}
+              href={session?.user ? "/account" : "/login"}
               className="flex items-center gap-2 text-sm font-medium text-[var(--color-navy)]/70"
             >
               <User className="h-4 w-4" strokeWidth={1.5} />
@@ -217,5 +215,13 @@ const cartCount = isLoggedIn ? dbCount : localCount;
         </nav>
       </div>
     </header>
+  );
+}
+
+export function Header() {
+  return (
+    <Suspense fallback={<header className="sticky top-0 z-50 h-16 bg-[var(--color-cream)] border-b border-[var(--color-sand)]/70 md:h-[72px]" />}>
+      <HeaderInner />
+    </Suspense>
   );
 }

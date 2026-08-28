@@ -21,7 +21,7 @@ export default async function OrderDetailPage({
 }) {
   const session = await auth();
   if (!session?.user?.id) {
-    redirect("/auth/login?callbackUrl=/account/orders");
+    redirect("/login?callbackUrl=/account/orders");
   }
 
   const { id } = await params;

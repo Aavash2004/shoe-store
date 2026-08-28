@@ -14,7 +14,11 @@ export default async function AccountLayout({
   const session = await auth();
 
   if (!session?.user) {
-    redirect("/auth/login?callbackUrl=/account");
+    redirect("/login?callbackUrl=/account");
+  }
+
+  if (session.user.role === "ADMIN") {
+    redirect("/admin");
   }
 
   return (

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ProductGrid } from "@/components/product/ProductGrid";
@@ -76,7 +77,6 @@ export default async function ShopPage({
 
   const activeFilterCount = [category, size, color].filter(Boolean).length;
 
-
   function buildHref(remove?: "category" | "size" | "color") {
     const params = new URLSearchParams();
     if (category && remove !== "category") params.set("category", category);
@@ -89,103 +89,105 @@ export default async function ShopPage({
 
   return (
     <main className="min-h-screen bg-[#F5F2EB] text-[#1E2A38]">
-      {/* Collection banner */}
-      <section className="mx-auto max-w-[1440px] px-5 pt-4 sm:px-8 lg:px-12">
-        <div className="relative h-[220px] overflow-hidden rounded-[10px] sm:h-[280px] lg:h-[320px]">
+      {/* 1. Collection Banner */}
+      <section className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 pt-4">
+        <div className="relative h-[240px] sm:h-[280px] lg:h-[320px] overflow-hidden rounded-2xl">
           <Image
             src="/images/hero/h3.avif"
-            alt="The New Collection"
+            alt="Editorial Footwear Collection"
             fill
             priority
             className="object-cover object-center"
+            sizes="(max-width: 1440px) 100vw, 1440px"
           />
-          <div className="absolute inset-0 bg-[#1E2A38]/40" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-           
-            <p className="text-[11px] font-medium uppercase tracking-[0.26em] text-[#F5F2EB]/85">
-             <h1 className="mt-1.5 font-[family-name:var(--font-display)] text-[36px] leading-[0.95] tracking-[-0.02em] text-[#1E2A38] sm:text-[42px]">
-            Shop
+          <div className="absolute inset-0 bg-[#1E2A38]/35" />
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+            <h1 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#F5F2EB]">
+              Shop Collection
             </h1>
-            </p>
           </div>
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1440px] px-5 pb-20 pt-12 sm:px-8 lg:px-12 lg:pt-14">
- <header className="max-w-2xl">
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1E2A38]/45">
-            Collection
+      {/* 2. Main Content Container */}
+      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 mt-10 sm:mt-12 pb-20">
+        {/* Shop Introduction */}
+        <div className="max-w-xl space-y-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1E2A38]/50 block">
+            COLLECTION
+          </span>
+          <h2 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl font-bold text-[#1E2A38]">
+            Shop
+          </h2>
+          <p className="text-xs sm:text-sm text-[#1E2A38]/70 pt-1 leading-relaxed">
+            Explore the latest footwear designed for everyday movement, comfort, and style.
           </p>
-        </header>
-        {/* Toolbar */}
-        <div className="mt-9 flex flex-col gap-3 border-y border-[#1E2A38]/10 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#1E2A38]/50">
-            {withPrice.length}{" "}
-            {withPrice.length === 1 ? "Product" : "Products"}
-            {activeFilterCount > 0 && (
-              <span className="text-[#89B4D9]">
-                {" "}
-                · {activeFilterCount} filter
-                {activeFilterCount > 1 ? "s" : ""}
-              </span>
-            )}
-          </p>
-
-          <ShopFilters
-            categories={categories}
-            sizes={sizes}
-            colors={colors}
-            activeCategory={category}
-            activeSize={size}
-            activeColor={color}
-            activeSort={sort}
-          />
         </div>
 
-        {/* Active filters */}
+        {/* 3. Filter & Sort Toolbar */}
+        <div className="mt-7">
+          <Suspense fallback={<div className="h-12 w-full animate-pulse bg-[#EFECE6] rounded-lg" />}>
+            <ShopFilters
+              categories={categories}
+              sizes={sizes}
+              colors={colors}
+              activeCategory={category}
+              activeSize={size}
+              activeColor={color}
+              activeSort={sort}
+              totalProducts={withPrice.length}
+            />
+          </Suspense>
+        </div>
+
+        {/* 4. Active Filters Chips (Only rendered when filters exist) */}
         {activeFilterCount > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="mr-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[#1E2A38]/40">
-              Active
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/50 mr-1">
+              Active Filters
             </span>
+
             {category && (
               <Link
                 href={buildHref("category")}
-                className="inline-flex items-center gap-1.5 border border-[#1E2A38]/10 bg-[#EFECE6] px-2.5 py-1 text-[12px] text-[#1E2A38] transition hover:border-[#1E2A38]/25"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
-                {category}
-                <span className="text-[#1E2A38]/40">×</span>
+                <span>Category: {category}</span>
+                <span className="text-[#1E2A38]/50 text-xs">×</span>
               </Link>
             )}
+
             {size && (
               <Link
                 href={buildHref("size")}
-                className="inline-flex items-center gap-1.5 border border-[#1E2A38]/10 bg-[#EFECE6] px-2.5 py-1 text-[12px] text-[#1E2A38] transition hover:border-[#1E2A38]/25"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
-                Size {size}
-                <span className="text-[#1E2A38]/40">×</span>
+                <span>Size: {size}</span>
+                <span className="text-[#1E2A38]/50 text-xs">×</span>
               </Link>
             )}
+
             {color && (
               <Link
                 href={buildHref("color")}
-                className="inline-flex items-center gap-1.5 border border-[#1E2A38]/10 bg-[#EFECE6] px-2.5 py-1 text-[12px] text-[#1E2A38] transition hover:border-[#1E2A38]/25"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
-                {color}
-                <span className="text-[#1E2A38]/40">×</span>
+                <span>Color: {color}</span>
+                <span className="text-[#1E2A38]/50 text-xs">×</span>
               </Link>
             )}
+
             <Link
               href="/shop"
-              className="ml-1 text-[12px] font-medium text-[#1E2A38]/50 transition hover:text-[#1E2A38]"
+              className="ml-2 text-xs font-semibold text-[#1E2A38]/60 hover:text-[#1E2A38] underline transition-colors"
             >
               Clear all
             </Link>
           </div>
         )}
 
-        {/* Products */}
-        <section className="mt-7">
+        {/* 5. Product Grid or Empty State */}
+        <section className="mt-8">
           {withPrice.length > 0 ? (
             <ScrollReveal>
               <ProductGrid
@@ -194,29 +196,28 @@ export default async function ShopPage({
                   name: product.name,
                   slug: product.slug,
                   price: product.minPrice,
-                  image: product.images[0]?.url ?? "",
+                  image: product.images[0]?.url ?? "/images/Shoes/s05.avif",
                   category: product.category.name,
                   brand: product.brand ?? "",
                 }))}
               />
             </ScrollReveal>
           ) : (
-            <div className="flex min-h-[360px] flex-col items-center justify-center border-y border-[#1E2A38]/10 text-center">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#1E2A38]/40">
-                No shoes found
+            <div className="py-20 text-center space-y-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#1E2A38]/40">
+                NO SHOES FOUND
               </p>
-              <h2 className="mt-2.5 font-[family-name:var(--font-display)] text-[26px] text-[#1E2A38]">
-                Nothing matched your filters.
-              </h2>
-              <p className="mt-2 max-w-sm text-[14px] text-[#1E2A38]/50">
-                Try adjusting your filters or explore the full collection.
+              <p className="text-sm text-[#1E2A38]/60 max-w-sm mx-auto">
+                Try adjusting your filters or clear them to view the full collection.
               </p>
-              <Link
-                href="/shop"
-                className="mt-6 inline-flex h-10 items-center bg-[#1E2A38] px-5 text-[12px] font-medium uppercase tracking-[0.1em] text-[#F5F2EB] transition hover:bg-[#89B4D9] hover:text-[#1E2A38]"
-              >
-                Clear filters
-              </Link>
+              <div>
+                <Link
+                  href="/shop"
+                  className="inline-block mt-3 px-5 py-2.5 bg-[#1E2A38] text-[#F5F2EB] text-xs font-semibold uppercase tracking-wider rounded-xl hover:bg-[#1E2A38]/90 transition-colors shadow-xs"
+                >
+                  Clear Filters
+                </Link>
+              </div>
             </div>
           )}
         </section>

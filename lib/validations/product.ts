@@ -23,6 +23,13 @@ const productVariantSchema = z.object({
   stock: z.number().min(0, "Stock must be non-negative"),
 });
 
+// Used when EDITING a product.
+// Existing variants have an ID.
+// New variants don't.
+const updateProductVariantSchema = productVariantSchema.extend({
+  id: z.string().optional(),
+});
+
 export const createProductSchema = z.object({
   name: z.string().min(1, "Name is required"),
   slug: z.string().min(1, "Slug is required"),
@@ -32,13 +39,28 @@ export const createProductSchema = z.object({
   metaTitle: z.string().optional(),
   metaDescription: z.string().optional(),
   isActive: z.boolean(),
-  images: z.array(productImageSchema).min(1, "At least one image is required"),
-  variants: z.array(productVariantSchema).min(1, "At least one variant is required"),
+  images: z
+    .array(productImageSchema)
+    .min(1, "At least one image is required"),
+  variants: z
+    .array(productVariantSchema)
+    .min(1, "At least one variant is required"),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
-export const updateProductSchema = createProductSchema.partial().extend({
-  id: z.string().min(1),
-});
+
+export const updateProductSchema = createProductSchema
+  .omit({
+    variants: true,
+  })
+  .partial()
+  .extend({
+    id: z.string().min(1),
+
+    variants: z
+      .array(updateProductVariantSchema)
+      .min(1, "At least one variant is required")
+      .optional(),
+  });
 
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;

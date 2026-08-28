@@ -13,6 +13,7 @@ type DbCartItem = {
     size: string;
     color: string;
     price: string;
+    stock:number;
     product: {
       name: string;
       slug: string;
@@ -42,18 +43,26 @@ export default function CartPage() {
       .finally(() => setLoading(false));
   }, [isLoggedIn]);
 
-  async function handleDbUpdate(variantId: string, quantity: number) {
-    await fetch("/api/cart", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ variantId, quantity }),
-    });
-    setDbItems((prev) =>
-      quantity === 0
-        ? prev.filter((i) => i.variant.id !== variantId)
-        : prev.map((i) => (i.variant.id === variantId ? { ...i, quantity } : i))
+   async function handleDbUpdate(variantId: string, quantity: number) {
+  const item = dbItems.find((i) => i.variant.id === variantId);
+  if (item && quantity > item.variant.stock) {
+    window.dispatchEvent(
+      new CustomEvent("show-toast", { detail: `Only ${item.variant.stock} left in stock` })
     );
+    return;
   }
+
+  await fetch("/api/cart", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ variantId, quantity }),
+  });
+  setDbItems((prev) =>
+    quantity === 0
+      ? prev.filter((i) => i.variant.id !== variantId)
+      : prev.map((i) => (i.variant.id === variantId ? { ...i, quantity } : i))
+  );
+}
 
   async function handleDbRemove(variantId: string) {
     await fetch(`/api/cart?variantId=${variantId}`, { method: "DELETE" });
