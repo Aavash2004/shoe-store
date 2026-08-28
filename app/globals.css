@@ -32,6 +32,9 @@
   --color-accent: var(--color-sky);
   --color-accent-foreground: var(--color-navy);
 
+  --color-popover: var(--color-cream);
+  --color-popover-foreground: var(--color-navy);
+
   --color-border: var(--color-sand);
   --color-input: var(--color-sand);
   --color-ring: var(--color-sky);
