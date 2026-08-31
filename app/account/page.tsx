@@ -98,17 +98,6 @@ export default async function AccountPage() {
   const wishlistCount = wishlist?._count.items || 0;
   const userName = userProfile?.name || session?.user?.name || "Customer";
 
-  // Compute 100% dynamic profile completeness percentage based on real user fields
-  let profileScore = 0;
-  if (userName && userName !== "Customer") profileScore += 25;
-  if (userProfile?.email || session?.user?.email) profileScore += 25;
-  if (userProfile?.addresses && userProfile.addresses.length > 0) {
-    profileScore += 25;
-    if (userProfile.addresses[0]?.phone) profileScore += 15;
-  }
-  if (ordersCount > 0) profileScore += 10;
-  if (profileScore === 0) profileScore = 40;
-
   const greeting = getTimeGreeting();
 
   return (
@@ -123,79 +112,49 @@ export default async function AccountPage() {
         </h1>
       </div>
 
-      {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+      {/* Summary Cards Grid (2 Balanced Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         {/* Orders Card */}
         <Link
           href="/account/orders"
-          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
+          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-6 transition-all duration-200 hover:border-[var(--color-navy)]/40 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E7575]">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#6E7575]">
               Orders
             </span>
-            <div className="p-2 rounded-xl bg-[var(--color-sand)]/60 text-[var(--color-navy)] transition-colors group-hover:bg-[var(--color-navy)] group-hover:text-[var(--color-cream)]">
-              <ShoppingBag className="w-4 h-4" />
+            <div className="p-2.5 rounded-xl bg-[var(--color-sand)]/60 text-[var(--color-navy)] transition-colors group-hover:bg-[var(--color-navy)] group-hover:text-[var(--color-cream)]">
+              <ShoppingBag className="w-5 h-5" />
             </div>
           </div>
-          <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-navy)] mt-3">
-            {ordersCount}
+          <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)] mt-4 tracking-tight">
+            {ordersCount} <span className="text-xs font-semibold text-[#6E7575]">total placed</span>
           </p>
-          <div className="mt-3 flex items-center text-xs font-semibold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
-            <span>View orders</span>
-            <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
+          <div className="mt-4 flex items-center text-xs font-bold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
+            <span>View order history</span>
+            <ArrowRight className="w-3.5 h-3.5 ml-1.5 transition-transform group-hover:translate-x-1" />
           </div>
         </Link>
 
         {/* Wishlist Card */}
         <Link
           href="/account/wishlist"
-          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
+          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-6 transition-all duration-200 hover:border-[var(--color-navy)]/40 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E7575]">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#6E7575]">
               Wishlist
             </span>
-            <div className="p-2 rounded-xl bg-rose-50 text-rose-500 transition-colors group-hover:bg-rose-500 group-hover:text-white">
-              <Heart className="w-4 h-4" />
+            <div className="p-2.5 rounded-xl bg-rose-50 text-rose-500 transition-colors group-hover:bg-rose-500 group-hover:text-white">
+              <Heart className="w-5 h-5" />
             </div>
           </div>
-          <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-navy)] mt-3">
-            {wishlistCount} <span className="text-xs font-normal text-[#6E7575]">saved</span>
+          <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)] mt-4 tracking-tight">
+            {wishlistCount} <span className="text-xs font-semibold text-[#6E7575]">items saved</span>
           </p>
-          <div className="mt-3 flex items-center text-xs font-semibold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
-            <span>View wishlist</span>
-            <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
-          </div>
-        </Link>
-
-        {/* Profile Card */}
-        <Link
-          href="/account/profile"
-          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E7575]">
-              Profile
-            </span>
-            <div className="p-2 rounded-xl bg-[var(--color-sand)]/60 text-[var(--color-navy)] transition-colors group-hover:bg-[var(--color-navy)] group-hover:text-[var(--color-cream)]">
-              <User className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-navy)]">
-              {profileScore}% <span className="text-xs font-normal text-[#6E7575]">complete</span>
-            </p>
-            <div className="w-full bg-[var(--color-sand)]/50 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div
-                className="bg-[var(--color-navy)] h-full rounded-full transition-all duration-500"
-                style={{ width: `${profileScore}%` }}
-              />
-            </div>
-          </div>
-          <div className="mt-3 flex items-center text-xs font-semibold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
-            <span>Edit profile</span>
-            <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
+          <div className="mt-4 flex items-center text-xs font-bold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
+            <span>View saved wishlist</span>
+            <ArrowRight className="w-3.5 h-3.5 ml-1.5 transition-transform group-hover:translate-x-1" />
           </div>
         </Link>
       </div>
