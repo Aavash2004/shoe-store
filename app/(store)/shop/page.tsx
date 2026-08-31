@@ -88,7 +88,7 @@ export default async function ShopPage({
   }
 
   return (
-    <main className="min-h-screen bg-[#F5F2EB] text-[#1E2A38]">
+    <main className="min-h-screen bg-[var(--color-cream)] text-[var(--color-navy)]">
       {/* 1. Collection Banner */}
       <section className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 pt-4">
         <div className="relative h-[240px] sm:h-[280px] lg:h-[320px] overflow-hidden rounded-2xl">

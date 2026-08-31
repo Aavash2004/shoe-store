@@ -21,6 +21,19 @@ export async function createProduct(data: CreateProductInput) {
     return { success: false as const, error: { slug: ["A product with this slug already exists"] } };
   }
 
+  const skus = variants.map((v) => v.sku.trim());
+  const existingSkus = await prisma.productVariant.findMany({
+    where: { sku: { in: skus } },
+    select: { sku: true },
+  });
+
+  if (existingSkus.length > 0) {
+    return {
+      success: false as const,
+      error: { variants: [`SKU "${existingSkus[0].sku}" is already in use by another product`] },
+    };
+  }
+
   const product = await prisma.product.create({
     data: {
       ...productData,

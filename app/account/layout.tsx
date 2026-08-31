@@ -13,22 +13,25 @@ export default async function AccountLayout({
 }) {
   const session = await auth();
 
-  if (!session?.user) {
-    redirect("/login?callbackUrl=/account");
-  }
-
-  if (session.user.role === "ADMIN") {
+  // Admin users must never enter customer account pages
+  if (session?.user?.role === "ADMIN") {
     redirect("/admin");
   }
+
+  const isLoggedIn = !!session?.user;
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-cream)]">
       <Header />
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-        <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
-          <AccountNav />
-          <section className="flex-1 min-w-0">{children}</section>
-        </div>
+        {isLoggedIn ? (
+          <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
+            <AccountNav />
+            <section className="flex-1 min-w-0">{children}</section>
+          </div>
+        ) : (
+          <section className="w-full">{children}</section>
+        )}
       </main>
       <Footer />
     </div>

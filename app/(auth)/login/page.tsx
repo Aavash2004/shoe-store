@@ -20,8 +20,14 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
-export default function CustomerLoginPage() {
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+
+function CustomerLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/account";
+
   const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -37,8 +43,11 @@ export default function CustomerLoginPage() {
     mode: "onChange",
   });
 
+  const [isAdminAttempt, setIsAdminAttempt] = useState(false);
+
   async function onSubmit(data: LoginForm) {
     setServerError("");
+    setIsAdminAttempt(false);
     setLoading(true);
 
     const res = await signIn("credentials", {
@@ -54,7 +63,8 @@ export default function CustomerLoginPage() {
       // Auth.js v5 surfaces CredentialsSignin subclass codes via res.code
       const code = (res as any).code as string | undefined;
       if (code === "admin_use_admin_login") {
-        setServerError("Admin accounts must use the admin login page.");
+        setIsAdminAttempt(true);
+        setServerError("Administrator accounts must use the admin login.");
       } else {
         setServerError("Invalid email or password.");
       }
@@ -75,7 +85,7 @@ export default function CustomerLoginPage() {
       clearCart();
     }
 
-    window.location.href = "/account";
+    window.location.href = callbackUrl;
   }
 
   return (
@@ -157,8 +167,18 @@ export default function CustomerLoginPage() {
             </div>
 
             {serverError && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600 font-medium">
-                {serverError}
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 font-medium space-y-2">
+                <p>{serverError}</p>
+                {isAdminAttempt && (
+                  <div>
+                    <Link
+                      href="/admin/login"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-navy text-cream rounded-md text-xs font-semibold hover:bg-navy/90 transition-colors"
+                    >
+                      Go to Admin Login →
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 
@@ -204,5 +224,13 @@ export default function CustomerLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CustomerLoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-cream flex items-center justify-center text-xs font-semibold text-navy/60">Loading...</div>}>
+      <CustomerLoginForm />
+    </Suspense>
   );
 }

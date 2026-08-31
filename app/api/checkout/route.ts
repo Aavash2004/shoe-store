@@ -20,13 +20,18 @@ export async function POST(request: NextRequest) {
   const data = parsed.data;
   const userId = session?.user ? (session.user as any).id : null;
 
-  if (!userId && (!data.guestEmail || !data.guestName)) {
-    return NextResponse.json({ error: "Guest checkout requires name and email" }, { status: 400 });
+  if (!userId) {
+    if (!data.guestName && data.fullName) {
+      data.guestName = data.fullName;
+    }
+    if (!data.guestEmail || !data.guestName) {
+      return NextResponse.json({ error: "Guest checkout requires an email address." }, { status: 400 });
+    }
   }
 
   try {
     const order = await prisma.$transaction(async (tx) => {
-      // Fetch variants with current stock, lock via transaction
+      // Fetch variants with current stock
       const variantIds = data.items.map((i) => i.variantId);
       const variants = await tx.productVariant.findMany({
         where: { id: { in: variantIds }, isActive: true },
@@ -37,21 +42,26 @@ export async function POST(request: NextRequest) {
       for (const item of data.items) {
         const variant = variants.find((v) => v.id === item.variantId);
         if (!variant) {
-          throw new Error(`Variant ${item.variantId} not found`);
+          throw new Error("One or more items in your cart are no longer available.");
         }
         if (variant.stock < item.quantity) {
-          throw new Error(`Insufficient stock for ${variant.product.name} (${variant.size}/${variant.color})`);
+          if (variant.stock === 0) {
+            throw new Error(`${variant.product.name} is currently out of stock.`);
+          }
+          throw new Error(
+            `Only ${variant.stock} item${variant.stock > 1 ? "s" : ""} left in stock.`
+          );
         }
       }
 
-      // Decrement stock atomically per item
+      // Decrement stock per item atomically inside transaction
       for (const item of data.items) {
         const result = await tx.productVariant.updateMany({
           where: { id: item.variantId, stock: { gte: item.quantity } },
           data: { stock: { decrement: item.quantity } },
         });
         if (result.count === 0) {
-          throw new Error("Stock changed during checkout, please try again");
+          throw new Error("Stock changed during checkout, please try again.");
         }
       }
 
@@ -122,6 +132,19 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (err: any) {
+    console.error("[Checkout Route Error]:", err);
+    const errMsg = String(err?.message || err);
+    if (
+      errMsg.includes("fetch failed") ||
+      errMsg.includes("NeonDbError") ||
+      errMsg.includes("PrismaClient") ||
+      errMsg.includes("ECONNREFUSED")
+    ) {
+      return NextResponse.json(
+        { error: "Unable to connect to the store right now. Please try again." },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: err.message ?? "Checkout failed" }, { status: 400 });
   }
 }

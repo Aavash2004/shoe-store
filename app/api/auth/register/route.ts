@@ -17,7 +17,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const { name, email, password } = parsed.data;
+  const { name, password } = parsed.data;
+  const email = parsed.data.email.trim().toLowerCase();
+  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+
+  if (configuredAdminEmail && email === configuredAdminEmail) {
+    return NextResponse.json(
+      { error: "Registration not permitted for this email address" },
+      { status: 400 }
+    );
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -27,7 +36,12 @@ export async function POST(request: NextRequest) {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.create({
-    data: { name, email, password: hashedPassword, role: "CUSTOMER" },
+    data: {
+      name,
+      email,
+      password: hashedPassword,
+      role: "CUSTOMER", // Explicitly hardcode CUSTOMER role
+    },
   });
 
   return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });

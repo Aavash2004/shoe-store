@@ -35,7 +35,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const email = (credentials.email as string).trim().toLowerCase();
+        const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+        const loginType = (credentials.loginType as string) || "customer";
+
+        if (loginType === "admin") {
+          // Admin login: ONLY allow configured ADMIN_EMAIL with role === ADMIN
+          if (configuredAdminEmail && email !== configuredAdminEmail) {
+            throw new InvalidCredentialsError();
+          }
+
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (!user || !user.password || user.role !== "ADMIN") {
+            throw new InvalidCredentialsError();
+          }
+
+          const isValid = await bcrypt.compare(
+            credentials.password as string,
+            user.password
+          );
+
+          if (!isValid) {
+            throw new InvalidCredentialsError();
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          };
+        }
+
+        // Customer login: strictly REJECT admin email or admin role
+        if (configuredAdminEmail && email === configuredAdminEmail) {
+          throw new AdminOnCustomerLoginError();
+        }
+
         const user = await prisma.user.findUnique({ where: { email } });
+        if (user && user.role === "ADMIN") {
+          throw new AdminOnCustomerLoginError();
+        }
 
         if (!user || !user.password) {
           throw new InvalidCredentialsError();
@@ -48,18 +87,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!isValid) {
           throw new InvalidCredentialsError();
-        }
-
-        const loginType = (credentials.loginType as string) || "customer";
-
-        // Admin accounts cannot log into customer login
-        if (loginType === "customer" && user.role === "ADMIN") {
-          throw new AdminOnCustomerLoginError();
-        }
-
-        // Customer accounts cannot log into admin login
-        if (loginType === "admin" && user.role !== "ADMIN") {
-          throw new CustomerOnAdminLoginError();
         }
 
         return {

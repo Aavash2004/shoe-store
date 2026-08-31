@@ -112,13 +112,13 @@ function HeaderInner() {
         </nav>
 
         {/* Icons */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           {/* Wishlist */}
           <Button
             variant="ghost"
             size="icon"
             asChild
-            className="hidden sm:inline-flex"
+            className="hidden sm:inline-flex rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1"
           >
             <Link href="/account/wishlist" aria-label="Wishlist">
               <Heart className="h-5 w-5" strokeWidth={1.5} />
@@ -126,7 +126,12 @@ function HeaderInner() {
           </Button>
 
           {/* Account / Login */}
-          <Button variant="ghost" size="icon" asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1"
+          >
             <Link
               href={
                 session?.user
@@ -139,7 +144,7 @@ function HeaderInner() {
                 session?.user
                   ? session.user.role === "ADMIN"
                     ? "Admin Console"
-                    : "Account"
+                    : "Account Dashboard"
                   : "Log in"
               }
             >
@@ -148,14 +153,19 @@ function HeaderInner() {
           </Button>
 
           {/* Cart */}
-          <Button variant="ghost" size="icon" asChild className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="relative rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1"
+          >
             <Link
               href="/cart"
               aria-label={`Cart${cartCount ? `, ${cartCount} items` : ""}`}
             >
               <ShoppingBag className="h-5 w-5" strokeWidth={1.5} />
               {cartCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-navy)] px-1 text-[10px] font-semibold leading-none text-[var(--color-cream)]">
+                <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs">
                   {cartCount > 99 ? "99+" : cartCount}
                 </span>
               )}
@@ -166,7 +176,7 @@ function HeaderInner() {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="md:hidden rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
             aria-controls="mobile-menu"

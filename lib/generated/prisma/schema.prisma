@@ -2,8 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider        = "prisma-client-js"
-  output          = "../lib/generated/prisma"
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
 }
 
 datasource db {
@@ -116,7 +116,7 @@ model Product {
 
   metaTitle       String?
   metaDescription String?
-  brand String?
+  brand           String?
   ogImage         String?
 
   isActive  Boolean   @default(true)
@@ -287,7 +287,7 @@ model Order {
   paymentStatus PaymentStatus @default(PENDING)
 
   subtotal Decimal @db.Decimal(10, 2)
-  shipping Decimal @db.Decimal(10, 2) @default(0)
+  shipping Decimal @default(0) @db.Decimal(10, 2)
   total    Decimal @db.Decimal(10, 2)
 
   items         OrderItem[]

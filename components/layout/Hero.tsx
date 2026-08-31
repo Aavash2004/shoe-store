@@ -68,7 +68,7 @@ export function Hero() {
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center gap-14 px-6 py-20 md:flex-row md:items-center md:justify-between md:gap-12 md:py-0">
-        
+
         {/* Text */}
         <div ref={contentRef} className="max-w-lg text-center md:text-left">
           <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.28em] text-white/65">

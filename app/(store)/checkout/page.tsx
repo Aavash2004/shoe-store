@@ -152,13 +152,15 @@ export default function CheckoutPage() {
     setError("");
     setLoading(true);
 
+    const guestNameToSend = data.guestName?.trim() || data.fullName?.trim();
+
     const res = await fetch("/api/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...data,
         guestEmail: isLoggedIn ? undefined : data.guestEmail,
-        guestName: isLoggedIn ? undefined : data.guestName,
+        guestName: isLoggedIn ? undefined : guestNameToSend,
         items: items.map((i) => ({
           variantId: i.variantId,
           quantity: i.quantity,

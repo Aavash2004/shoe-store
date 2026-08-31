@@ -24,13 +24,13 @@ export default async function HomePage() {
     },
   });
 
- const featured = products.map((p: (typeof products)[number]) => ({
+  const featured = products.map((p: (typeof products)[number]) => ({
     id: p.id,
     name: p.name,
     slug: p.slug,
-   price: p.variants.length
-  ? Math.min(...p.variants.map((v: (typeof p.variants)[number]) => Number(v.price)))
-  : 0,
+    price: p.variants.length
+      ? Math.min(...p.variants.map((v: (typeof p.variants)[number]) => Number(v.price)))
+      : 0,
     image: p.images[0]?.url ?? "",
     category: p.category.name,
     brand: p.brand ?? "Unknown",
@@ -76,7 +76,7 @@ export default async function HomePage() {
             </Link>
           </div>
 
-          
+
         </ScrollReveal>
 
         <div className="mt-10 md:mt-12">

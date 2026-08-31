@@ -18,15 +18,23 @@ export async function requireAuth() {
 }
 
 /**
- * Ensures user is authenticated AND has ADMIN role.
+ * Ensures user is authenticated AND has ADMIN role AND matches process.env.ADMIN_EMAIL.
  * Throws an Error if unauthorized or forbidden.
  * Used in server-side functions / server components.
  */
 export async function requireAdmin() {
   const session = await requireAuth();
-  if (session.user.role !== UserRole.ADMIN && (session.user.role as string) !== "ADMIN") {
+  const role = session.user.role as string;
+  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+
+  if (role !== "ADMIN" && role !== UserRole.ADMIN) {
     throw new Error("Forbidden: Admin role required");
   }
+
+  if (configuredAdminEmail && session.user.email?.toLowerCase() !== configuredAdminEmail) {
+    throw new Error("Forbidden: Unauthorized admin account");
+  }
+
   return session;
 }
 
@@ -37,9 +45,17 @@ export async function requireAdmin() {
  */
 export async function requireCustomer() {
   const session = await requireAuth();
-  if (session.user.role === UserRole.ADMIN || (session.user.role as string) === "ADMIN") {
+  const role = session.user.role as string;
+  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+
+  if (role === "ADMIN" || role === UserRole.ADMIN) {
     throw new Error("Forbidden: Customers only");
   }
+
+  if (configuredAdminEmail && session.user.email?.toLowerCase() === configuredAdminEmail) {
+    throw new Error("Forbidden: Customers only");
+  }
+
   return session;
 }
 
@@ -59,11 +75,23 @@ export async function requireAdminApi() {
     };
   }
 
-  if (session.user.role !== UserRole.ADMIN && (session.user.role as string) !== "ADMIN") {
+  const role = session.user.role as string;
+  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+
+  if (role !== "ADMIN" && role !== UserRole.ADMIN) {
     return {
       authorized: false as const,
       status: 403,
       error: "Forbidden: Admin access required",
+      session: null,
+    };
+  }
+
+  if (configuredAdminEmail && session.user.email?.toLowerCase() !== configuredAdminEmail) {
+    return {
+      authorized: false as const,
+      status: 403,
+      error: "Forbidden: Unauthorized admin account",
       session: null,
     };
   }

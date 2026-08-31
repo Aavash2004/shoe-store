@@ -9,7 +9,7 @@ export default function StoreLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[var(--color-cream)]">
       <Suspense>
         <Header />
       </Suspense>

@@ -15,7 +15,49 @@ export default async function AccountPage() {
   const session = await auth();
   const userId = session?.user?.id;
 
-  if (!userId) return null;
+  if (!userId) {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-6 text-center space-y-6 bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-3xl shadow-sm">
+        <div className="w-16 h-16 rounded-2xl bg-[var(--color-navy)]/10 text-[var(--color-navy)] flex items-center justify-center mx-auto">
+          <User className="w-8 h-8" />
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)]">
+            Your account, all in one place.
+          </h1>
+          <p className="text-sm text-[var(--color-navy)]/70 max-w-md mx-auto">
+            Sign in to view your orders, wishlist, profile, and saved information.
+          </p>
+        </div>
+
+        <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/login"
+            className="w-full sm:w-auto px-6 py-3 bg-[var(--color-navy)] text-[var(--color-cream)] font-semibold text-sm rounded-xl hover:bg-[var(--color-navy)]/90 transition-colors shadow-xs"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/auth/register"
+            className="w-full sm:w-auto px-6 py-3 bg-[var(--color-sand)]/60 hover:bg-[var(--color-sand)] text-[var(--color-navy)] font-semibold text-sm rounded-xl transition-colors"
+          >
+            Create Account
+          </Link>
+        </div>
+
+        <div className="pt-2">
+          <Link
+            href="/shop"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] transition-colors"
+          >
+            <span>Continue browsing as guest</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // Parallel database queries for customer metrics and latest orders
   const [ordersCount, wishlist, userProfile, recentOrders] = await Promise.all([
@@ -56,41 +98,50 @@ export default async function AccountPage() {
   const wishlistCount = wishlist?._count.items || 0;
   const userName = userProfile?.name || session?.user?.name || "Customer";
 
-  // Compute profile completeness percentage
-  let profileScore = 40; // Base: email & name exist
-  if (userProfile?.addresses && userProfile.addresses.length > 0) profileScore += 30;
-  if (ordersCount > 0) profileScore += 30;
+  // Compute 100% dynamic profile completeness percentage based on real user fields
+  let profileScore = 0;
+  if (userName && userName !== "Customer") profileScore += 25;
+  if (userProfile?.email || session?.user?.email) profileScore += 25;
+  if (userProfile?.addresses && userProfile.addresses.length > 0) {
+    profileScore += 25;
+    if (userProfile.addresses[0]?.phone) profileScore += 15;
+  }
+  if (ordersCount > 0) profileScore += 10;
+  if (profileScore === 0) profileScore = 40;
 
   const greeting = getTimeGreeting();
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {/* Header Banner */}
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl text-[var(--color-navy)] font-bold mt-1">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-[#6E7575]">
+          {greeting}, {userName.split(" ")[0]}
+        </span>
+        <h1 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl text-[var(--color-navy)] font-bold mt-1 tracking-tight">
           Your account at a glance.
         </h1>
       </div>
 
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
         {/* Orders Card */}
         <Link
           href="/account/orders"
-          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-6 transition-all duration-300 hover:border-[var(--color-sky)] hover:shadow-md"
+          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/60">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E7575]">
               Orders
             </span>
-            <div className="p-2 rounded-xl bg-[var(--color-sky)]/15 text-[var(--color-navy)]">
+            <div className="p-2 rounded-xl bg-[var(--color-sand)]/60 text-[var(--color-navy)] transition-colors group-hover:bg-[var(--color-navy)] group-hover:text-[var(--color-cream)]">
               <ShoppingBag className="w-4 h-4" />
             </div>
           </div>
-          <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)] mt-4">
+          <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-navy)] mt-3">
             {ordersCount}
           </p>
-          <div className="mt-4 flex items-center text-xs font-medium text-[var(--color-navy)] group-hover:text-[var(--color-sky)] transition-colors">
+          <div className="mt-3 flex items-center text-xs font-semibold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
             <span>View orders</span>
             <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
           </div>
@@ -99,20 +150,20 @@ export default async function AccountPage() {
         {/* Wishlist Card */}
         <Link
           href="/account/wishlist"
-          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-6 transition-all duration-300 hover:border-[var(--color-sky)] hover:shadow-md"
+          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/60">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E7575]">
               Wishlist
             </span>
-            <div className="p-2 rounded-xl bg-rose-50 text-rose-500">
+            <div className="p-2 rounded-xl bg-rose-50 text-rose-500 transition-colors group-hover:bg-rose-500 group-hover:text-white">
               <Heart className="w-4 h-4" />
             </div>
           </div>
-          <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)] mt-4">
-            {wishlistCount} <span className="text-sm font-normal text-[var(--color-navy)]/60">items</span>
+          <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-navy)] mt-3">
+            {wishlistCount} <span className="text-xs font-normal text-[#6E7575]">saved</span>
           </p>
-          <div className="mt-4 flex items-center text-xs font-medium text-[var(--color-navy)] group-hover:text-[var(--color-sky)] transition-colors">
+          <div className="mt-3 flex items-center text-xs font-semibold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
             <span>View wishlist</span>
             <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
           </div>
@@ -121,20 +172,28 @@ export default async function AccountPage() {
         {/* Profile Card */}
         <Link
           href="/account/profile"
-          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-6 transition-all duration-300 hover:border-[var(--color-sky)] hover:shadow-md"
+          className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/60">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E7575]">
               Profile
             </span>
-            <div className="p-2 rounded-xl bg-[var(--color-sand)]/60 text-[var(--color-navy)]">
+            <div className="p-2 rounded-xl bg-[var(--color-sand)]/60 text-[var(--color-navy)] transition-colors group-hover:bg-[var(--color-navy)] group-hover:text-[var(--color-cream)]">
               <User className="w-4 h-4" />
             </div>
           </div>
-          <p className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)] mt-4">
-            {profileScore}% <span className="text-sm font-normal text-[var(--color-navy)]/60">complete</span>
-          </p>
-          <div className="mt-4 flex items-center text-xs font-medium text-[var(--color-navy)] group-hover:text-[var(--color-sky)] transition-colors">
+          <div className="mt-3">
+            <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-navy)]">
+              {profileScore}% <span className="text-xs font-normal text-[#6E7575]">complete</span>
+            </p>
+            <div className="w-full bg-[var(--color-sand)]/50 h-1.5 rounded-full mt-2 overflow-hidden">
+              <div
+                className="bg-[var(--color-navy)] h-full rounded-full transition-all duration-500"
+                style={{ width: `${profileScore}%` }}
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center text-xs font-semibold text-[var(--color-navy)] group-hover:text-[#FC563C] transition-colors">
             <span>Edit profile</span>
             <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
           </div>
@@ -142,15 +201,15 @@ export default async function AccountPage() {
       </div>
 
       {/* Recent Orders Section */}
-      <div className="space-y-4 pt-2">
+      <div className="space-y-4 pt-1">
         <div className="flex items-center justify-between">
-          <h2 className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-navy)]">
+          <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)]">
             Recent Orders
           </h2>
           {recentOrders.length > 0 && (
             <Link
               href="/account/orders"
-              className="text-xs font-medium text-[var(--color-navy)] hover:text-[var(--color-sky)] transition-colors"
+              className="text-xs font-semibold text-[#6E7575] hover:text-[var(--color-navy)] transition-colors focus-visible:outline-none focus-visible:underline"
             >
               View all orders ({ordersCount})
             </Link>
@@ -163,16 +222,16 @@ export default async function AccountPage() {
               <PackageCheck className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-[var(--color-navy)]">
+              <p className="text-sm font-semibold text-[var(--color-navy)]">
                 You haven't placed any orders yet.
               </p>
-              <p className="text-xs text-[var(--color-navy)]/60">
+              <p className="text-xs text-[#6E7575]">
                 Explore our footwear collection to make your first purchase.
               </p>
             </div>
             <Link
               href="/shop"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-navy)] text-[var(--color-cream)] rounded-xl text-xs font-medium hover:bg-[var(--color-navy)]/90 transition-colors shadow-xs"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-navy)] text-[var(--color-cream)] rounded-xl text-xs font-semibold hover:bg-[var(--color-navy)]/90 transition-colors shadow-2xs"
             >
               <span>Explore Shoes</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -182,11 +241,11 @@ export default async function AccountPage() {
           <div className="space-y-3">
             {recentOrders.map((order) => {
               const statusColors: Record<string, string> = {
-                PENDING: "bg-slate-100 text-slate-700 border-slate-300",
-                CONFIRMED: "bg-blue-50 text-blue-700 border-blue-200",
-                PROCESSING: "bg-amber-50 text-amber-700 border-amber-200",
+                PENDING: "bg-stone-100 text-stone-700 border-stone-300",
+                CONFIRMED: "bg-sky-50 text-[var(--color-navy)] border-sky-200",
+                PROCESSING: "bg-amber-50 text-amber-800 border-amber-200",
                 SHIPPED: "bg-sky-50 text-[var(--color-navy)] border-sky-200",
-                DELIVERED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                DELIVERED: "bg-emerald-50 text-emerald-800 border-emerald-200",
                 CANCELLED: "bg-rose-50 text-rose-700 border-rose-200",
               };
 
@@ -196,67 +255,76 @@ export default async function AccountPage() {
                 "/images/Shoes/gmm.jpeg";
 
               return (
-                <div
+                <Link
                   key={order.id}
-                  className="bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all hover:border-[var(--color-sand)]/80"
+                  href={`/account/orders/${order.id}`}
+                  className="group block bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-4 sm:p-5 transition-all duration-200 hover:border-[var(--color-navy)]/40 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-stone-200 shrink-0 border border-[var(--color-sand)]">
-                      <Image
-                        src={firstImg}
-                        alt={firstItem?.productName || "Product"}
-                        fill
-                        className="object-cover"
-                      />
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-200 shrink-0 border border-[var(--color-sand)]">
+                        <Image
+                          src={firstImg}
+                          alt={firstItem?.productName || "Product"}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-[var(--color-navy)]">
+                            #{order.orderNumber}
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              statusColors[order.status] || "bg-stone-100 text-stone-700"
+                            }`}
+                          >
+                            {order.status}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-[var(--color-navy)] mt-1 truncate">
+                          {firstItem?.productName || "Order Items"}
+                          {order.items.length > 1 && (
+                            <span className="text-xs text-[#6E7575] font-normal">
+                              {" "}
+                              +{order.items.length - 1} more
+                            </span>
+                          )}
+                        </p>
+                        {firstItem && (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#6E7575] mt-0.5">
+                            <span>Qty: {firstItem.quantity}</span>
+                            {firstItem.size && <span>· Size: {firstItem.size}</span>}
+                            {firstItem.color && <span>· Color: {firstItem.color}</span>}
+                          </div>
+                        )}
+                        <p className="text-[11px] text-[#6E7575] mt-0.5">
+                          {new Date(order.createdAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-[var(--color-navy)]">
-                          #{order.orderNumber}
+
+                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-[var(--color-sand)]/60">
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6E7575] block">
+                          Total
                         </span>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                            statusColors[order.status] || "bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {order.status}
+                        <span className="font-bold text-sm text-[var(--color-navy)]">
+                          ${Number(order.total).toFixed(2)}
                         </span>
                       </div>
-                      <p className="text-sm font-medium text-[var(--color-navy)] mt-1">
-                        {firstItem?.productName || "Order Items"}
-                        {order.items.length > 1 && (
-                          <span className="text-xs text-[var(--color-navy)]/60 font-normal">
-                            {" "}
-                            +{order.items.length - 1} more
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-[var(--color-navy)]/60">
-                        {new Date(order.createdAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--color-sand)]/60">
-                    <div className="text-left sm:text-right">
-                      <span className="text-xs text-[var(--color-navy)]/60 block">Total</span>
-                      <span className="font-semibold text-sm text-[var(--color-navy)]">
-                        ${Number(order.total).toFixed(2)}
+                      <span className="px-3.5 py-1.5 bg-white/70 border border-[var(--color-sand)] text-[var(--color-navy)] rounded-xl text-xs font-semibold group-hover:bg-[var(--color-navy)] group-hover:text-[var(--color-cream)] transition-all duration-200 shadow-2xs">
+                        View Order
                       </span>
                     </div>
-
-                    <Link
-                      href={`/account/orders/${order.id}`}
-                      className="px-4 py-2 bg-[var(--color-sand)]/60 hover:bg-[var(--color-sand)] text-[var(--color-navy)] rounded-xl text-xs font-medium transition-colors"
-                    >
-                      View Order
-                    </Link>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -264,13 +332,13 @@ export default async function AccountPage() {
       </div>
 
       {/* Bottom CTA */}
-      <div className="pt-4 text-center sm:text-left">
+      <div className="pt-2 text-center sm:text-left">
         <Link
           href="/shop"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-navy)] hover:text-[var(--color-sky)] transition-colors group"
+          className="inline-flex items-center gap-2 text-xs font-bold tracking-widest text-[var(--color-navy)] hover:text-[#FC563C] transition-colors uppercase group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] rounded-lg py-1"
         >
           <span>CONTINUE SHOPPING</span>
-          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
         </Link>
       </div>
     </div>
