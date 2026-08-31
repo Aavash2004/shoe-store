@@ -1,12 +1,23 @@
 "use client";
 
-import { Suspense, useEffect, useState, useTransition } from "react";
+import { Suspense, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ShoppingBag, Heart, User, Menu, X, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
+
+interface SuggestionItem {
+  id: string;
+  name: string;
+  slug: string;
+  brand: string;
+  category: string;
+  image: string;
+  price: number;
+}
 
 const links = [
   { href: "/shop", label: "Shop", category: null },
@@ -21,6 +32,10 @@ function HeaderInner() {
   const activeCategory = searchParams.get("category");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
   const [isPending, startTransition] = useTransition();
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
@@ -29,8 +44,46 @@ function HeaderInner() {
     setSearchQuery(searchParams.get("q") || "");
   }, [searchParams]);
 
+  // Debounced search autocomplete fetch
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 1) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsFetchingSuggestions(true);
+      try {
+        const res = await fetch(`/api/products/search?q=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        setSuggestions(data.suggestions ?? []);
+        setShowDropdown(true);
+      } catch (err) {
+        console.error("Autocomplete fetch error:", err);
+      } finally {
+        setIsFetchingSuggestions(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setShowDropdown(false);
     const trimmed = searchQuery.trim();
     const params = new URLSearchParams(searchParams.toString());
     if (trimmed) {
@@ -45,6 +98,8 @@ function HeaderInner() {
 
   function handleClearSearch() {
     setSearchQuery("");
+    setSuggestions([]);
+    setShowDropdown(false);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("q");
     startTransition(() => {
@@ -83,6 +138,7 @@ function HeaderInner() {
   // Close mobile menu on route change
   useEffect(() => {
     setMobileOpen(false);
+    setShowDropdown(false);
   }, [pathname, searchParams]);
 
   // Lock body scroll when mobile menu is open
@@ -142,35 +198,109 @@ function HeaderInner() {
 
         {/* Search Bar & Icons */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Header Search Form */}
-          <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-            <input
-              type="text"
-              value={searchQuery}
-              disabled={isPending}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isPending ? "Searching..." : "Search..."}
-              className={`w-28 sm:w-44 md:w-52 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-40 sm:focus:w-56 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs ${
-                isPending ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-            />
-            {isPending ? (
-              <Loader2 className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/60 animate-spin pointer-events-none" />
-            ) : (
-              <Search className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/50 pointer-events-none" />
-            )}
-            {searchQuery && (
-              <button
-                type="button"
+          {/* Header Search Form & Autocomplete Container */}
+          <div ref={searchRef} className="relative flex items-center">
+            <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+              <input
+                type="text"
+                value={searchQuery}
                 disabled={isPending}
-                onClick={handleClearSearch}
-                className="absolute right-2 p-0.5 text-[var(--color-navy)]/40 hover:text-[var(--color-navy)] transition-colors disabled:opacity-40"
-                aria-label="Clear search query"
-              >
-                <X className="h-3 w-3" />
-              </button>
+                onFocus={() => {
+                  if (searchQuery.trim().length >= 1 && suggestions.length > 0) {
+                    setShowDropdown(true);
+                  }
+                }}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isPending ? "Searching..." : "Search shoes..."}
+                className={`w-32 sm:w-48 md:w-56 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3.5 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-44 sm:focus:w-60 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs ${
+                  isPending ? "opacity-60 cursor-not-allowed" : ""
+                }`}
+              />
+              {isPending || isFetchingSuggestions ? (
+                <Loader2 className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/60 animate-spin pointer-events-none" />
+              ) : (
+                <Search className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/50 pointer-events-none" />
+              )}
+              {searchQuery && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={handleClearSearch}
+                  className="absolute right-2.5 p-0.5 text-[var(--color-navy)]/40 hover:text-[var(--color-navy)] transition-colors disabled:opacity-40"
+                  aria-label="Clear search query"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </form>
+
+            {/* Live Search Autocomplete Dropdown Menu */}
+            {showDropdown && (
+              <div className="absolute top-full right-0 mt-2.5 w-72 sm:w-80 rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream)] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50 border-b border-[var(--color-sand)]/60 flex items-center justify-between">
+                  <span>Product Suggestions</span>
+                  {suggestions.length > 0 && (
+                    <span className="text-[9px] font-medium text-[var(--color-navy)]/40">
+                      {suggestions.length} match{suggestions.length === 1 ? "" : "es"}
+                    </span>
+                  )}
+                </div>
+
+                <div className="max-h-72 overflow-y-auto py-1 divide-y divide-[var(--color-sand)]/30">
+                  {suggestions.length > 0 ? (
+                    suggestions.map((item) => (
+                      <Link
+                        key={item.id}
+                        href={`/products/${item.slug}`}
+                        onClick={() => setShowDropdown(false)}
+                        className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--color-sand)]/50 transition-colors group"
+                      >
+                        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--color-cream-alt)] border border-[var(--color-sand)]/60">
+                          <Image
+                            src={item.image}
+                            alt={item.name}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-200"
+                            sizes="44px"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--color-navy)] truncate group-hover:text-[var(--color-sky)] transition-colors">
+                            {item.name}
+                          </p>
+                          <p className="text-[10px] font-medium text-[var(--color-navy)]/50 truncate">
+                            {item.brand} · {item.category}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-bold text-[var(--color-navy)]">
+                            ${item.price.toFixed(2)}
+                          </span>
+                        </div>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="py-4 px-3 text-center text-xs text-[var(--color-navy)]/60">
+                      No matching shoes found for &ldquo;{searchQuery}&rdquo;
+                    </div>
+                  )}
+                </div>
+
+                {/* View All Search Results Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setShowDropdown(false);
+                    handleSearchSubmit(e);
+                  }}
+                  className="w-full mt-1.5 py-2 px-3 rounded-xl bg-[var(--color-navy)] text-[var(--color-cream)] text-xs font-semibold hover:bg-[var(--color-navy)]/90 transition-colors flex items-center justify-between"
+                >
+                  <span>View all results for &ldquo;{searchQuery}&rdquo;</span>
+                  <span>→</span>
+                </button>
+              </div>
             )}
-          </form>
+          </div>
 
           {/* Wishlist */}
           <Button

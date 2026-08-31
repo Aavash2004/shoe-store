@@ -14,45 +14,12 @@ const categoryChips = [
   { name: "Basketball", href: "/shop?category=basketball" },
 ];
 
-export default async function HomePage() {
-  // 1. New Arrivals: Newest active products sorted by createdAt desc
-  const newArrivalsData = await prisma.product.findMany({
-    where: { isActive: true, deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    take: 4,
-    include: {
-      category: true,
-      images: { orderBy: { position: "asc" } },
-      variants: { where: { isActive: true } },
-    },
-  });
-
-  // 2. Best Sellers: Computed by OrderItem sales volume
-  const topVariants = await prisma.orderItem.groupBy({
-    by: ["variantId"],
-    _sum: { quantity: true },
-    orderBy: { _sum: { quantity: "desc" } },
-    take: 8,
-  });
-
-  const variantIds = topVariants.map((v) => v.variantId);
-  let bestSellersData: typeof newArrivalsData = [];
-
-  if (variantIds.length > 0) {
-    const variants = await prisma.productVariant.findMany({
-      where: { id: { in: variantIds } },
-      select: { productId: true },
-    });
-    const bestSellerProductIds = Array.from(
-      new Set(variants.map((v) => v.productId))
-    );
-
-    bestSellersData = await prisma.product.findMany({
-      where: {
-        id: { in: bestSellerProductIds },
-        isActive: true,
-        deletedAt: null,
-      },
+async function executeHomePageData() {
+  const fetchAll = async () => {
+    // 1. New Arrivals: Newest active products sorted by createdAt desc
+    const newArrivalsData = await prisma.product.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { createdAt: "desc" },
       take: 4,
       include: {
         category: true,
@@ -60,23 +27,81 @@ export default async function HomePage() {
         variants: { where: { isActive: true } },
       },
     });
-  }
 
-  // Fallback: Fill best sellers with new arrivals if order data is sparse
-  if (bestSellersData.length < 4) {
-    const existingIds = new Set(bestSellersData.map((p) => p.id));
-    const fallbacks = newArrivalsData.filter((p) => !existingIds.has(p.id));
-    bestSellersData = [...bestSellersData, ...fallbacks].slice(0, 4);
+    // 2. Best Sellers: Computed by OrderItem sales volume with safe try/catch fallback
+    let bestSellersData: typeof newArrivalsData = [];
+    try {
+      const topVariants = await prisma.orderItem.groupBy({
+        by: ["variantId"],
+        _sum: { quantity: true },
+        orderBy: { _sum: { quantity: "desc" } },
+        take: 8,
+      });
+
+      const variantIds = topVariants.map((v) => v.variantId);
+
+      if (variantIds.length > 0) {
+        const variants = await prisma.productVariant.findMany({
+          where: { id: { in: variantIds } },
+          select: { productId: true },
+        });
+        const bestSellerProductIds = Array.from(
+          new Set(variants.map((v) => v.productId))
+        );
+
+        bestSellersData = await prisma.product.findMany({
+          where: {
+            id: { in: bestSellerProductIds },
+            isActive: true,
+            deletedAt: null,
+          },
+          take: 4,
+          include: {
+            category: true,
+            images: { orderBy: { position: "asc" } },
+            variants: { where: { isActive: true } },
+          },
+        });
+      }
+    } catch (orderErr) {
+      console.warn("[HomePage] OrderItem groupBy fallback:", orderErr);
+    }
+
+    // Fallback: Fill best sellers with new arrivals if order data is sparse or query failed
+    if (bestSellersData.length < 4) {
+      const existingIds = new Set(bestSellersData.map((p) => p.id));
+      const fallbacks = newArrivalsData.filter((p) => !existingIds.has(p.id));
+      bestSellersData = [...bestSellersData, ...fallbacks].slice(0, 4);
+    }
+
+    return { newArrivalsData, bestSellersData };
+  };
+
+  try {
+    return await fetchAll();
+  } catch (firstErr) {
+    console.warn("[HomePage DB] Initial query failed, retrying...", firstErr);
+    await new Promise((res) => setTimeout(res, 250));
+    try {
+      return await fetchAll();
+    } catch (retryErr) {
+      console.error("[HomePage DB] Retry failed:", retryErr);
+      return { newArrivalsData: [], bestSellersData: [] };
+    }
   }
+}
+
+export default async function HomePage() {
+  const { newArrivalsData, bestSellersData } = await executeHomePageData();
 
   const formatProduct = (p: typeof newArrivalsData[number]) => ({
     id: p.id,
     name: p.name,
     slug: p.slug,
-    price: p.variants.length
+    price: p.variants?.length
       ? Math.min(...p.variants.map((v) => Number(v.price)))
       : 0,
-    image: p.images[0]?.url ?? "/images/Shoes/s05.avif",
+    image: p.images?.[0]?.url ?? "/images/Shoes/s05.avif",
     category: p.category?.name ?? "Footwear",
     brand: p.brand ?? "ABXV",
   });
