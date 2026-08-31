@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Heart, User, Menu, X, Search } from "lucide-react";
+import { ShoppingBag, Heart, User, Menu, X, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
@@ -21,6 +21,7 @@ function HeaderInner() {
   const activeCategory = searchParams.get("category");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const [isPending, startTransition] = useTransition();
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
 
@@ -37,7 +38,18 @@ function HeaderInner() {
     } else {
       params.delete("q");
     }
-    router.push(`/shop?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/shop?${params.toString()}`);
+    });
+  }
+
+  function handleClearSearch() {
+    setSearchQuery("");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("q");
+    startTransition(() => {
+      router.push(params.toString() ? `/shop?${params.toString()}` : "/shop");
+    });
   }
 
   const localCount = useCartStore((state) =>
@@ -135,21 +147,24 @@ function HeaderInner() {
             <input
               type="text"
               value={searchQuery}
+              disabled={isPending}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search..."
-              className="w-28 sm:w-44 md:w-52 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-40 sm:focus:w-56 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs"
+              placeholder={isPending ? "Searching..." : "Search..."}
+              className={`w-28 sm:w-44 md:w-52 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-40 sm:focus:w-56 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs ${
+                isPending ? "opacity-60 cursor-not-allowed" : ""
+              }`}
             />
-            <Search className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/50 pointer-events-none" />
+            {isPending ? (
+              <Loader2 className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/60 animate-spin pointer-events-none" />
+            ) : (
+              <Search className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/50 pointer-events-none" />
+            )}
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  const params = new URLSearchParams(searchParams.toString());
-                  params.delete("q");
-                  router.push(params.toString() ? `/shop?${params.toString()}` : "/shop");
-                }}
-                className="absolute right-2 p-0.5 text-[var(--color-navy)]/40 hover:text-[var(--color-navy)] transition-colors"
+                disabled={isPending}
+                onClick={handleClearSearch}
+                className="absolute right-2 p-0.5 text-[var(--color-navy)]/40 hover:text-[var(--color-navy)] transition-colors disabled:opacity-40"
                 aria-label="Clear search query"
               >
                 <X className="h-3 w-3" />

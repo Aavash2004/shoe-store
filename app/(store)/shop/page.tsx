@@ -6,6 +6,8 @@ import { ShopFilters } from "@/components/product/ShopFilters";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
 
+export const dynamic = "force-dynamic";
+
 type SearchParams = {
   category?: string;
   size?: string;
@@ -14,6 +16,40 @@ type SearchParams = {
   q?: string;
 };
 
+async function executeShopQueries(whereClause: any) {
+  const queryAll = () =>
+    Promise.all([
+      prisma.product.findMany({
+        where: whereClause,
+        include: {
+          category: true,
+          images: { orderBy: { position: "asc" } },
+          variants: { where: { isActive: true } },
+        },
+      }),
+      prisma.category.findMany({
+        select: { name: true },
+      }),
+      prisma.productVariant.findMany({
+        where: { isActive: true, product: { isActive: true, deletedAt: null } },
+        select: { size: true, color: true },
+      }),
+    ]);
+
+  try {
+    return await queryAll();
+  } catch (firstErr) {
+    console.warn("[ShopPage DB] Initial query attempt failed, retrying...", firstErr);
+    await new Promise((res) => setTimeout(res, 250));
+    try {
+      return await queryAll();
+    } catch (retryErr) {
+      console.error("[ShopPage DB] Retry query failed:", retryErr);
+      return [[], [], []];
+    }
+  }
+}
+
 export default async function ShopPage({
   searchParams,
 }: {
@@ -21,47 +57,33 @@ export default async function ShopPage({
 }) {
   const { category, size, color, sort, q } = await searchParams;
 
-  const [products, dbCategories, dbVariants] = await Promise.all([
-    prisma.product.findMany({
-      where: {
-        isActive: true,
-        deletedAt: null,
-        ...(q && {
-          OR: [
-            { name: { contains: q, mode: "insensitive" } },
-            { brand: { contains: q, mode: "insensitive" } },
-            { description: { contains: q, mode: "insensitive" } },
-          ],
-        }),
-        ...(category && {
-          category: { slug: category.toLowerCase() },
-        }),
-        ...(size || color
-          ? {
-              variants: {
-                some: {
-                  isActive: true,
-                  ...(size && { size }),
-                  ...(color && { color }),
-                },
-              },
-            }
-          : {}),
-      },
-      include: {
-        category: true,
-        images: { orderBy: { position: "asc" } },
-        variants: { where: { isActive: true } },
-      },
+  const whereClause = {
+    isActive: true,
+    deletedAt: null,
+    ...(q && {
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { brand: { contains: q, mode: "insensitive" } },
+        { description: { contains: q, mode: "insensitive" } },
+      ],
     }),
-    prisma.category.findMany({
-      select: { name: true },
+    ...(category && {
+      category: { slug: category.toLowerCase() },
     }),
-    prisma.productVariant.findMany({
-      where: { isActive: true, product: { isActive: true, deletedAt: null } },
-      select: { size: true, color: true },
-    }),
-  ]);
+    ...(size || color
+      ? {
+          variants: {
+            some: {
+              isActive: true,
+              ...(size && { size }),
+              ...(color && { color }),
+            },
+          },
+        }
+      : {}),
+  };
+
+  const [products, dbCategories, dbVariants] = await executeShopQueries(whereClause);
 
   const withPrice = products.map((product) => ({
     ...product,
