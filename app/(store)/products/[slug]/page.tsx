@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { auth } from "@/lib/auth/auth";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductDetailInteractive } from "@/components/product/ProductDetailInteractive";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
+import { ProductReviewsSection } from "@/components/product/ProductReviewsSection";
 
 export default async function ProductDetailPage({
   params,
@@ -11,6 +13,8 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const session = await auth();
+  const isLoggedIn = !!session?.user;
 
   const product = await prisma.product.findFirst({
     where: { slug, isActive: true, deletedAt: null },
@@ -18,6 +22,12 @@ export default async function ProductDetailPage({
       category: true,
       images: { orderBy: { position: "asc" } },
       variants: { where: { isActive: true } },
+      reviews: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { name: true, email: true } },
+        },
+      },
     },
   });
 
@@ -106,6 +116,14 @@ export default async function ProductDetailPage({
           }}
         />
       </div>
+
+      {/* Customer Product Reviews & Ratings Section */}
+      <ProductReviewsSection
+        productId={product.id}
+        productSlug={product.slug}
+        isLoggedIn={isLoggedIn}
+        reviews={product.reviews}
+      />
 
       {/* Related Products Section */}
       {formattedRelated.length > 0 && (

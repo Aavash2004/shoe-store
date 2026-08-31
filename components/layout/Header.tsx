@@ -36,6 +36,7 @@ function HeaderInner() {
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchCacheRef = useRef<Map<string, SuggestionItem[]>>(new Map());
   const [isPending, startTransition] = useTransition();
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
@@ -44,12 +45,19 @@ function HeaderInner() {
     setSearchQuery(searchParams.get("q") || "");
   }, [searchParams]);
 
-  // Debounced search autocomplete fetch
+  // Fast 80ms debounced search autocomplete fetch with instant 0ms memory cache
   useEffect(() => {
-    const trimmed = searchQuery.trim();
+    const trimmed = searchQuery.trim().toLowerCase();
     if (trimmed.length < 1) {
       setSuggestions([]);
       setShowDropdown(false);
+      return;
+    }
+
+    // Check 0ms instant in-memory cache first
+    if (searchCacheRef.current.has(trimmed)) {
+      setSuggestions(searchCacheRef.current.get(trimmed)!);
+      setShowDropdown(true);
       return;
     }
 
@@ -58,14 +66,16 @@ function HeaderInner() {
       try {
         const res = await fetch(`/api/products/search?q=${encodeURIComponent(trimmed)}`);
         const data = await res.json();
-        setSuggestions(data.suggestions ?? []);
+        const results = data.suggestions ?? [];
+        searchCacheRef.current.set(trimmed, results);
+        setSuggestions(results);
         setShowDropdown(true);
       } catch (err) {
         console.error("Autocomplete fetch error:", err);
       } finally {
         setIsFetchingSuggestions(false);
       }
-    }, 200);
+    }, 80);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);

@@ -21,7 +21,7 @@ function getRelevanceScore(
     return 1;
   }
 
-  // Priority 2: A word inside product name starts with search query (e.g. "Ridge Runner" or "Terrex Trail" for "r")
+  // Priority 2: A word inside product name starts with search query (e.g. "Ridge Runner" for "r")
   if (
     nameLower.includes(` ${qLower}`) ||
     nameLower.includes(`-${qLower}`) ||
@@ -40,7 +40,7 @@ function getRelevanceScore(
     return 4;
   }
 
-  // Priority 5: Partial text match anywhere in name, brand, or description
+  // Priority 5: Partial text match anywhere in name, slug, or brand
   if (nameLower.includes(qLower) || slugLower.includes(qLower)) {
     return 5;
   }
@@ -70,12 +70,12 @@ export async function GET(request: NextRequest) {
     variants: {
       where: { isActive: true },
       select: { price: true },
-      take: 5,
+      take: 3,
     },
   };
 
   try {
-    // Query candidate products matching q
+    // Optimized fast query (focused on name, slug, brand, category - excluding description text scan)
     const rawProducts = await prisma.product.findMany({
       where: {
         isActive: true,
@@ -84,11 +84,10 @@ export async function GET(request: NextRequest) {
           { name: { contains: q, mode: "insensitive" } },
           { slug: { contains: q, mode: "insensitive" } },
           { brand: { contains: q, mode: "insensitive" } },
-          { description: { contains: q, mode: "insensitive" } },
           { category: { name: { contains: q, mode: "insensitive" } } },
         ],
       },
-      take: 20,
+      take: 10,
       select: selectFields,
     });
 
@@ -124,7 +123,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ suggestions });
+    return NextResponse.json(
+      { suggestions },
+      {
+        headers: {
+          "Cache-Control":
+            "public, max-age=60, s-maxage=120, stale-while-revalidate=300",
+        },
+      }
+    );
   } catch (error) {
     console.error("[Search Autocomplete API Error]:", error);
     return NextResponse.json({ suggestions: [] });

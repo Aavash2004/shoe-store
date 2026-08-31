@@ -27,19 +27,21 @@ export default async function AdminProductsPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.15em] text-navy/50">Catalog</p>
-          <h1 className="mt-1 font-[family-name:var(--font-display)] text-4xl text-navy">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/55">
+            Catalog
+          </span>
+          <h1 className="mt-0.5 font-[family-name:var(--font-display)] text-3xl font-extrabold tracking-tight text-[var(--color-navy)]">
             Products
           </h1>
-          <p className="mt-1 text-sm text-navy/50">
+          <p className="mt-1 text-xs text-[var(--color-navy)]/60">
             {products.length} product{products.length !== 1 ? "s" : ""} in catalog
           </p>
         </div>
 
-        <Button asChild size="lg">
+        <Button asChild className="h-11 rounded-xl px-5 shadow-2xs">
           <Link href="/admin/products/new">
             <Plus className="mr-2 h-4 w-4" />
             Add Product
@@ -47,15 +49,15 @@ export default async function AdminProductsPage() {
         </Button>
       </div>
 
-      {/* Empty state */}
+      {/* Empty State */}
       {products.length === 0 ? (
-        <div className="flex flex-col items-center justify-center border-y border-sand py-20 text-center">
-          <Package className="h-8 w-8 text-navy/30" />
-          <h2 className="mt-4 font-[family-name:var(--font-display)] text-xl text-navy">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] py-20 text-center shadow-2xs">
+          <Package className="mb-4 h-10 w-10 text-[var(--color-navy)]/30" />
+          <h2 className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-navy)]">
             No products yet
           </h2>
-          <p className="mt-1 text-sm text-navy/50">Start by adding your first product.</p>
-          <Button asChild className="mt-6">
+          <p className="mt-1 text-xs text-[var(--color-navy)]/60">Start by adding your first product.</p>
+          <Button asChild className="mt-6 rounded-xl">
             <Link href="/admin/products/new">
               <Plus className="mr-2 h-4 w-4" />
               Add Product
@@ -64,20 +66,20 @@ export default async function AdminProductsPage() {
         </div>
       ) : (
         <>
-          {/* Desktop table */}
-          <div className="hidden md:block">
-            <table className="w-full border-collapse text-left text-sm">
+          {/* Desktop Table */}
+          <div className="hidden overflow-hidden rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] shadow-2xs md:block">
+            <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-sand text-xs uppercase tracking-wide text-navy/45">
-                  <th className="py-3 font-medium">Product</th>
-                  <th className="py-3 font-medium">Category</th>
-                  <th className="py-3 text-right font-medium">Price</th>
-                  <th className="py-3 text-right font-medium">Stock</th>
-                  <th className="py-3 text-right font-medium">Status</th>
-                  <th className="py-3 text-right font-medium"></th>
+                <tr className="border-b border-[var(--color-sand)] text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/55">
+                  <th className="px-6 py-4 font-bold">Product</th>
+                  <th className="px-6 py-4 font-bold">Category</th>
+                  <th className="px-6 py-4 text-right font-bold">Price</th>
+                  <th className="px-6 py-4 text-right font-bold">Stock</th>
+                  <th className="px-6 py-4 text-right font-bold">Status</th>
+                  <th className="px-6 py-4 text-right font-bold">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-sand">
+              <tbody className="divide-y divide-[var(--color-sand)]/70">
                 {products.map((product: ProductWithRelations) => {
                   const imageUrl = product.images[0]?.url || "/images/Shoes/gmm.jpeg";
                   const prices = product.variants.map((v) => Number(v.price));
@@ -85,36 +87,40 @@ export default async function AdminProductsPage() {
                   const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);
 
                   return (
-                    <tr key={product.id}>
-                      <td className="py-4">
+                    <tr key={product.id} className="hover:bg-[var(--color-sand)]/20 transition-colors">
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-sand">
+                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[var(--color-cream)] border border-[var(--color-sand)]">
                             <Image src={imageUrl} alt={product.name} fill className="object-cover" />
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate font-[family-name:var(--font-display)] text-navy">
+                            <p className="truncate font-[family-name:var(--font-display)] font-semibold text-[var(--color-navy)]">
                               {product.name}
                             </p>
-                            <p className="text-xs text-navy/45">{product.brand || "—"}</p>
+                            <p className="text-xs text-[var(--color-navy)]/50">{product.brand || "ABXV"}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-4 text-navy/60">{product.category?.name || "—"}</td>
-                      <td className="py-4 text-right font-medium text-navy">
+                      <td className="px-6 py-4 text-sm text-[var(--color-navy)]/70">{product.category?.name || "—"}</td>
+                      <td className="px-6 py-4 text-right font-bold text-[var(--color-navy)]">
                         ${minPrice.toFixed(2)}
                       </td>
-                      <td className="py-4 text-right">
-                        <span className={totalStock <= 5 ? "text-rose-600" : "text-navy"}>
+                      <td className="px-6 py-4 text-right">
+                        <span className={totalStock <= 5 ? "font-bold text-rose-600" : "text-[var(--color-navy)]"}>
                           {totalStock}
                         </span>
                       </td>
-                      <td className="py-4 text-right text-navy/60">
-                        {product.isActive ? "Active" : "Draft"}
+                      <td className="px-6 py-4 text-right text-xs font-semibold text-[var(--color-navy)]/70">
+                        {product.isActive ? (
+                          <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-emerald-700">Active</span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-stone-100 px-2.5 py-0.5 text-stone-600">Draft</span>
+                        )}
                       </td>
-                      <td className="py-4 text-right">
+                      <td className="px-6 py-4 text-right">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="text-navy hover:text-accent"
+                          className="text-xs font-semibold text-[var(--color-navy)] hover:text-[var(--color-sky)] transition-colors"
                         >
                           Edit
                         </Link>
@@ -126,8 +132,8 @@ export default async function AdminProductsPage() {
             </table>
           </div>
 
-          {/* Mobile cards */}
-          <div className="flex flex-col divide-y divide-sand md:hidden">
+          {/* Mobile Cards */}
+          <div className="flex flex-col divide-y divide-[var(--color-sand)] rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] md:hidden">
             {products.map((product: ProductWithRelations) => {
               const imageUrl = product.images[0]?.url || "/images/Shoes/gmm.jpeg";
               const prices = product.variants.map((v) => Number(v.price));
@@ -138,19 +144,19 @@ export default async function AdminProductsPage() {
                 <Link
                   key={product.id}
                   href={`/admin/products/${product.id}`}
-                  className="flex items-center gap-4 py-4"
+                  className="flex items-center gap-4 px-4 py-4 hover:bg-[var(--color-sand)]/20 transition-colors"
                 >
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md bg-sand">
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--color-cream)] border border-[var(--color-sand)]">
                     <Image src={imageUrl} alt={product.name} fill className="object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-[family-name:var(--font-display)] text-navy">
+                    <p className="truncate font-[family-name:var(--font-display)] font-semibold text-[var(--color-navy)]">
                       {product.name}
                     </p>
-                    <p className="mt-0.5 text-xs text-navy/45">
+                    <p className="mt-0.5 text-xs text-[var(--color-navy)]/60">
                       {product.category?.name || "—"} · ${minPrice.toFixed(2)}
                     </p>
-                    <p className={`mt-1 text-xs ${totalStock <= 5 ? "text-rose-600" : "text-navy/50"}`}>
+                    <p className={`mt-1 text-xs ${totalStock <= 5 ? "font-semibold text-rose-600" : "text-[var(--color-navy)]/50"}`}>
                       {totalStock} in stock
                     </p>
                   </div>
