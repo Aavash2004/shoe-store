@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Inter } from "next/font/google";
+import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
 import { SessionProviderWrapper } from "@/components/layout/SessionProviderWrapper";
 import { Toast } from "@/components/ui/Toast";
 
-
-const playfair = Playfair_Display({
+const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["400", "600", "700"],
+  weight: ["400", "600", "700", "800"],
 });
 const inter = Inter({
   subsets: ["latin"],
@@ -27,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${playfair.variable} ${inter.variable} antialiased`}>
+      <body className={`${manrope.variable} ${inter.variable} antialiased`}>
         <SessionProviderWrapper>{children}<Toast></Toast></SessionProviderWrapper>
       </body>
     </html>

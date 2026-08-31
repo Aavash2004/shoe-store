@@ -1,4 +1,5 @@
 @import "tailwindcss";
+
 /* ========================================
    Design Tokens
 ======================================== */
@@ -12,14 +13,15 @@
   --color-sand: #E6E0D4;
 
   /* Fonts */
-  --font-display: "Playfair Display", Georgia, serif;
+  --font-display: "Manrope", sans-serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
 
   /* Semantic colors */
   --color-background: var(--color-cream);
   --color-foreground: var(--color-navy);
 
-  --color-primary: var(--color-navy);               /* changed to navy for stronger CTAs */
+  --color-primary: var(--color-navy);
+  /* changed to navy for stronger CTAs */
   --color-primary-foreground: var(--color-cream);
 
   --color-secondary: var(--color-sand);
