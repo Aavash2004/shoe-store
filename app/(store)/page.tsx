@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Hero } from "@/components/layout/Hero";
-import { ProductGrid } from "@/components/product/ProductGrid";
-import { ScrollReveal } from "@/components/product/ScrollReveal";
+import { PerksMarquee } from "@/components/layout/PerksMarquee";
+import { HomeProductTabs } from "@/components/product/HomeProductTabs";
 import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +12,6 @@ const categoryChips = [
   { name: "Lifestyle", href: "/shop?category=lifestyle" },
   { name: "Training", href: "/shop?category=training" },
   { name: "Basketball", href: "/shop?category=basketball" },
-];
-
-const perks = [
-  { label: "Free shipping", detail: "On orders over $75" },
-  { label: "Easy returns", detail: "30-day window" },
-  { label: "Secure checkout", detail: "Encrypted end to end" },
 ];
 
 export default async function HomePage() {
@@ -112,125 +106,11 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Perks strip — staggered scroll reveal */}
-      <section className="border-b border-navy/10 bg-cream">
-        <ScrollReveal selector="[data-perk-item]" stagger={0.07} y={12}>
-          <div className="mx-auto grid max-w-7xl grid-cols-1 divide-y divide-navy/10 px-6 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {perks.map((perk) => (
-              <div
-                key={perk.label}
-                data-perk-item
-                className="flex flex-col items-center gap-1 py-6 text-center"
-              >
-                <span className="text-sm font-semibold text-navy">{perk.label}</span>
-                <span className="text-xs text-navy/60">{perk.detail}</span>
-              </div>
-            ))}
-          </div>
-        </ScrollReveal>
-      </section>
+      {/* Infinite Perks Marquee Highlight Strip */}
+      <PerksMarquee />
 
-      {/* Section 1: New Arrivals */}
-      <section className="mx-auto max-w-7xl px-6 py-16 md:py-24">
-        <ScrollReveal selector="[data-reveal-header]">
-          <div
-            data-reveal-header
-            className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end"
-          >
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-navy)]/55">
-                FRESH DROPS
-              </span>
-              <h2 className="mt-1 font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-navy)] sm:text-4xl font-bold">
-                New Arrivals
-              </h2>
-              <p className="mt-2.5 max-w-md text-[var(--color-navy)]/70 text-sm sm:text-base">
-                Discover our latest footwear drops engineered for performance, movement, and everyday style.
-              </p>
-            </div>
-
-            <Link
-              href="/shop"
-              className="group hidden shrink-0 items-center gap-1.5 text-sm font-semibold text-[var(--color-navy)]/75 transition-colors hover:text-[var(--color-navy)] sm:flex"
-            >
-              <span>View all new arrivals</span>
-              <span className="transition-transform duration-200 group-hover:translate-x-1">
-                →
-              </span>
-            </Link>
-          </div>
-        </ScrollReveal>
-
-        <div className="mt-10 md:mt-12">
-          <ScrollReveal selector="[data-product-card]" stagger={0.06}>
-            <ProductGrid products={newArrivals} />
-          </ScrollReveal>
-        </div>
-
-        <div className="mt-10 flex justify-center sm:hidden">
-          <Link
-            href="/shop"
-            className="group flex items-center gap-1.5 text-sm font-semibold text-[var(--color-navy)]/75 transition-colors hover:text-[var(--color-navy)]"
-          >
-            <span>View all new arrivals</span>
-            <span className="transition-transform duration-200 group-hover:translate-x-1">
-              →
-            </span>
-          </Link>
-        </div>
-      </section>
-
-      {/* Section 2: Best Sellers (With subtle background contrast) */}
-      <section className="bg-[var(--color-cream-alt)]/50 border-t border-[var(--color-sand)]/60 py-16 md:py-24">
-        <div className="mx-auto max-w-7xl px-6">
-          <ScrollReveal selector="[data-reveal-header]">
-            <div
-              data-reveal-header
-              className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end"
-            >
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-navy)]/55">
-                  CUSTOMER FAVORITES
-                </span>
-                <h2 className="mt-1 font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-navy)] sm:text-4xl font-bold">
-                  Best Sellers
-                </h2>
-                <p className="mt-2.5 max-w-md text-[var(--color-navy)]/70 text-sm sm:text-base">
-                  Explore top-rated shoes loved by the ABXV community.
-                </p>
-              </div>
-
-              <Link
-                href="/shop?sort=price-desc"
-                className="group hidden shrink-0 items-center gap-1.5 text-sm font-semibold text-[var(--color-navy)]/75 transition-colors hover:text-[var(--color-navy)] sm:flex"
-              >
-                <span>Explore best sellers</span>
-                <span className="transition-transform duration-200 group-hover:translate-x-1">
-                  →
-                </span>
-              </Link>
-            </div>
-          </ScrollReveal>
-
-          <div className="mt-10 md:mt-12">
-            <ScrollReveal selector="[data-product-card]" stagger={0.06}>
-              <ProductGrid products={bestSellers} />
-            </ScrollReveal>
-          </div>
-
-          <div className="mt-10 flex justify-center sm:hidden">
-            <Link
-              href="/shop?sort=price-desc"
-              className="group flex items-center gap-1.5 text-sm font-semibold text-[var(--color-navy)]/75 transition-colors hover:text-[var(--color-navy)]"
-            >
-              <span>Explore best sellers</span>
-              <span className="transition-transform duration-200 group-hover:translate-x-1">
-                →
-              </span>
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* New Arrivals & Best Sellers Tabbed Product Showcase */}
+      <HomeProductTabs newArrivals={newArrivals} bestSellers={bestSellers} />
     </>
   );
 }
