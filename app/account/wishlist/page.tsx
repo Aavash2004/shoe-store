@@ -79,9 +79,6 @@ export default function WishlistPage() {
         <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)]">
           YOUR WISHLIST
         </h1>
-        <p className="text-sm text-[var(--color-navy)]/60 mt-1 italic">
-          "Pieces you're thinking about."
-        </p>
       </div>
 
       {/* Grid Content */}

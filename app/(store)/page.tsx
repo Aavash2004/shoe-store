@@ -6,6 +6,7 @@ import { placeholderProducts } from "@/lib/placeholder-data";
 import { prisma } from "@/lib/db/prisma";
 import { features } from "process";
 
+export const dynamic = "force-dynamic";
 
 const perks = [
   { label: "Free shipping", detail: "On orders over $75" },

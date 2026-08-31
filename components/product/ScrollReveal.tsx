@@ -3,31 +3,50 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 
-export function ScrollReveal({ children }: { children: ReactNode }) {
+interface ScrollRevealProps {
+  children: ReactNode;
+  selector?: string;
+  stagger?: number;
+  y?: number;
+}
+
+export function ScrollReveal({
+  children,
+  selector,
+  stagger = 0.06,
+  y = 14,
+}: ScrollRevealProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const propsRef = useRef({ selector, stagger, y });
+  propsRef.current = { selector, stagger, y };
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     // Respect prefers-reduced-motion
-    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
       return;
     }
 
-    // Target the actual product cards (not the wrapper)
-    const cards = container.querySelectorAll("[data-product-card]");
+    const { selector: sel, stagger: st, y: yPos } = propsRef.current;
 
-    // Fallback: if no cards found, return early
-    if (cards.length === 0) return;
+    const targets = sel
+      ? container.querySelectorAll(sel)
+      : container.querySelectorAll("[data-product-card], [data-reveal-item]");
+
+    const elementsToAnimate =
+      targets.length > 0 ? Array.from(targets) : [container];
 
     const ctx = gsap.context(() => {
-      gsap.from(cards, {
-        y: 20,
-        scale: 0.95,
+      gsap.from(elementsToAnimate, {
+        y: yPos,
         opacity: 0,
         duration: 0.5,
-        stagger: 0.06,
+        stagger: st,
         ease: "power2.out",
         clearProps: "all", // removes inline styles after animation finishes
         scrollTrigger: {

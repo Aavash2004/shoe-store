@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { ShoppingBag, Heart, User, Menu, X } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ShoppingBag, Heart, User, Menu, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
@@ -15,12 +15,30 @@ const links = [
 ];
 
 function HeaderInner() {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get("category");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = searchQuery.trim();
+    const params = new URLSearchParams(searchParams.toString());
+    if (trimmed) {
+      params.set("q", trimmed);
+    } else {
+      params.delete("q");
+    }
+    router.push(`/shop?${params.toString()}`);
+  }
 
   const localCount = useCartStore((state) =>
     state.items.reduce((sum, item) => sum + item.quantity, 0)
@@ -99,11 +117,10 @@ function HeaderInner() {
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`relative text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${
-                  active
+                className={`relative text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${active
                     ? "text-[var(--color-navy)] after:scale-x-100"
                     : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
-                }`}
+                  }`}
               >
                 {link.label}
               </Link>
@@ -111,8 +128,35 @@ function HeaderInner() {
           })}
         </nav>
 
-        {/* Icons */}
-        <div className="flex items-center gap-1.5">
+        {/* Search Bar & Icons */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Header Search Form */}
+          <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search..."
+              className="w-28 sm:w-44 md:w-52 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-40 sm:focus:w-56 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs"
+            />
+            <Search className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/50 pointer-events-none" />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  const params = new URLSearchParams(searchParams.toString());
+                  params.delete("q");
+                  router.push(params.toString() ? `/shop?${params.toString()}` : "/shop");
+                }}
+                className="absolute right-2 p-0.5 text-[var(--color-navy)]/40 hover:text-[var(--color-navy)] transition-colors"
+                aria-label="Clear search query"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </form>
+
           {/* Wishlist */}
           <Button
             variant="ghost"
@@ -194,9 +238,8 @@ function HeaderInner() {
       {/* Mobile menu panel */}
       <div
         id="mobile-menu"
-        className={`overflow-hidden border-t border-[var(--color-sand)]/70 bg-[var(--color-cream)] transition-[max-height,opacity] duration-300 ease-in-out md:hidden ${
-          mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-        }`}
+        className={`overflow-hidden border-t border-[var(--color-sand)]/70 bg-[var(--color-cream)] transition-[max-height,opacity] duration-300 ease-in-out md:hidden ${mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          }`}
       >
         <nav className="flex flex-col px-4 py-2">
           {links.map((link) => {
@@ -206,11 +249,10 @@ function HeaderInner() {
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`border-b border-[var(--color-sand)]/40 py-3 text-base font-medium last:border-b-0 ${
-                  active
+                className={`border-b border-[var(--color-sand)]/40 py-3 text-base font-medium last:border-b-0 ${active
                     ? "text-[var(--color-navy)]"
                     : "text-[var(--color-navy)]/70"
-                }`}
+                  }`}
               >
                 {link.label}
               </Link>

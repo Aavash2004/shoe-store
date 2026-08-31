@@ -11,6 +11,7 @@ type SearchParams = {
   size?: string;
   color?: string;
   sort?: string;
+  q?: string;
 };
 
 export default async function ShopPage({
@@ -18,33 +19,49 @@ export default async function ShopPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { category, size, color, sort } = await searchParams;
+  const { category, size, color, sort, q } = await searchParams;
 
-  const products = await prisma.product.findMany({
-    where: {
-      isActive: true,
-      deletedAt: null,
-      ...(category && {
-        category: { slug: category.toLowerCase() },
-      }),
-      ...(size || color
-        ? {
-            variants: {
-              some: {
-                isActive: true,
-                ...(size && { size }),
-                ...(color && { color }),
+  const [products, dbCategories, dbVariants] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        isActive: true,
+        deletedAt: null,
+        ...(q && {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { brand: { contains: q, mode: "insensitive" } },
+            { description: { contains: q, mode: "insensitive" } },
+          ],
+        }),
+        ...(category && {
+          category: { slug: category.toLowerCase() },
+        }),
+        ...(size || color
+          ? {
+              variants: {
+                some: {
+                  isActive: true,
+                  ...(size && { size }),
+                  ...(color && { color }),
+                },
               },
-            },
-          }
-        : {}),
-    },
-    include: {
-      category: true,
-      images: { orderBy: { position: "asc" } },
-      variants: { where: { isActive: true } },
-    },
-  });
+            }
+          : {}),
+      },
+      include: {
+        category: true,
+        images: { orderBy: { position: "asc" } },
+        variants: { where: { isActive: true } },
+      },
+    }),
+    prisma.category.findMany({
+      select: { name: true },
+    }),
+    prisma.productVariant.findMany({
+      where: { isActive: true, product: { isActive: true, deletedAt: null } },
+      select: { size: true, color: true },
+    }),
+  ]);
 
   const withPrice = products.map((product) => ({
     ...product,
@@ -60,25 +77,15 @@ export default async function ShopPage({
     withPrice.sort((a, b) => b.minPrice - a.minPrice);
   }
 
-  const allProducts = await prisma.product.findMany({
-    where: { isActive: true, deletedAt: null },
-    include: { category: true, variants: true },
-  });
+  const categories = Array.from(new Set(dbCategories.map((c) => c.name)));
+  const sizes = Array.from(new Set(dbVariants.map((v) => v.size))).sort();
+  const colors = Array.from(new Set(dbVariants.map((v) => v.color)));
 
-  const categories = Array.from(
-    new Set(allProducts.map((p) => p.category.name))
-  );
-  const sizes = Array.from(
-    new Set(allProducts.flatMap((p) => p.variants.map((v) => v.size)))
-  ).sort();
-  const colors = Array.from(
-    new Set(allProducts.flatMap((p) => p.variants.map((v) => v.color)))
-  );
+  const activeFilterCount = [category, size, color, q].filter(Boolean).length;
 
-  const activeFilterCount = [category, size, color].filter(Boolean).length;
-
-  function buildHref(remove?: "category" | "size" | "color") {
+  function buildHref(remove?: "category" | "size" | "color" | "q") {
     const params = new URLSearchParams();
+    if (q && remove !== "q") params.set("q", q);
     if (category && remove !== "category") params.set("category", category);
     if (size && remove !== "size") params.set("size", size);
     if (color && remove !== "color") params.set("color", color);
@@ -117,10 +124,12 @@ export default async function ShopPage({
             COLLECTION
           </span>
           <h2 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl font-bold text-[#1E2A38]">
-            Shop
+            {q ? `Search Results: "${q}"` : "Shop"}
           </h2>
           <p className="text-xs sm:text-sm text-[#1E2A38]/70 pt-1 leading-relaxed">
-            Explore the latest footwear designed for everyday movement, comfort, and style.
+            {q
+              ? `Showing results matching "${q}" across our collection.`
+              : "Explore the latest footwear designed for everyday movement, comfort, and style."}
           </p>
         </div>
 
@@ -146,6 +155,16 @@ export default async function ShopPage({
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/50 mr-1">
               Active Filters
             </span>
+
+            {q && (
+              <Link
+                href={buildHref("q")}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+              >
+                <span>Query: &ldquo;{q}&rdquo;</span>
+                <span className="text-[#1E2A38]/50 text-xs">×</span>
+              </Link>
+            )}
 
             {category && (
               <Link
@@ -205,17 +224,19 @@ export default async function ShopPage({
           ) : (
             <div className="py-20 text-center space-y-3">
               <p className="text-xs font-bold uppercase tracking-widest text-[#1E2A38]/40">
-                NO SHOES FOUND
+                {q ? `NO RESULTS FOUND FOR "${q.toUpperCase()}"` : "NO SHOES FOUND"}
               </p>
               <p className="text-sm text-[#1E2A38]/60 max-w-sm mx-auto">
-                Try adjusting your filters or clear them to view the full collection.
+                {q
+                  ? `We couldn't find any shoes matching "${q}". Try checking your spelling or search for another model.`
+                  : "Try adjusting your filters or clear them to view the full collection."}
               </p>
               <div>
                 <Link
                   href="/shop"
                   className="inline-block mt-3 px-5 py-2.5 bg-[#1E2A38] text-[#F5F2EB] text-xs font-semibold uppercase tracking-wider rounded-xl hover:bg-[#1E2A38]/90 transition-colors shadow-xs"
                 >
-                  Clear Filters
+                  {q ? "Clear Search" : "Clear Filters"}
                 </Link>
               </div>
             </div>
