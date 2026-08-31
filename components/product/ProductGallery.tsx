@@ -1,31 +1,104 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { gsap } from "@/lib/gsap";
+import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { ZoomIn, X } from "lucide-react";
 
 export function ProductGallery({ images }: { images: string[] }) {
   const safeImages = images?.length ? images : ["/images/Shoes/gmm.jpeg"]; // fallback
   const [activeIndex, setActiveIndex] = useState(0);
   const [showLightbox, setShowLightbox] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
   const mainImageRef = useRef<HTMLDivElement>(null);
+  const thumbnailsRef = useRef<HTMLDivElement>(null);
+
+  // Initial load animation & ScrollTrigger parallax
+  useEffect(() => {
+    const container = containerRef.current;
+    const mainImage = mainImageRef.current;
+    const thumbnails = thumbnailsRef.current?.children;
+
+    if (!container || !mainImage) return;
+
+    // Respect prefers-reduced-motion
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const ctx = gsap.context(() => {
+      // 1. Entrance animation for main image
+      gsap.fromTo(
+        mainImage,
+        { opacity: 0, scale: 0.96 },
+        { opacity: 1, scale: 1, duration: 0.5, ease: "power2.out" }
+      );
+
+      // 2. Parallax drift as user scrolls past the gallery
+      gsap.to(mainImage, {
+        y: 18,
+        ease: "none",
+        scrollTrigger: {
+          trigger: container,
+          start: "top top",
+          end: "bottom top",
+          scrub: true,
+        },
+      });
+
+      // 3. Staggered thumbnails reveal
+      if (thumbnails && thumbnails.length > 0) {
+        gsap.fromTo(
+          Array.from(thumbnails),
+          { opacity: 0, y: 10 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            stagger: 0.06,
+            delay: 0.15,
+            ease: "power2.out",
+          }
+        );
+      }
+    }, container);
+
+    return () => ctx.revert();
+  }, []);
 
   function selectImage(index: number) {
-    if (index === activeIndex) return;
+    if (index === activeIndex || !mainImageRef.current) return;
+
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reducedMotion) {
+      setActiveIndex(index);
+      return;
+    }
+
+    // Crossfade + scale pulse (98% -> 100%)
     gsap.to(mainImageRef.current, {
       opacity: 0,
-      duration: 0.15,
+      scale: 0.98,
+      duration: 0.12,
+      ease: "power2.in",
       onComplete: () => {
         setActiveIndex(index);
-        gsap.to(mainImageRef.current, { opacity: 1, duration: 0.25 });
+        gsap.fromTo(
+          mainImageRef.current,
+          { opacity: 0, scale: 0.98 },
+          { opacity: 1, scale: 1, duration: 0.22, ease: "power2.out" }
+        );
       },
     });
   }
 
   return (
     <>
-      <div className="flex flex-col gap-4">
+      <div ref={containerRef} className="flex flex-col gap-4">
         {/* Main Image Container */}
         <div
           ref={mainImageRef}
@@ -46,7 +119,7 @@ export function ProductGallery({ images }: { images: string[] }) {
 
         {/* Thumbnails Strip */}
         {safeImages.length > 1 && (
-          <div className="flex gap-3">
+          <div ref={thumbnailsRef} className="flex gap-3">
             {safeImages.map((img, index) => (
               <button
                 key={img + index}

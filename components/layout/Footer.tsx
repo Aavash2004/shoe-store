@@ -94,7 +94,7 @@ export function Footer() {
     </div>
 
     <div className="mt-8 border-t border-[var(--color-cream)]/15 pt-4 text-[11px] text-[var(--color-cream)]/45">
-      © {new Date().getFullYear()} Shoe Store. All rights reserved.
+      © {new Date().getFullYear()} ABXV. All rights reserved.
     </div>
   </div>
 </footer>

@@ -62,7 +62,7 @@ function AdminLoginForm() {
             ADMINISTRATOR
           </p>
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-[var(--color-navy)]">
-            Shoe Store Admin
+            ABXV Admin
           </h1>
         </div>
 
@@ -103,7 +103,7 @@ function AdminLoginForm() {
                   aria-describedby={errors.email ? "admin-email-error" : undefined}
                   disabled={isSubmitting}
                   className="w-full pl-10 pr-4 py-3 bg-[var(--color-cream)] border border-[var(--color-sand)] rounded-xl text-sm text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--color-sky)] transition-all disabled:opacity-50"
-                  placeholder="admin@shoestore.com"
+                  placeholder="admin@abxv.com"
                   {...register("email")}
                 />
               </div>
@@ -165,7 +165,7 @@ function AdminLoginForm() {
 
         {/* Footer Note */}
         <p className="text-center text-xs text-[var(--color-navy)]/50">
-          Shoe Store Administration Interface
+          ABXV Administration Interface
         </p>
       </div>
     </div>

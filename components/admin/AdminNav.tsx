@@ -42,8 +42,8 @@ export function AdminNav({ email }: { email: string }) {
             Admin
           </span>
           </div>
-          <Link href="/admin" className="font-[family-name:var(--font-display)] text-xl text-navy">
-            Shoe Store 
+          <Link href="/admin" className="font-[family-name:var(--font-display)] text-xl font-extrabold tracking-wider text-navy">
+            ABXV
           </Link>
         </div>
         

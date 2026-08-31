@@ -103,9 +103,9 @@ function CustomerLoginForm() {
           <div className="absolute bottom-3 left-4">
             <Link
               href="/"
-              className="font-[family-name:var(--font-display)] text-2xl text-white"
+              className="font-[family-name:var(--font-display)] text-2xl font-extrabold tracking-wider text-white"
             >
-              Shoe Store
+              ABXV
             </Link>
           </div>
         </div>
@@ -115,7 +115,7 @@ function CustomerLoginForm() {
             Welcome back
           </h1>
           <p className="mt-2 text-sm text-navy/60">
-            Sign in to continue shopping.
+            Log in to manage your orders and profile.
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="mt-8 flex flex-col gap-4">
@@ -212,8 +212,8 @@ function CustomerLoginForm() {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-navy via-navy/40 to-transparent" />
         <div className="relative z-10 flex h-full flex-col justify-end p-12">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-cream/60">
-            Shoe Store
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cream/60">
+            ABXV
           </p>
           <h2 className="mt-3 font-[family-name:var(--font-display)] text-4xl text-cream">
             Good to see you again.

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/stores/cart-store";
 import { useSession } from "next-auth/react";
+import { gsap } from "@/lib/gsap";
 
 type Variant = {
   id: string;
@@ -36,6 +37,8 @@ export function ProductDetailInteractive({
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const addItem = useCartStore((state) => state.addItem);
   const { status } = useSession();
   const isLoggedIn = status === "authenticated";
@@ -44,6 +47,34 @@ export function ProductDetailInteractive({
   const matchedVariant = product.variants.find(
     (v) => v.size === selectedSize && v.color === selectedColor
   );
+
+  // Staggered entrance animation for product info details
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Respect prefers-reduced-motion
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        Array.from(container.children),
+        { opacity: 0, y: 16 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.5,
+          stagger: 0.05,
+          delay: 0.15,
+          ease: "power2.out",
+        }
+      );
+    }, container);
+
+    return () => ctx.revert();
+  }, []);
 
   async function handleAddToCart() {
     if (!matchedVariant) return;
@@ -95,7 +126,7 @@ export function ProductDetailInteractive({
   }
 
   return (
-    <div className="flex flex-col">
+    <div ref={containerRef} className="flex flex-col">
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--color-navy)]/55">
         {product.brand} · {product.category}
       </p>

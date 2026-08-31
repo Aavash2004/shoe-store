@@ -70,8 +70,8 @@ export default function RegisterPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-navy via-navy/40 to-transparent" />
         <div className="relative z-10 flex h-full flex-col justify-end p-12">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-cream/60">
-            Shoe Store
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cream/60">
+            ABXV
           </p>
           <h2 className="mt-3 font-[family-name:var(--font-display)] text-4xl text-cream">
             Join the collection.
@@ -103,9 +103,9 @@ export default function RegisterPage() {
   <div className="w-full max-w-sm">
     <Link
             href="/"
-            className="font-[family-name:var(--font-display)] text-2xl text-navy"
+            className="font-[family-name:var(--font-display)] text-2xl font-extrabold tracking-wider text-navy"
           >
-            Shoe Store
+            ABXV
           </Link>
 
           <h1 className="mt-8 font-[family-name:var(--font-display)] text-3xl text-navy">

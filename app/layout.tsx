@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Shoe Store",
-  description: "Premium shoes, thoughtfully made.",
+  title: "ABXV",
+  description: "ABXV — Premium shoes, thoughtfully made.",
 };
 
 export default function RootLayout({

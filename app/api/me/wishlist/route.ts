@@ -83,7 +83,7 @@ export async function GET() {
       productId: prod?.id,
       slug: prod?.slug,
       name: prod?.name || "Shoe Product",
-      brand: prod?.brand || "ShoeStore",
+      brand: prod?.brand || "ABXV",
       category: prod?.category?.name || "Footwear",
       price: firstVariant ? Number(firstVariant.price) : 0,
       image: primaryImg?.url || "/images/Shoes/gmm.jpeg",

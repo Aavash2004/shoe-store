@@ -85,9 +85,9 @@ function HeaderInner() {
         {/* Logo */}
         <Link
           href="/"
-          className="font-[family-name:var(--font-display)] text-xl tracking-tight text-[var(--color-navy)] transition-opacity hover:opacity-80 md:text-2xl"
+          className="font-[family-name:var(--font-display)] text-xl font-extrabold tracking-wider text-[var(--color-navy)] transition-opacity hover:opacity-80 md:text-2xl"
         >
-          Shoe Store
+          ABXV
         </Link>
 
         {/* Desktop Navigation */}

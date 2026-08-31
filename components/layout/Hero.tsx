@@ -56,7 +56,7 @@ export function Hero() {
       <div className="absolute inset-0 z-0">
         <Image
           src="/images/shoes/f.avif"
-          alt="Shoe store background"
+          alt="ABXV background"
           fill
           priority
           className="object-cover object-center"

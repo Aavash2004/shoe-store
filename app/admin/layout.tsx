@@ -27,7 +27,7 @@ export default async function AdminLayout({
       <AdminNav email={session.user.email ?? ""} />
       <main className="mx-auto max-w-7xl px-6 py-10">{children}</main>
       <footer className="border-t border-[var(--color-sand)] py-6 text-center text-xs text-[var(--color-navy)]/50">
-        © {new Date().getFullYear()} Shoe Store. All rights reserved.
+        © {new Date().getFullYear()} ABXV. All rights reserved.
       </footer>
     </div>
   );

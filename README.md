@@ -1,4 +1,4 @@
-# Shoe Store
+# ABXV
 
 A full-stack shoe e-commerce app built with Next.js (App Router), TypeScript, Tailwind CSS, Prisma, and PostgreSQL (Neon).
 
