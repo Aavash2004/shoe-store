@@ -92,19 +92,16 @@ export async function updateProduct(data: UpdateProductInput) {
     }
   }
 
-  // ------------------------------------------------
+  // --------------------------------------------------
   // VARIANTS
-  // ------------------------------------------------
+  // --------------------------------------------------
 
   if (variants) {
     const submittedVariantIds = variants
       .map((variant) => variant.id)
       .filter((id): id is string => Boolean(id));
 
-    // ----------------------------------------------
-    // 1. Soft-delete variants removed from the form
-    // ----------------------------------------------
-
+    // 1. Soft-delete variants removed from form
     const removedVariants = existing.variants.filter(
       (existingVariant) =>
         !submittedVariantIds.includes(existingVariant.id)
@@ -115,7 +112,6 @@ export async function updateProduct(data: UpdateProductInput) {
         where: {
           id: variant.id,
         },
-
         data: {
           isActive: false,
           deletedAt: new Date(),
@@ -123,18 +119,13 @@ export async function updateProduct(data: UpdateProductInput) {
       });
     }
 
-    // ----------------------------------------------
     // 2. Update existing variants / create new ones
-    // ----------------------------------------------
-
     for (const variant of variants) {
       if (variant.id) {
-        // Existing variant by ID
         await prisma.productVariant.update({
           where: {
             id: variant.id,
           },
-
           data: {
             size: variant.size,
             color: variant.color,
@@ -146,14 +137,12 @@ export async function updateProduct(data: UpdateProductInput) {
           },
         });
       } else {
-        // Check if a variant with this SKU already exists in DB
         const existingSku = await prisma.productVariant.findUnique({
           where: { sku: variant.sku },
         });
 
         if (existingSku) {
           if (existingSku.productId === id) {
-            // Re-activate and update existing variant for this product
             await prisma.productVariant.update({
               where: { id: existingSku.id },
               data: {
@@ -174,7 +163,6 @@ export async function updateProduct(data: UpdateProductInput) {
             };
           }
         } else {
-          // New variant
           await prisma.productVariant.create({
             data: {
               productId: id,
@@ -192,13 +180,13 @@ export async function updateProduct(data: UpdateProductInput) {
   }
 
   // --------------------------------------------------
-  // CACHE
+  // CACHE REVALIDATION
   // --------------------------------------------------
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${id}`);
 
-  redirect(`/admin/products/${id}`);
+  return { success: true as const };
 }
 
 // ====================================================
@@ -221,7 +209,6 @@ export async function deleteProduct(id: string) {
 
   await prisma.product.update({
     where: { id },
-
     data: {
       deletedAt: new Date(),
       isActive: false,
@@ -229,6 +216,5 @@ export async function deleteProduct(id: string) {
   });
 
   revalidatePath("/admin/products");
-
   redirect("/admin/products");
 }

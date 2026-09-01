@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { ArrowRight, Plus, ShoppingBag, Boxes, Tag, Users } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 function statusDot(status: string) {
   const colors: Record<string, string> = {
     DELIVERED: "bg-emerald-500",
@@ -34,6 +36,80 @@ function timeAgo(date: Date) {
   return `${days} days ago`;
 }
 
+async function safeQuery<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch (firstErr) {
+    console.warn("[Dashboard Query Warning] Retrying in 200ms...", firstErr);
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      return await fn();
+    } catch (secondErr) {
+      console.error("[Dashboard Query Failed] Using fallback:", secondErr);
+      return fallback;
+    }
+  }
+}
+
+async function executeAdminDashboardData() {
+  const [
+    totalOrdersCount,
+    totalProductsCount,
+    lowStockCount,
+    recentOrders,
+    lowStockItems,
+    recentProducts,
+    revenueAggregate,
+  ] = await Promise.all([
+    safeQuery(() => prisma.order.count(), 0),
+    safeQuery(() => prisma.product.count({ where: { deletedAt: null } }), 0),
+    safeQuery(() => prisma.productVariant.count({ where: { stock: { lte: 5 }, isActive: true } }), 0),
+    safeQuery(
+      () =>
+        prisma.order.findMany({
+          take: 5,
+          orderBy: { createdAt: "desc" },
+          include: { items: true, user: { select: { name: true, email: true } } },
+        }),
+      []
+    ),
+    safeQuery(
+      () =>
+        prisma.productVariant.findMany({
+          where: { stock: { lte: 5 }, isActive: true },
+          take: 4,
+          include: { product: { select: { name: true, slug: true, images: { take: 1 } } } },
+        }),
+      []
+    ),
+    safeQuery(
+      () =>
+        prisma.product.findMany({
+          where: { deletedAt: null },
+          take: 4,
+          orderBy: { createdAt: "desc" },
+          include: {
+            images: { take: 1 },
+            variants: { take: 1 },
+            category: { select: { name: true } },
+          },
+        }),
+      []
+    ),
+    safeQuery(() => prisma.order.aggregate({ _sum: { total: true } }), { _sum: { total: null } }),
+  ]);
+
+  return [
+    totalOrdersCount,
+    totalProductsCount,
+    lowStockCount,
+    recentOrders,
+    lowStockItems,
+    recentProducts,
+    revenueAggregate,
+  ] as const;
+}
+
 export default async function AdminDashboardPage() {
   const session = await auth();
   const adminName = session?.user?.name || session?.user?.email?.split("@")[0] || "Admin";
@@ -46,31 +122,7 @@ export default async function AdminDashboardPage() {
     lowStockItems,
     recentProducts,
     revenueAggregate,
-  ] = await Promise.all([
-    prisma.order.count(),
-    prisma.product.count(),
-    prisma.productVariant.count({ where: { stock: { lte: 5 }, isActive: true } }),
-    prisma.order.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      include: { items: true, user: { select: { name: true, email: true } } },
-    }),
-    prisma.productVariant.findMany({
-      where: { stock: { lte: 5 }, isActive: true },
-      take: 4,
-      include: { product: { select: { name: true, slug: true, images: { where: { isPrimary: true }, take: 1 } } } },
-    }),
-    prisma.product.findMany({
-      take: 4,
-      orderBy: { createdAt: "desc" },
-      include: {
-        images: { where: { isPrimary: true }, take: 1 },
-        variants: { take: 1 },
-        category: { select: { name: true } },
-      },
-    }),
-    prisma.order.aggregate({ _sum: { total: true } }),
-  ]);
+  ] = await executeAdminDashboardData();
 
   const totalRevenue = Number(revenueAggregate._sum.total || 0);
 
@@ -142,9 +194,9 @@ export default async function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-sand)]/70">
-                    {recentOrders.map((order: (typeof recentOrders)[number]) => {
+                    {recentOrders.map((order: any) => {
                       const totalQty = order.items.reduce(
-                        (sum: number, i: (typeof order.items)[number]) => sum + i.quantity,
+                        (sum: number, i: any) => sum + i.quantity,
                         0
                       );
                       const customerName = order.user?.name || order.user?.email || "Guest";
@@ -190,7 +242,7 @@ export default async function AdminDashboardPage() {
               <p className="mt-6 text-xs text-[var(--color-navy)]/50">No products yet.</p>
             ) : (
               <div className="mt-4 flex flex-col divide-y divide-[var(--color-sand)] rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] overflow-hidden">
-                {recentProducts.map((prod: (typeof recentProducts)[number]) => {
+                {recentProducts.map((prod: any) => {
                   const imgUrl = prod.images[0]?.url || "/images/Shoes/gmm.jpeg";
                   const price = prod.variants[0]?.price ? Number(prod.variants[0].price) : 0;
                   return (
@@ -227,7 +279,7 @@ export default async function AdminDashboardPage() {
               <p className="mt-6 text-xs text-[var(--color-navy)]/50">All inventory levels healthy.</p>
             ) : (
               <div className="mt-4 flex flex-col gap-2.5">
-                {lowStockItems.map((item: (typeof lowStockItems)[number]) => {
+                {lowStockItems.map((item: any) => {
                   const imgUrl = item.product.images?.[0]?.url || "/images/Shoes/gmm.jpeg";
                   const urgent = item.stock <= 2;
                   return (

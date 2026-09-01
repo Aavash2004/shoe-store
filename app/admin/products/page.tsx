@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma";
 import { Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+export const dynamic = "force-dynamic";
+
 type ProductWithRelations = {
   id: string;
   name: string;
@@ -14,16 +16,47 @@ type ProductWithRelations = {
   variants: { price: any; stock: number }[];
 };
 
+async function executeAdminProductsQueries() {
+  const fetchProducts = () =>
+    prisma.product.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      include: {
+        category: { select: { name: true } },
+        images: { orderBy: { position: "asc" }, take: 1 },
+        variants: { select: { price: true, stock: true } },
+      },
+    });
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await fetchProducts();
+    } catch (err) {
+      console.warn(`[AdminProductsPage DB] Attempt ${attempt} failed:`, err);
+      if (attempt === 3) break;
+      await new Promise((res) => setTimeout(res, 250 * attempt));
+    }
+  }
+
+  // Fallback to basic findMany without nested includes if socket flickers
+  try {
+    return await prisma.product.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      include: {
+        category: { select: { name: true } },
+        images: { take: 1 },
+        variants: { select: { price: true, stock: true } },
+      },
+    });
+  } catch (fallbackErr) {
+    console.error("[AdminProductsPage DB] Final fallback failed:", fallbackErr);
+    return [];
+  }
+}
+
 export default async function AdminProductsPage() {
-  const products = await prisma.product.findMany({
-    where: { deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    include: {
-      category: { select: { name: true } },
-      images: { where: { isPrimary: true }, take: 1 },
-      variants: { where: { isActive: true }, select: { price: true, stock: true } },
-    },
-  });
+  const products = await executeAdminProductsQueries();
 
   return (
     <div className="space-y-8">

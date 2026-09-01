@@ -11,6 +11,7 @@ import {
   Loader2,
   X,
   ChevronDown,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,7 @@ type ExistingProduct = {
   metaDescription: string | null;
   isActive: boolean;
   images: { url: string; altText: string | null; isPrimary: boolean }[];
-  variants: { size: string; color: string; sku: string; price: any; stock: number }[];
+  variants: { id?: string; size: string; color: string; sku: string; price: any; stock: number }[];
 };
 
 interface ImageField {
@@ -58,6 +59,7 @@ interface ImageField {
 }
 
 interface VariantField {
+  id?: string;
   size: string;
   color: string;
   sku: string;
@@ -83,7 +85,8 @@ export function ProductForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string[]>>({});
-const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
   const [name, setName] = useState(product?.name ?? "");
   const [slug, setSlug] = useState(product?.slug ?? "");
   const [slugEdited, setSlugEdited] = useState(isEditMode);
@@ -109,6 +112,7 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [variants, setVariants] = useState<VariantField[]>(
     product?.variants.length
       ? product.variants.map((v) => ({
+          id: v.id,
           size: v.size,
           color: v.color,
           sku: v.sku,
@@ -160,23 +164,28 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     );
   }
 
-  async function uploadImage(index: number, file: File) {
-    if (!file.type.startsWith("image/")) return;
+  async function handleFileUpload(
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     setUploadingIndex(index);
     try {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
       if (!res.ok) throw new Error("Upload failed");
 
-      const { url } = await res.json();
-      updateImage(index, "url", url);
-      if (!images[index].altText) {
-        updateImage(index, "altText", file.name.replace(/\.[^.]+$/, ""));
-      }
-    } catch {
+      const data = await res.json();
+      updateImage(index, "url", data.url);
+    } catch (err) {
       console.error("Failed to upload image");
     } finally {
       setUploadingIndex(null);
@@ -228,6 +237,7 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
       variants: variants
         .filter((v) => v.sku.trim() !== "")
         .map((v) => ({
+          id: v.id,
           size: v.size,
           color: v.color,
           sku: v.sku,
@@ -240,8 +250,30 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
       const result = isEditMode
         ? await updateProduct({ ...payload, id: product!.id })
         : await createProduct(payload);
+
       if (result && !result.success) {
         setErrors(result.error);
+        window.dispatchEvent(
+          new CustomEvent("show-toast", {
+            detail: {
+              message: "Please fix the form errors before saving.",
+              type: "error",
+            },
+          })
+        );
+      } else {
+        setSavedSuccess(true);
+        window.dispatchEvent(
+          new CustomEvent("show-toast", {
+            detail: {
+              message: isEditMode
+                ? "Product changes saved successfully!"
+                : "New product created successfully!",
+              type: "success",
+            },
+          })
+        );
+        setTimeout(() => setSavedSuccess(false), 3000);
       }
     });
   }
@@ -423,10 +455,7 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadImage(i, file);
-                      }}
+                      onChange={(e) => handleFileUpload(i, e)}
                     />
                   </label>
                 )}
@@ -659,15 +688,26 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
       <Button
         type="submit"
         disabled={isPending}
-        className="h-10 rounded-md bg-[#1E2A38] px-6 text-[13px] font-medium text-[#F5F2EB] transition hover:bg-[#89B4D9] hover:text-[#1E2A38] disabled:opacity-60"
+        className={`h-10 rounded-md px-6 text-[13px] font-medium transition-all duration-300 ${
+          savedSuccess
+            ? "bg-emerald-600 text-white hover:bg-emerald-700"
+            : "bg-[#1E2A38] text-[#F5F2EB] hover:bg-[#89B4D9] hover:text-[#1E2A38]"
+        } disabled:opacity-60`}
       >
-        {isPending
-          ? isEditMode
-            ? "Saving…"
-            : "Creating…"
-          : isEditMode
-            ? "Save Changes"
-            : "Create Product"}
+        {isPending ? (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {isEditMode ? "Saving…" : "Creating…"}
+          </span>
+        ) : savedSuccess ? (
+          <span className="flex items-center gap-1.5 font-bold">
+            <Check className="h-4 w-4 text-white" /> Saved Successfully!
+          </span>
+        ) : isEditMode ? (
+          "Save Changes"
+        ) : (
+          "Create Product"
+        )}
       </Button>
     </div>
   </div>

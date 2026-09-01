@@ -27,6 +27,11 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
 // ============================================================
 // AUTH (NextAuth / Auth.js)
 // ============================================================
@@ -116,7 +121,7 @@ model Product {
 
   metaTitle       String?
   metaDescription String?
-  brand String?
+  brand           String?
   ogImage         String?
 
   isActive  Boolean   @default(true)
@@ -353,6 +358,27 @@ model Review {
   @@unique([productId, userId])
   @@index([productId])
   @@map("reviews")
+}
+
+// ============================================================
+// COUPONS
+// ============================================================
+
+model Coupon {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  discountType  DiscountType @default(PERCENTAGE)
+  discountValue Decimal      @db.Decimal(10, 2)
+  minSubtotal   Decimal      @default(0) @db.Decimal(10, 2)
+  maxUses       Int?
+  usedCount     Int          @default(0)
+  isActive      Boolean      @default(true)
+  expiresAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("coupons")
 }
 
 // ============================================================

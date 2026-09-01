@@ -10,6 +10,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Lock, Package, Truck } from "lucide-react";
+import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
 
 const formSchema = z.object({
   guestEmail: z
@@ -112,6 +113,7 @@ export default function CheckoutPage() {
   const [dbItems, setDbItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
   const {
     register,
@@ -407,16 +409,33 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              <div className="mt-6 space-y-2 border-t border-[var(--color-sand)] pt-5 text-sm">
+              <div className="mt-6 border-t border-[var(--color-sand)] pt-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/60 mb-2">
+                  Promo Code
+                </p>
+                <CouponInput
+                  subtotal={subtotal}
+                  appliedCoupon={appliedCoupon}
+                  onApplyCoupon={setAppliedCoupon}
+                />
+              </div>
+
+              <div className="mt-5 space-y-2 border-t border-[var(--color-sand)] pt-4 text-sm">
                 <div className="flex justify-between text-[var(--color-navy)]/70">
                   <span>Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
+                {appliedCoupon && (
+                  <div className="flex justify-between font-medium text-emerald-700">
+                    <span>Promo Discount ({appliedCoupon.code})</span>
+                    <span>-${appliedCoupon.discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-[var(--color-navy)]/70">
                   <span>Shipping</span>
                   <span>
                     {shipping === 0 ? (
-                      <span className="text-emerald-600">Free</span>
+                      <span className="text-emerald-600 font-semibold">Free</span>
                     ) : (
                       `$${shipping.toFixed(2)}`
                     )}
@@ -424,9 +443,9 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-between border-t border-[var(--color-sand)] pt-4 text-base font-semibold text-[var(--color-navy)]">
+              <div className="mt-4 flex justify-between border-t border-[var(--color-sand)] pt-4 text-base font-bold text-[var(--color-navy)]">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>${Math.max(0, total - (appliedCoupon?.discountAmount ?? 0)).toFixed(2)}</span>
               </div>
 
               {subtotal < 75 && (
