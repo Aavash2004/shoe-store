@@ -1,5 +1,6 @@
-onlyBuiltDependencies:
-  - "@prisma/engines"
-  - "prisma"
-  - "esbuild"
-  - "unrs-resolver"
+allowBuilds:
+  '@prisma/engines': false
+  esbuild: false
+  prisma: false
+  unrs-resolver: false
+"pnpm": { "onlyBuiltDependencies": [ "@prisma/engines", "prisma", "esbuild", "unrs-resolver" ] }
