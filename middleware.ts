@@ -40,19 +40,13 @@ export default auth((req) => {
 
   // Customer account routes handling (/account, /account/*)
   if (pathname.startsWith("/account")) {
-    // Admin must never enter customer account area
-    if (isLoggedIn && userRole === "ADMIN") {
-      return NextResponse.redirect(new URL("/admin", req.url), {
-        headers: requestHeaders,
-      });
-    }
-
-    // Require authentication only for account sub-routes (/account/orders, /account/profile, etc.)
-    // Allow /account root page for guests so it renders the polished guest state UI
-    if (!isLoggedIn && pathname !== "/account") {
-      const loginUrl = new URL("/login", req.url);
-      loginUrl.searchParams.set("callbackUrl", pathname);
-      return NextResponse.redirect(loginUrl, { headers: requestHeaders });
+    // Sub-routes (/account/orders, /account/profile, etc.) require CUSTOMER session
+    if (pathname !== "/account") {
+      if (!isLoggedIn || userRole !== "CUSTOMER") {
+        const loginUrl = new URL("/login", req.url);
+        loginUrl.searchParams.set("callbackUrl", pathname);
+        return NextResponse.redirect(loginUrl, { headers: requestHeaders });
+      }
     }
   }
 
@@ -69,16 +63,10 @@ export default auth((req) => {
       });
     }
 
-    if (!isLoggedIn) {
+    if (!isLoggedIn || userRole !== "ADMIN") {
       const loginUrl = new URL("/admin/login", req.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(loginUrl, { headers: requestHeaders });
-    }
-
-    if (userRole !== "ADMIN") {
-      return NextResponse.redirect(new URL("/account", req.url), {
-        headers: requestHeaders,
-      });
     }
   }
 

@@ -59,6 +59,43 @@ export default async function AccountPage() {
     );
   }
 
+  if (session?.user?.role === "ADMIN") {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-6 text-center space-y-6 bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-3xl shadow-sm">
+        <div className="w-16 h-16 rounded-2xl bg-[var(--color-navy)] text-white flex items-center justify-center mx-auto shadow-md">
+          <User className="w-8 h-8" />
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-sky)] bg-[var(--color-navy)] px-3.5 py-1 rounded-full">
+            Administrator Mode
+          </span>
+          <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold text-[var(--color-navy)] pt-2">
+            Administrator Account
+          </h1>
+          <p className="text-sm text-[var(--color-navy)]/70 max-w-md mx-auto">
+            You are signed in as an Administrator ({session.user.email}). Store management controls are available in your Admin Dashboard.
+          </p>
+        </div>
+
+        <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/admin"
+            className="w-full sm:w-auto px-6 py-3 bg-[var(--color-navy)] text-[var(--color-cream)] font-semibold text-sm rounded-xl hover:bg-[var(--color-navy)]/90 transition-colors shadow-xs"
+          >
+            Go to Admin Dashboard
+          </Link>
+          <Link
+            href="/shop"
+            className="w-full sm:w-auto px-6 py-3 bg-[var(--color-sand)]/60 hover:bg-[var(--color-sand)] text-[var(--color-navy)] font-semibold text-sm rounded-xl transition-colors"
+          >
+            Continue Browsing Shop
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // Parallel database queries for customer metrics and latest orders
   const [ordersCount, wishlist, userProfile, recentOrders] = await Promise.all([
     prisma.order.count({ where: { userId } }),

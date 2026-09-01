@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth/auth";
+import { requireAdmin } from "@/lib/auth/authorization";
 import { AdminNav } from "@/components/admin/AdminNav";
 
 export default async function AdminLayout({
@@ -16,9 +16,10 @@ export default async function AdminLayout({
     return <>{children}</>;
   }
 
-  const session = await auth();
-
-  if (!session?.user || (session.user as any).role !== "ADMIN") {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (err) {
     redirect("/admin/login");
   }
 

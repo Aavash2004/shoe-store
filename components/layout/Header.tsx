@@ -332,20 +332,8 @@ function HeaderInner() {
             className="rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1"
           >
             <Link
-              href={
-                session?.user
-                  ? session.user.role === "ADMIN"
-                    ? "/admin"
-                    : "/account"
-                  : "/login"
-              }
-              aria-label={
-                session?.user
-                  ? session.user.role === "ADMIN"
-                    ? "Admin Console"
-                    : "Account Dashboard"
-                  : "Log in"
-              }
+              href={session?.user ? "/account" : "/login"}
+              aria-label={session?.user ? "Account Dashboard" : "Log in"}
             >
               <User className="h-5 w-5" strokeWidth={1.5} />
             </Link>

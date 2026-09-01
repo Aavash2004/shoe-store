@@ -72,12 +72,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const user = await prisma.user.findUnique({ where: { email } });
-        if (user && user.role === "ADMIN") {
-          throw new AdminOnCustomerLoginError();
-        }
-
         if (!user || !user.password) {
           throw new InvalidCredentialsError();
+        }
+
+        if (user.role === "ADMIN" || user.role !== "CUSTOMER") {
+          throw new AdminOnCustomerLoginError();
         }
 
         const isValid = await bcrypt.compare(
