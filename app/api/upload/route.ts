@@ -29,25 +29,31 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream(
-          {
-            folder: "shoe-store/products",
-            resource_type: "image",
-          },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result as { secure_url: string });
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "shoe-store/products",
+          resource_type: "image",
+        },
+        (error, result) => {
+          if (error) {
+            console.error("[Cloudinary Upload Error]:", error);
+            reject(error);
+          } else if (result?.secure_url) {
+            resolve(result as { secure_url: string });
+          } else {
+            reject(new Error("Cloudinary did not return a valid secure_url"));
           }
-        )
-        .end(buffer);
+        }
+      );
+
+      uploadStream.end(buffer);
     });
 
     return NextResponse.json({ url: result.secure_url });
-  } catch (error) {
-    console.error("Upload error:", error);
+  } catch (error: any) {
+    console.error("[Upload API Handler Error]:", error);
     return NextResponse.json(
-      { error: "Failed to upload image" },
+      { error: error?.message || "Failed to upload image. Please check Cloudinary configuration." },
       { status: 500 }
     );
   }

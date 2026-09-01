@@ -181,12 +181,33 @@ export function ProductForm({
         body: formData,
       });
 
-      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json().catch(() => ({}));
 
-      const data = await res.json();
-      updateImage(index, "url", data.url);
-    } catch (err) {
-      console.error("Failed to upload image");
+      if (!res.ok) {
+        throw new Error(data.error || `Upload failed with status ${res.status}`);
+      }
+
+      if (data.url) {
+        updateImage(index, "url", data.url);
+        window.dispatchEvent(
+          new CustomEvent("show-toast", {
+            detail: {
+              message: "Image uploaded successfully!",
+              type: "success",
+            },
+          })
+        );
+      }
+    } catch (err: any) {
+      console.error("[Upload Error]:", err);
+      window.dispatchEvent(
+        new CustomEvent("show-toast", {
+          detail: {
+            message: err?.message || "Failed to upload image. Please check your credentials/session.",
+            type: "error",
+          },
+        })
+      );
     } finally {
       setUploadingIndex(null);
     }
@@ -218,26 +239,26 @@ export function ProductForm({
     setErrors({});
 
     const payload: CreateProductInput = {
-      name,
-      slug,
-      description,
-      brand: brand || undefined,
+      name: name.trim(),
+      slug: slug.trim(),
+      description: description.trim(),
+      ...(brand.trim() ? { brand: brand.trim() } : {}),
       categoryId,
-      metaTitle: metaTitle || undefined,
-      metaDescription: metaDescription || undefined,
+      ...(metaTitle.trim() ? { metaTitle: metaTitle.trim() } : {}),
+      ...(metaDescription.trim() ? { metaDescription: metaDescription.trim() } : {}),
       isActive,
       images: images
-        .filter((img) => img.url.trim() !== "")
+        .filter((img) => img.url && img.url.trim() !== "")
         .map((img, i) => ({
           url: img.url,
-          altText: img.altText || undefined,
+          ...(img.altText && img.altText.trim() ? { altText: img.altText.trim() } : {}),
           isPrimary: img.isPrimary,
           position: i,
         })),
       variants: variants
-        .filter((v) => v.sku.trim() !== "")
+        .filter((v) => v.sku && v.sku.trim() !== "")
         .map((v) => ({
-          id: v.id,
+          ...(v.id ? { id: v.id } : {}),
           size: v.size,
           color: v.color,
           sku: v.sku,
@@ -274,6 +295,9 @@ export function ProductForm({
           })
         );
         setTimeout(() => setSavedSuccess(false), 3000);
+        if (!isEditMode && result && "productId" in result && result.productId) {
+          router.push(`/admin/products/${result.productId}`);
+        }
       }
     });
   }

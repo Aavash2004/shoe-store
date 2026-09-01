@@ -16,6 +16,7 @@ const productImageSchema = z.object({
 });
 
 const productVariantSchema = z.object({
+  id: z.string().optional(),
   size: z.string().min(1, "Size is required"),
   color: z.string().min(1, "Color is required"),
   sku: z.string().min(1, "SKU is required"),

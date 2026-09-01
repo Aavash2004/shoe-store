@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { createProductSchema, type CreateProductInput } from "@/lib/validations/product";
@@ -9,7 +8,23 @@ import { createProductSchema, type CreateProductInput } from "@/lib/validations/
 export async function createProduct(data: CreateProductInput) {
   await requireAdmin();
 
-  const validated = createProductSchema.safeParse(data);
+  // Sanitize any React Flight serialized "$undefined" string markers
+  const cleanedData = {
+    ...data,
+    brand: data.brand === "$undefined" ? undefined : data.brand,
+    metaTitle: data.metaTitle === "$undefined" ? undefined : data.metaTitle,
+    metaDescription: data.metaDescription === "$undefined" ? undefined : data.metaDescription,
+    images: data.images?.map((img) => ({
+      ...img,
+      altText: img.altText === "$undefined" ? undefined : img.altText,
+    })),
+    variants: data.variants?.map((v) => {
+      const { id, ...rest } = v;
+      return id && id !== "$undefined" ? { ...rest, id } : rest;
+    }),
+  };
+
+  const validated = createProductSchema.safeParse(cleanedData);
   if (!validated.success) {
     return { success: false as const, error: validated.error.flatten().fieldErrors };
   }
@@ -58,5 +73,5 @@ export async function createProduct(data: CreateProductInput) {
   });
 
   revalidatePath("/admin/products");
-  redirect(`/admin/products/${product.id}`);
+  return { success: true as const, productId: product.id };
 }
