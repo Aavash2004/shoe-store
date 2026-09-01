@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
           line2: data.line2,
           city: data.city,
           state: data.state,
-          postalCode: data.postalCode,
+          postalCode: data.postalCode || "N/A",
           country: data.country,
         },
       });

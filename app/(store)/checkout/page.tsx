@@ -83,20 +83,10 @@ const formSchema = z.object({
       "Please enter a valid state or province."
     ),
 
-  postalCode: z
-    .string()
-    .trim()
-    .min(3, "Postal code must be at least 3 characters.")
-    .max(12, "Postal code is too long.")
-    .regex(
-      /^[A-Za-z0-9][A-Za-z0-9\s-]*$/,
-      "Please enter a valid postal code."
-    ),
-
   country: z
     .string()
     .trim()
-    .min(2, "Please select a country.")
+    .min(2, "Please enter a country.")
     .max(100, "Country name is too long."),
 });
 
@@ -332,31 +322,17 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <Input
-                      placeholder="Postal code"
-                      {...register("postalCode")}
-                      className="h-12 rounded-xl"
-                    />
-                    {errors.postalCode && (
-                      <p className="mt-1.5 text-xs text-red-600">
-                        {errors.postalCode.message}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <Input
-                      placeholder="Country"
-                      {...register("country")}
-                      className="h-12 rounded-xl"
-                    />
-                    {errors.country && (
-                      <p className="mt-1.5 text-xs text-red-600">
-                        {errors.country.message}
-                      </p>
-                    )}
-                  </div>
+                <div>
+                  <Input
+                    placeholder="Country"
+                    {...register("country")}
+                    className="h-12 rounded-xl"
+                  />
+                  {errors.country && (
+                    <p className="mt-1.5 text-xs text-red-600">
+                      {errors.country.message}
+                    </p>
+                  )}
                 </div>
               </div>
             </section>
