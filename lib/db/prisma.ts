@@ -2,7 +2,6 @@ import { PrismaClient } from "@/lib/generated/prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";
 
-// Configure Neon driver for server environment
 if (typeof window === "undefined" && typeof globalThis.WebSocket !== "undefined") {
   neonConfig.webSocketConstructor = globalThis.WebSocket;
 }
@@ -21,19 +20,8 @@ function getCleanConnectionString(): string {
 
 function createPrismaClient(): PrismaClient {
   const connectionString = getCleanConnectionString();
-  try {
-    const adapter = new PrismaNeon({ connectionString });
-    return new PrismaClient({ adapter });
-  } catch (err) {
-    console.warn("[Prisma Client Warning] Neon adapter fallback:", err);
-    return new PrismaClient({
-      datasources: {
-        db: {
-          url: connectionString,
-        },
-      },
-    });
-  }
+  const adapter = new PrismaNeon({ connectionString });
+  return new PrismaClient({ adapter });
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();

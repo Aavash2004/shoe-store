@@ -50,21 +50,18 @@ export function Hero() {
   return (
     <section
       ref={sectionRef}
-      className="relative flex min-h-[calc(100vh-73px)] items-center overflow-hidden"
+      className="relative flex min-h-[85vh] md:min-h-[calc(100vh-73px)] items-center overflow-hidden bg-[#0A0D14]"
     >
       {/* Background */}
-      <div className="absolute inset-0 z-0">
-        <Image
-          src="/images/shoes/f.avif"
-          alt="ABXV background"
-          fill
-          priority
-          className="object-cover object-center"
-          sizes="100vw"
+      <div className="absolute inset-0 z-0 bg-[#0A0D14]">
+        <img
+          src="/images/hero/bg.avif"
+          alt="Hero Background"
+          className="h-full w-full object-cover object-center opacity-70"
+          loading="eager"
         />
-        <div className="absolute inset-0 bg-black/65" />
-        <div className="absolute inset-0
-        -to-r from-black/80 via-black/50 to-black/20" />
+        <div className="absolute inset-0 bg-black/50" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-black/20" />
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center gap-14 px-6 py-20 md:flex-row md:items-center md:justify-between md:gap-12 md:py-0">

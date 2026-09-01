@@ -147,7 +147,7 @@ export function ProductDetailInteractive({
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-[var(--color-navy)]">Color</p>
           {selectedColor && (
-            <span className="text-sm text-[var(--color-navy)]/60">{selectedColor}</span>
+            <span className="text-sm text-[var(--color-navy)]"></span>
           )}
         </div>
 
@@ -158,11 +158,10 @@ export function ProductDetailInteractive({
               <button
                 key={color}
                 onClick={() => setSelectedColor(color)}
-                className={`rounded-full border px-4 py-2 text-sm transition-all ${
-                  isSelected
-                    ? "border-[var(--color-accent)] bg-[var(--color-cream-alt)] text-[var(--color-navy)]"
-                    : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40"
-                }`}
+                className={`rounded-full border px-4 py-2 text-sm transition-all ${isSelected
+                  ? "border-[var(--color-accent)] bg-[var(--color-cream-alt)] text-[var(--color-navy)]"
+                  : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40"
+                  }`}
               >
                 {color}
               </button>
@@ -175,7 +174,7 @@ export function ProductDetailInteractive({
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-[var(--color-navy)]">Size</p>
           {selectedSize && (
-            <span className="text-sm text-[var(--color-navy)]/60">EU {selectedSize}</span>
+            <span className="text-sm text-[var(--color-navy)]/60"></span>
           )}
         </div>
 
@@ -186,11 +185,10 @@ export function ProductDetailInteractive({
               <button
                 key={size}
                 onClick={() => setSelectedSize(size)}
-                className={`flex h-11 w-11 items-center justify-center rounded-lg border text-sm font-medium transition-all ${
-                  isSelected
-                    ? "border-[var(--color-accent)] bg-[var(--color-cream-alt)] text-[var(--color-navy)]"
-                    : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40"
-                }`}
+                className={`flex h-11 w-11 items-center justify-center rounded-lg border text-sm font-medium transition-all ${isSelected
+                  ? "border-[var(--color-accent)] bg-[var(--color-cream-alt)] text-[var(--color-navy)]"
+                  : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40"
+                  }`}
               >
                 {size}
               </button>
