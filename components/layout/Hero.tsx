@@ -54,11 +54,13 @@ export function Hero() {
     >
       {/* Background */}
       <div className="absolute inset-0 z-0 bg-[#0A0D14]">
-        <img
+        <Image
           src="/images/hero/bg.avif"
           alt="Hero Background"
-          className="h-full w-full object-cover object-center opacity-70"
-          loading="eager"
+          fill
+          priority
+          className="object-cover object-center opacity-70"
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-black/50" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-black/20" />

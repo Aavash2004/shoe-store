@@ -13,23 +13,27 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const session = await auth();
-  const isLoggedIn = !!session?.user;
 
-  const product = await prisma.product.findFirst({
-    where: { slug, isActive: true, deletedAt: null },
-    include: {
-      category: true,
-      images: { orderBy: { position: "asc" } },
-      variants: { where: { isActive: true } },
-      reviews: {
-        orderBy: { createdAt: "desc" },
-        include: {
-          user: { select: { name: true, email: true } },
+  // Run auth check and main product query in parallel
+  const [session, product] = await Promise.all([
+    auth(),
+    prisma.product.findFirst({
+      where: { slug, isActive: true, deletedAt: null },
+      include: {
+        category: true,
+        images: { orderBy: { position: "asc" } },
+        variants: { where: { isActive: true } },
+        reviews: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: { select: { name: true, email: true } },
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
+
+  const isLoggedIn = !!session?.user;
 
   if (!product) {
     notFound();

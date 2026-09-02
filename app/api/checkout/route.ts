@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
 import { checkoutSchema } from "@/lib/validations/checkout";
@@ -129,6 +130,14 @@ export async function POST(request: NextRequest) {
 
       return newOrder;
     });
+
+    try {
+      revalidatePath("/");
+      revalidatePath("/shop");
+      revalidatePath("/products/[slug]", "page");
+    } catch (e) {
+      console.warn("[Checkout] Revalidation warning:", e);
+    }
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (err: any) {

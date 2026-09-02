@@ -1,5 +1,3 @@
-"use client";
-
 import { ShieldCheck, Truck, RotateCcw, Sparkles, Award } from "lucide-react";
 
 const perks = [

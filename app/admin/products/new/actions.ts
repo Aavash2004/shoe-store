@@ -73,5 +73,10 @@ export async function createProduct(data: CreateProductInput) {
   });
 
   revalidatePath("/admin/products");
+  revalidatePath("/");
+  revalidatePath("/shop");
+  if (product.slug) {
+    revalidatePath(`/products/${product.slug}`);
+  }
   return { success: true as const, productId: product.id };
 }

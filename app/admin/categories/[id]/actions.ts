@@ -58,6 +58,8 @@ export async function updateCategory(
 
     revalidatePath("/admin/categories");
     revalidatePath("/admin");
+    revalidatePath("/");
+    revalidatePath("/shop");
 
     return { success: true };
   } catch (err: any) {
@@ -94,6 +96,8 @@ export async function deleteCategory(id: string) {
 
     revalidatePath("/admin/categories");
     revalidatePath("/admin");
+    revalidatePath("/");
+    revalidatePath("/shop");
 
     return { success: true };
   } catch (err: any) {

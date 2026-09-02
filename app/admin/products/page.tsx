@@ -17,8 +17,8 @@ type ProductWithRelations = {
 };
 
 async function executeAdminProductsQueries() {
-  const fetchProducts = () =>
-    prisma.product.findMany({
+  try {
+    return await prisma.product.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       include: {
@@ -27,30 +27,8 @@ async function executeAdminProductsQueries() {
         variants: { select: { price: true, stock: true } },
       },
     });
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      return await fetchProducts();
-    } catch (err) {
-      console.warn(`[AdminProductsPage DB] Attempt ${attempt} failed:`, err);
-      if (attempt === 3) break;
-      await new Promise((res) => setTimeout(res, 250 * attempt));
-    }
-  }
-
-  // Fallback to basic findMany without nested includes if socket flickers
-  try {
-    return await prisma.product.findMany({
-      where: { deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      include: {
-        category: { select: { name: true } },
-        images: { take: 1 },
-        variants: { select: { price: true, stock: true } },
-      },
-    });
-  } catch (fallbackErr) {
-    console.error("[AdminProductsPage DB] Final fallback failed:", fallbackErr);
+  } catch (err) {
+    console.error("[AdminProductsPage DB] Query failed:", err);
     return [];
   }
 }

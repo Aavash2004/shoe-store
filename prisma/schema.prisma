@@ -136,6 +136,8 @@ model Product {
   updatedAt DateTime @updatedAt
 
   @@index([categoryId])
+  @@index([isActive, deletedAt, createdAt])
+  @@index([isActive, deletedAt, categoryId])
   @@map("products")
 }
 
@@ -175,6 +177,7 @@ model ProductVariant {
 
   @@unique([productId, size, color])
   @@index([productId])
+  @@index([isActive, stock])
   @@map("product_variants")
 }
 
@@ -322,6 +325,7 @@ model OrderItem {
   variant ProductVariant @relation(fields: [variantId], references: [id])
 
   @@index([orderId])
+  @@index([variantId])
   @@map("order_items")
 }
 

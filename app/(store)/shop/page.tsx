@@ -6,7 +6,7 @@ import { ShopFilters } from "@/components/product/ShopFilters";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type SearchParams = {
   category?: string;
@@ -17,8 +17,8 @@ type SearchParams = {
 };
 
 async function executeShopQueries(whereClause: any) {
-  const queryAll = () =>
-    Promise.all([
+  const queryAll = async () => {
+    const [products, dbCategories, dbSizes, dbColors] = await Promise.all([
       prisma.product.findMany({
         where: whereClause,
         include: {
@@ -30,22 +30,31 @@ async function executeShopQueries(whereClause: any) {
       prisma.category.findMany({
         select: { name: true },
       }),
-      prisma.productVariant.findMany({
+      prisma.productVariant.groupBy({
+        by: ["size"],
         where: { isActive: true, product: { isActive: true, deletedAt: null } },
-        select: { size: true, color: true },
+      }),
+      prisma.productVariant.groupBy({
+        by: ["color"],
+        where: { isActive: true, product: { isActive: true, deletedAt: null } },
       }),
     ]);
+
+    const sizes = dbSizes.map((s) => s.size);
+    const colors = dbColors.map((c) => c.color);
+
+    return [products, dbCategories, sizes, colors] as const;
+  };
 
   try {
     return await queryAll();
   } catch (firstErr) {
     console.warn("[ShopPage DB] Initial query attempt failed, retrying...", firstErr);
-    await new Promise((res) => setTimeout(res, 250));
     try {
       return await queryAll();
     } catch (retryErr) {
       console.error("[ShopPage DB] Retry query failed:", retryErr);
-      return [[], [], []];
+      return [[], [], [], []] as const;
     }
   }
 }
@@ -83,7 +92,7 @@ export default async function ShopPage({
       : {}),
   };
 
-  const [products, dbCategories, dbVariants] = await executeShopQueries(whereClause);
+  const [products, dbCategories, dbSizes, dbColors] = await executeShopQueries(whereClause);
 
   const withPrice = products.map((product) => ({
     ...product,
@@ -100,8 +109,8 @@ export default async function ShopPage({
   }
 
   const categories = Array.from(new Set(dbCategories.map((c) => c.name)));
-  const sizes = Array.from(new Set(dbVariants.map((v) => v.size))).sort();
-  const colors = Array.from(new Set(dbVariants.map((v) => v.color)));
+  const sizes = Array.from(new Set(dbSizes)).sort();
+  const colors = Array.from(new Set(dbColors));
 
   const activeFilterCount = [category, size, color, q].filter(Boolean).length;
 

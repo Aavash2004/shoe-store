@@ -185,6 +185,15 @@ export async function updateProduct(data: UpdateProductInput) {
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${id}`);
+  revalidatePath("/");
+  revalidatePath("/shop");
+  revalidatePath("/products/[slug]", "page");
+  if (existing.slug) {
+    revalidatePath(`/products/${existing.slug}`);
+  }
+  if (productData.slug && productData.slug !== existing.slug) {
+    revalidatePath(`/products/${productData.slug}`);
+  }
 
   return { success: true as const };
 }
@@ -216,5 +225,11 @@ export async function deleteProduct(id: string) {
   });
 
   revalidatePath("/admin/products");
+  revalidatePath("/");
+  revalidatePath("/shop");
+  revalidatePath("/products/[slug]", "page");
+  if (existing.slug) {
+    revalidatePath(`/products/${existing.slug}`);
+  }
   redirect("/admin/products");
 }

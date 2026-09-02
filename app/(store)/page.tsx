@@ -4,7 +4,7 @@ import { PerksMarquee } from "@/components/layout/PerksMarquee";
 import { HomeProductTabs } from "@/components/product/HomeProductTabs";
 import { prisma } from "@/lib/db/prisma";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const categoryChips = [
   { name: "All Shoes", href: "/shop" },
@@ -16,58 +16,49 @@ const categoryChips = [
 
 async function executeHomePageData() {
   const fetchAll = async () => {
-    // 1. New Arrivals: Newest active products sorted by createdAt desc
-    const newArrivalsData = await prisma.product.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 4,
-      include: {
-        category: true,
-        images: { orderBy: { position: "asc" } },
-        variants: { where: { isActive: true } },
-      },
-    });
+    // 1. Fetch New Arrivals & Best Sellers top variants in parallel
+    const [newArrivalsData, topVariants] = await Promise.all([
+      prisma.product.findMany({
+        where: { isActive: true, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 4,
+        include: {
+          category: true,
+          images: { orderBy: { position: "asc" } },
+          variants: { where: { isActive: true } },
+        },
+      }),
+      prisma.orderItem
+        .groupBy({
+          by: ["variantId"],
+          _sum: { quantity: true },
+          orderBy: { _sum: { quantity: "desc" } },
+          take: 8,
+        })
+        .catch(() => []),
+    ]);
 
-    // 2. Best Sellers: Computed by OrderItem sales volume with safe try/catch fallback
+    // 2. Fetch Best Sellers product data if variants exist
     let bestSellersData: typeof newArrivalsData = [];
-    try {
-      const topVariants = await prisma.orderItem.groupBy({
-        by: ["variantId"],
-        _sum: { quantity: true },
-        orderBy: { _sum: { quantity: "desc" } },
-        take: 8,
+    const variantIds = topVariants.map((v) => v.variantId);
+
+    if (variantIds.length > 0) {
+      bestSellersData = await prisma.product.findMany({
+        where: {
+          variants: { some: { id: { in: variantIds } } },
+          isActive: true,
+          deletedAt: null,
+        },
+        take: 4,
+        include: {
+          category: true,
+          images: { orderBy: { position: "asc" } },
+          variants: { where: { isActive: true } },
+        },
       });
-
-      const variantIds = topVariants.map((v) => v.variantId);
-
-      if (variantIds.length > 0) {
-        const variants = await prisma.productVariant.findMany({
-          where: { id: { in: variantIds } },
-          select: { productId: true },
-        });
-        const bestSellerProductIds = Array.from(
-          new Set(variants.map((v) => v.productId))
-        );
-
-        bestSellersData = await prisma.product.findMany({
-          where: {
-            id: { in: bestSellerProductIds },
-            isActive: true,
-            deletedAt: null,
-          },
-          take: 4,
-          include: {
-            category: true,
-            images: { orderBy: { position: "asc" } },
-            variants: { where: { isActive: true } },
-          },
-        });
-      }
-    } catch (orderErr) {
-      console.warn("[HomePage] OrderItem groupBy fallback:", orderErr);
     }
 
-    // Fallback: Fill best sellers with new arrivals if order data is sparse or query failed
+    // Fallback: Fill best sellers with new arrivals if order data is sparse
     if (bestSellersData.length < 4) {
       const existingIds = new Set(bestSellersData.map((p) => p.id));
       const fallbacks = newArrivalsData.filter((p) => !existingIds.has(p.id));
