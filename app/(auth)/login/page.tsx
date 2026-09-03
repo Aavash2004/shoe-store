@@ -43,11 +43,8 @@ function CustomerLoginForm() {
     mode: "onChange",
   });
 
-  const [isAdminAttempt, setIsAdminAttempt] = useState(false);
-
   async function onSubmit(data: LoginForm) {
     setServerError("");
-    setIsAdminAttempt(false);
     setLoading(true);
 
     const res = await signIn("credentials", {
@@ -60,14 +57,7 @@ function CustomerLoginForm() {
     setLoading(false);
 
     if (res?.error) {
-      // Auth.js v5 surfaces CredentialsSignin subclass codes via res.code
-      const code = (res as any).code as string | undefined;
-      if (code === "admin_use_admin_login") {
-        setIsAdminAttempt(true);
-        setServerError("Administrator accounts must use the admin login.");
-      } else {
-        setServerError("Invalid email or password.");
-      }
+      setServerError("Invalid email or password.");
       return;
     }
 
@@ -167,18 +157,8 @@ function CustomerLoginForm() {
             </div>
 
             {serverError && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 font-medium space-y-2">
-                <p>{serverError}</p>
-                {isAdminAttempt && (
-                  <div>
-                    <Link
-                      href="/admin/login"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-navy text-cream rounded-md text-xs font-semibold hover:bg-navy/90 transition-colors"
-                    >
-                      Go to Admin Login →
-                    </Link>
-                  </div>
-                )}
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 font-medium">
+                {serverError}
               </div>
             )}
 
@@ -193,13 +173,6 @@ function CustomerLoginForm() {
               Create one
             </Link>
           </p>
-
-          {/* Subtle Admin Access Link */}
-          <div className="mt-6 text-center text-xs text-navy/40">
-            <Link href="/admin/login" className="hover:text-navy hover:underline transition-colors">
-              Admin access
-            </Link>
-          </div>
         </div>
       </div>
 
