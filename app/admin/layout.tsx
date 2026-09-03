@@ -1,6 +1,4 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/authorization";
+import { auth } from "@/lib/auth/auth";
 import { AdminNav } from "@/components/admin/AdminNav";
 
 export default async function AdminLayout({
@@ -8,19 +6,14 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const headersList = await headers();
-  const pathname = headersList.get("x-pathname") || "";
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
 
-  // If rendering admin login page, bypass admin layout checks and nav chrome
-  if (pathname === "/admin/login") {
+  // If rendering without an active admin session (e.g. on /admin/login page),
+  // return plain children without the AdminNav header chrome.
+  // Protection of /admin sub-routes is enforced by middleware.ts & page-level checks.
+  if (!isAdmin) {
     return <>{children}</>;
-  }
-
-  let session;
-  try {
-    session = await requireAdmin();
-  } catch (err) {
-    redirect("/admin/login");
   }
 
   return (
