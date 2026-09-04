@@ -1,10 +1,12 @@
 import "dotenv/config";
 import { PrismaClient } from "../lib/generated/prisma/client";
-import { PrismaNeon } from "@prisma/adapter-neon";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 import slugify from "slugify";
 import bcrypt from "bcryptjs";
 
-const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
@@ -47,22 +49,21 @@ async function main() {
   const running = await prisma.category.upsert({
     where: { slug: "running" },
     update: {},
-    create: { name: "Running" , slug:"running"},
+    create: { name: "Running", slug: "running" },
+  });
 
-    });
+  const lifestyle = await prisma.category.upsert({
+    where: { slug: "lifestyle" },
+    update: {},
+    create: { name: "lifestyle", slug: "lifestyle" },
+  });
 
-    const lifestyle =await prisma.category.upsert({
-        where: { slug: "lifestyle"},
-        update: {},
-        create:{name:"lifestyle", slug:"lifestyle"},
-    });
-
-    const products =[
-        {
-            name:"Air Zoom Pulse",
-            category: running.id,
-            brand: "Nike",
-             description: "A lightweight running shoe built for daily mileage.",
+  const products = [
+    {
+      name: "Air Zoom Pulse",
+      category: running.id,
+      brand: "Nike",
+      description: "A lightweight running shoe built for daily mileage.",
       images: ["/images/Shoes/gmm.jpeg", "/images/Shoes/s06.avif"],
       variants: [
         { size: "40", color: "Blue", price: 129, stock: 10 },
@@ -70,18 +71,18 @@ async function main() {
         { size: "42", color: "Cream", price: 129, stock: 5 },
       ],
     },
-     {
-        name:"React Street",
-        category: lifestyle.id,
-         brand: "Nike",
+    {
+      name: "React Street",
+      category: lifestyle.id,
+      brand: "Nike",
       description: "A clean, everyday sneaker with a minimal silhouette.",
       images: ["/images/Shoes/so1.webp", "/images/Shoes/so2.webp"],
       variants: [
         { size: "39", color: "White", price: 99, stock: 12 },
         { size: "40", color: "Black", price: 99, stock: 7 },
       ],
-     },
-     {
+    },
+    {
       name: "Terrex Trail",
       category: running.id,
       brand: "Nike",
@@ -90,10 +91,10 @@ async function main() {
       variants: [
         { size: "42", color: "Olive", price: 149, stock: 6 },
         { size: "43", color: "Grey", price: 149, stock: 4 },
-      ],  
-     } ,
-     {
-          name: "Superstar Classic",
+      ],
+    },
+    {
+      name: "Superstar Classic",
       category: lifestyle.id,
       brand: "Adidas",
       description: "A timeless low-top silhouette that pairs with everything.",
@@ -103,7 +104,7 @@ async function main() {
         { size: "41", color: "Navy", price: 89, stock: 9 },
       ],
     },
-      {
+    {
       name: "Ultraboost Flow",
       category: running.id,
       brand: "Adidas",
@@ -112,7 +113,7 @@ async function main() {
       variants: [
         { size: "41", color: "Black", price: 179, stock: 8 },
         { size: "42", color: "Black", price: 179, stock: 5 },
-        ],
+      ],
     },
     {
       name: "Court Vintage",
@@ -147,49 +148,48 @@ async function main() {
         { size: "39", color: "Navy", price: 79, stock: 6 },
       ],
     },
-    
-  ]; 
-    
-  for ( const p of products){
-    const slug =slugify(p.name, {lower: true});
+  ];
+
+  for (const p of products) {
+    const slug = slugify(p.name, { lower: true });
 
     await prisma.product.upsert({
-        where:{slug},
-        update: {},
-        create: {
-            name: p.name,
-            slug,
-            description:p.description,
-            brand: p.brand,
-            categoryId: p.category,
-            images:{
-                create: p.images.map((url, i)=>({
-                    url,
-                    isPrimary: i ===0,
-                    position: i,
-                })),
-            },
-            variants:{
-                create: p.variants.map((v) => ({
+      where: { slug },
+      update: {},
+      create: {
+        name: p.name,
+        slug,
+        description: p.description,
+        brand: p.brand,
+        categoryId: p.category,
+        images: {
+          create: p.images.map((url, i) => ({
+            url,
+            isPrimary: i === 0,
+            position: i,
+          })),
+        },
+        variants: {
+          create: p.variants.map((v) => ({
             size: v.size,
             color: v.color,
             price: v.price,
             stock: v.stock,
             sku: `${slug}-${v.size}-${v.color}`.toUpperCase(),
           })),
-            },
         },
+      },
     });
   }
   console.log("Seed Complete");
-    
 }
 
 main()
-.catch((e)=>{
+  .catch((e) => {
     console.error(e);
     process.exit(1);
-})
-.finally(async() =>{
+  })
+  .finally(async () => {
     await prisma.$disconnect();
-});
+    await pool.end();
+  });

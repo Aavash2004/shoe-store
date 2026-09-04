@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { prisma } from "../lib/db/prisma";
 
 async function main() {
@@ -12,10 +13,18 @@ async function main() {
   console.log("=== DB PRODUCTS CHECK ===");
   console.log("Total Products in DB:", allProducts.length);
   allProducts.forEach((p) => {
-    console.log(`- ID: ${p.id} | Name: ${p.name} | Slug: ${p.slug} | Active: ${p.isActive} | DeletedAt: ${p.deletedAt}`);
+    console.log(`- ID: ${p.id} | Name: ${p.name} | Slug: ${p.slug} | Active: ${p.isActive}`);
   });
 }
 
 main()
-  .catch((e) => console.error(e))
-  .finally(() => process.exit(0));
+  .then(async () => {
+    console.log("Done checking DB products.");
+    await prisma.$disconnect();
+    process.exit(0);
+  })
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
