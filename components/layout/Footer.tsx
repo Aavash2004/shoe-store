@@ -15,10 +15,13 @@ export function Footer() {
   <div className="absolute inset-0 bg-gradient-to-t from-black" />
 
   <div className="relative z-10">
-    <h2 className="font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-cream)] md:text-4xl">
+    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white p-1 shadow-md border border-white/20">
+      <Image src="/logo.png" alt="ABXV Logo" width={40} height={40} className="object-contain" />
+    </div>
+    <h2 className="font-[family-name:var(--font-display)] text-3xl leading-tight text-white md:text-4xl font-extrabold">
       Step Into
     </h2>
-    <h2 className="font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-accent)] md:text-4xl">
+    <h2 className="font-[family-name:var(--font-display)] text-3xl leading-tight text-[var(--color-sky)] md:text-4xl font-extrabold">
       Something Bold
     </h2>
 

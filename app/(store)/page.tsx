@@ -170,8 +170,8 @@ export default async function HomePage() {
               className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end border-b border-[var(--color-sand)] pb-6"
             >
               <div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-900 mb-2">
-                  <TrendingUp className="h-3 w-3 text-amber-700" />
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-green-200 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black mb-2">
+                  <TrendingUp className="h-3 w-3 text-black" />
                   Community Favorites
                 </div>
                 <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[var(--color-navy)] tracking-tight">

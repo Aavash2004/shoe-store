@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/stores/cart-store";
 import { useSession } from "next-auth/react";
 import { gsap } from "@/lib/gsap";
+import { WishlistButton } from "@/components/product/WishlistButton";
 
 type Variant = {
   id: string;
@@ -220,20 +221,29 @@ export function ProductDetailInteractive({
       )}
 
       <div className="mt-8 space-y-3">
-        <Button
-          className="w-full"
-          size="lg"
-          disabled={!canAddToCart || (matchedVariant?.stock ?? 0) <= 0}
-          onClick={handleAddToCart}
-        >
-          {added
-            ? "Added!"
-            : !canAddToCart
-              ? "Select size & color"
-              : (matchedVariant?.stock ?? 0) <= 0
-                ? "Out of Stock"
-                : "Add to Cart"}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            className="flex-1 h-12 text-sm font-bold"
+            size="lg"
+            disabled={!canAddToCart || (matchedVariant?.stock ?? 0) <= 0}
+            onClick={handleAddToCart}
+          >
+            {added
+              ? "Added!"
+              : !canAddToCart
+                ? "Select size & color"
+                : (matchedVariant?.stock ?? 0) <= 0
+                  ? "Out of Stock"
+                  : "Add to Cart"}
+          </Button>
+          <div className="shrink-0">
+            <WishlistButton
+              productId={product.id}
+              iconSize={20}
+              className="h-12 w-12 rounded-xl border border-[var(--color-sand)] hover:border-[var(--color-navy)]/40 bg-white shadow-2xs"
+            />
+          </div>
+        </div>
 
         <p className="text-center text-xs text-[var(--color-navy)]/50">
           Free shipping on orders over $150

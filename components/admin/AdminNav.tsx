@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut, Menu, X } from "lucide-react";
@@ -38,14 +39,20 @@ export function AdminNav({ email }: { email: string }) {
     <header className="sticky top-0 z-50 border-b border-sand bg-cream/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
-            <div>
-            <span className=" text-xs uppercase tracking-wide text-navy-blue/80 ">
+          <Link href="/admin" className="flex items-center gap-2 font-[family-name:var(--font-display)] text-lg font-extrabold tracking-wider text-navy">
+            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white border border-[var(--color-sand)] p-0.5 shadow-2xs">
+              <Image
+                src="/logo.png"
+                alt="ABXV Sneaker Logo"
+                fill
+                className="object-contain"
+              />
+            </div>
+            <span>ABXV</span>
+          </Link>
+          <span className="rounded-full bg-[var(--color-navy)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]">
             Admin
           </span>
-          </div>
-          <Link href="/admin" className="font-[family-name:var(--font-display)] text-xl font-extrabold tracking-wider text-navy">
-            ABXV
-          </Link>
         </div>
         
 

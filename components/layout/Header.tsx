@@ -181,11 +181,21 @@ function HeaderInner() {
         {/* Logo */}
         <Link
           href="/"
-          className="font-[family-name:var(--font-display)] text-xl font-extrabold tracking-wider text-[var(--color-navy)] transition-opacity hover:opacity-80 md:text-2xl"
+          className="group flex flex-col items-center justify-center font-[family-name:var(--font-display)] transition-opacity hover:opacity-90 leading-none py-1"
         >
-          ABXV
+          <div className="relative h-10 w-12 sm:h-11 sm:w-14 shrink-0 overflow-hidden">
+            <Image
+              src="/logo.png"
+              alt="ABXV Sneaker Logo"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+          <span className="text-[11px] sm:text-xs font-black tracking-widest text-[var(--color-navy)] uppercase -mt-0.5">
+            ABXV
+          </span>
         </Link>
-
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-8 md:flex">
           {links.map((link) => {
@@ -196,8 +206,8 @@ function HeaderInner() {
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 className={`relative text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${active
-                    ? "text-[var(--color-navy)] after:scale-x-100"
-                    : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
+                  ? "text-[var(--color-navy)] after:scale-x-100"
+                  : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
                   }`}
               >
                 {link.label}
@@ -222,9 +232,8 @@ function HeaderInner() {
                 }}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={isPending ? "Searching..." : "Search shoes..."}
-                className={`w-32 sm:w-48 md:w-56 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3.5 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-44 sm:focus:w-60 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs ${
-                  isPending ? "opacity-60 cursor-not-allowed" : ""
-                }`}
+                className={`w-32 sm:w-48 md:w-56 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3.5 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-44 sm:focus:w-60 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs ${isPending ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
               />
               {isPending || isFetchingSuggestions ? (
                 <Loader2 className="absolute left-2.5 h-3.5 w-3.5 text-[var(--color-navy)]/60 animate-spin pointer-events-none" />
@@ -393,8 +402,8 @@ function HeaderInner() {
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 className={`border-b border-[var(--color-sand)]/40 py-3 text-base font-medium last:border-b-0 ${active
-                    ? "text-[var(--color-navy)]"
-                    : "text-[var(--color-navy)]/70"
+                  ? "text-[var(--color-navy)]"
+                  : "text-[var(--color-navy)]/70"
                   }`}
               >
                 {link.label}
