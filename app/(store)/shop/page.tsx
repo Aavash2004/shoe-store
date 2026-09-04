@@ -166,7 +166,7 @@ export default async function ShopPage({
 
         {/* 3. Filter & Sort Toolbar */}
         <div className="mt-7">
-          <Suspense fallback={<div className="h-12 w-full animate-pulse bg-[#EFECE6] rounded-lg" />}>
+          <Suspense fallback={<div className="h-12 w-full animate-pulse bg-[var(--color-cream-alt)] rounded-lg" />}>
             <ShopFilters
               categories={categories}
               sizes={sizes}
@@ -190,7 +190,7 @@ export default async function ShopPage({
             {q && (
               <Link
                 href={buildHref("q")}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Query: &ldquo;{q}&rdquo;</span>
                 <span className="text-[#1E2A38]/50 text-xs">×</span>
@@ -200,7 +200,7 @@ export default async function ShopPage({
             {category && (
               <Link
                 href={buildHref("category")}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Category: {category}</span>
                 <span className="text-[#1E2A38]/50 text-xs">×</span>
@@ -210,7 +210,7 @@ export default async function ShopPage({
             {size && (
               <Link
                 href={buildHref("size")}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Size: {size}</span>
                 <span className="text-[#1E2A38]/50 text-xs">×</span>
@@ -220,7 +220,7 @@ export default async function ShopPage({
             {color && (
               <Link
                 href={buildHref("color")}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFECE6] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Color: {color}</span>
                 <span className="text-[#1E2A38]/50 text-xs">×</span>

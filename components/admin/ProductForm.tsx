@@ -303,7 +303,7 @@ export function ProductForm({
   }
 
   const inputClass =
-    "h-11 w-full rounded-md border border-[#1E2A38]/10 bg-[#EFECE6] px-3.5 text-sm text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]";
+    "h-11 w-full rounded-md border border-[#1E2A38]/10 bg-[var(--color-cream-alt)] px-3.5 text-sm text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]";
   const labelClass =
     "mb-1.5 block text-[11px] font-medium tracking-wide text-[#1E2A38]";
 
@@ -415,7 +415,7 @@ export function ProductForm({
                 onChange={(e) => setDescription(e.target.value)}
                 rows={5}
                 placeholder="Detailed product description…"
-                className="w-full resize-none rounded-md border border-[#1E2A38]/10 bg-[#EFECE6] px-3.5 py-3 text-sm leading-relaxed text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]"
+                className="w-full resize-none rounded-md border border-[#1E2A38]/10 bg-[var(--color-cream-alt)] px-3.5 py-3 text-sm leading-relaxed text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]"
                 required
                 aria-invalid={!!errors.description}
               />
@@ -435,7 +435,7 @@ export function ProductForm({
             {images.map((img, i) => (
               <div key={i} className="group relative">
                 {img.url ? (
-                  <div className="relative aspect-square overflow-hidden rounded-md border border-[#1E2A38]/10 bg-[#EFECE6]">
+                  <div className="relative aspect-square overflow-hidden rounded-md border border-[#1E2A38]/10 bg-[var(--color-cream-alt)]">
                     <img
                       src={img.url}
                       alt={img.altText || `Product image ${i + 1}`}
@@ -466,7 +466,7 @@ export function ProductForm({
                     </div>
                   </div>
                 ) : (
-                  <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#1E2A38]/15 bg-[#EFECE6] transition hover:border-[#89B4D9]/60 hover:bg-[#E6E0D4]/40">
+                  <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#1E2A38]/15 bg-[var(--color-cream-alt)] transition hover:border-[#89B4D9]/60 hover:bg-slate-100">
                     {uploadingIndex === i ? (
                       <Loader2 className="h-5 w-5 animate-spin text-[#1E2A38]/40" />
                     ) : (
@@ -649,7 +649,7 @@ export function ProductForm({
                 onChange={(e) => setMetaDescription(e.target.value)}
                 rows={2}
                 placeholder="Brief description for search results"
-                className="w-full resize-none rounded-md border border-[#1E2A38]/10 bg-[#EFECE6] px-3.5 py-3 text-sm text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]"
+                className="w-full resize-none rounded-md border border-[#1E2A38]/10 bg-[var(--color-cream-alt)] px-3.5 py-3 text-sm text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9] focus:ring-1 focus:ring-[#89B4D9]"
               />
             </div>
           </div>
@@ -685,7 +685,7 @@ export function ProductForm({
         </section>
 
    {/* ── Sticky Footer ── */}
-<div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1E2A38]/10 bg-[#F5F2EB]/95 backdrop-blur-sm">
+<div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1E2A38]/10 bg-[var(--color-cream)]/95 backdrop-blur-sm">
   <div className="mx-auto flex max-w-[1100px] items-center justify-between px-6 py-3.5">
     {isEditMode ? (
       <button
@@ -715,7 +715,7 @@ export function ProductForm({
         className={`h-10 rounded-md px-6 text-[13px] font-medium transition-all duration-300 ${
           savedSuccess
             ? "bg-emerald-600 text-white hover:bg-emerald-700"
-            : "bg-[#1E2A38] text-[#F5F2EB] hover:bg-[#89B4D9] hover:text-[#1E2A38]"
+            : "bg-[#1E2A38] text-[var(--color-cream)] hover:bg-[#89B4D9] hover:text-[#1E2A38]"
         } disabled:opacity-60`}
       >
         {isPending ? (
@@ -740,7 +740,7 @@ export function ProductForm({
 {/* ── Delete Confirmation Dialog ── */}
 {isEditMode && (
   <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-    <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[#F5F2EB] p-0 shadow-lg">
+    <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[var(--color-cream)] p-0 shadow-lg">
       <div className="px-6 pt-6 pb-5">
         <DialogHeader className="space-y-2 text-left">
           <DialogTitle className="font-[family-name:var(--font-display)] text-[20px] font-semibold tracking-tight text-[#1E2A38]">
@@ -755,7 +755,7 @@ export function ProductForm({
         </DialogHeader>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[#EFECE6]/60 px-6 py-3.5">
+      <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[var(--color-cream-alt)] px-6 py-3.5">
         <button
           type="button"
           onClick={() => setShowDeleteConfirm(false)}

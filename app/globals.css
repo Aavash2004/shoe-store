@@ -5,12 +5,12 @@
 ======================================== */
 @theme {
   /* Brand colors */
-  --color-cream: #F5F2EB;
-  --color-cream-alt: #EFECE6;
+  --color-cream: #FFFFFF;
+  --color-cream-alt: #F8FAFC;
   --color-sky: #89B4D9;
   --color-sky-secondary: #A2C2E1;
   --color-navy: #1E2A38;
-  --color-sand: #E6E0D4;
+  --color-sand: #E2E8F0;
 
   /* Fonts */
   --font-display: "Manrope", sans-serif;

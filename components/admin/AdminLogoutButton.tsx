@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import {
@@ -27,8 +27,8 @@ export function AdminLogoutButton() {
         Sign Out
       </button>
 
-<Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[#F5F2EB] p-0 shadow-lg">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[var(--color-cream)] p-0 shadow-lg">
           <div className="px-6 pt-6 pb-5">
             <DialogHeader className="space-y-2 text-left">
               <DialogTitle className="font-[family-name:var(--font-display)] text-[20px] font-semibold tracking-tight text-[#1E2A38]">
@@ -41,7 +41,7 @@ export function AdminLogoutButton() {
             </DialogHeader>
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[#EFECE6]/60 px-6 py-3.5">
+          <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[var(--color-cream-alt)] px-6 py-3.5">
             <button
               type="button"
               onClick={() => setOpen(false)}
