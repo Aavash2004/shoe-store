@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { ArrowRight, Sparkles, TrendingUp } from "lucide-react";
 import { Hero } from "@/components/layout/Hero";
 import { PerksMarquee } from "@/components/layout/PerksMarquee";
-import { HomeProductTabs } from "@/components/product/HomeProductTabs";
+import { ProductGrid } from "@/components/product/ProductGrid";
+import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
 
 export const revalidate = 60;
@@ -21,7 +23,7 @@ async function executeHomePageData() {
       prisma.product.findMany({
         where: { isActive: true, deletedAt: null },
         orderBy: { createdAt: "desc" },
-        take: 4,
+        take: 8,
         include: {
           category: true,
           images: { orderBy: { position: "asc" } },
@@ -49,7 +51,7 @@ async function executeHomePageData() {
           isActive: true,
           deletedAt: null,
         },
-        take: 4,
+        take: 8,
         include: {
           category: true,
           images: { orderBy: { position: "asc" } },
@@ -58,11 +60,11 @@ async function executeHomePageData() {
       });
     }
 
-    // Fallback: Fill best sellers with new arrivals if order data is sparse
-    if (bestSellersData.length < 4) {
+    // Fallback: Fill best sellers with remaining products if order data is sparse
+    if (bestSellersData.length < 8) {
       const existingIds = new Set(bestSellersData.map((p) => p.id));
       const fallbacks = newArrivalsData.filter((p) => !existingIds.has(p.id));
-      bestSellersData = [...bestSellersData, ...fallbacks].slice(0, 4);
+      bestSellersData = [...bestSellersData, ...fallbacks].slice(0, 8);
     }
 
     return { newArrivalsData, bestSellersData };
@@ -105,7 +107,7 @@ export default async function HomePage() {
       <Hero />
 
       {/* Category quick-filter chips bar */}
-      <section className="border-b border-[var(--color-navy)]/10 bg-[var(--color-cream-alt)]/60 py-3.5 px-6 overflow-x-auto no-scrollbar">
+      <section className="border-b border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60 py-3.5 px-6 overflow-x-auto no-scrollbar">
         <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 sm:gap-3 text-xs font-semibold">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50 mr-1 hidden sm:inline">
             Explore Categories:
@@ -125,8 +127,75 @@ export default async function HomePage() {
       {/* Infinite Perks Marquee Highlight Strip */}
       <PerksMarquee />
 
-      {/* New Arrivals & Best Sellers Tabbed Product Showcase */}
-      <HomeProductTabs newArrivals={newArrivals} bestSellers={bestSellers} />
+      {/* SECTION 1: NEW ARRIVALS */}
+      <section className="mx-auto max-w-7xl px-6 py-16 md:py-24">
+        <ScrollReveal selector="[data-reveal-header]">
+          <div
+            data-reveal-header
+            className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end border-b border-[var(--color-sand)] pb-6"
+          >
+            <div>
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-sky)]/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)] mb-2">
+                <Sparkles className="h-3 w-3 text-[var(--color-navy)]" />
+                Fresh Drops
+              </div>
+              <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[var(--color-navy)] tracking-tight">
+                New Arrivals
+              </h2>
+            </div>
+
+            <Link
+              href="/shop"
+              className="group inline-flex shrink-0 items-center gap-2 text-xs sm:text-sm font-bold text-[var(--color-navy)] transition-colors hover:text-[var(--color-sky)]"
+            >
+              <span>Explore All New Arrivals</span>
+              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+            </Link>
+          </div>
+        </ScrollReveal>
+
+        <div className="mt-8 md:mt-12">
+          <ScrollReveal selector="[data-product-card]" stagger={0.06}>
+            <ProductGrid products={newArrivals} />
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* SECTION 2: BEST SELLERS */}
+      <section className="bg-[var(--color-cream-alt)]/50 border-y border-[var(--color-sand)] py-16 md:py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <ScrollReveal selector="[data-reveal-header]">
+            <div
+              data-reveal-header
+              className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end border-b border-[var(--color-sand)] pb-6"
+            >
+              <div>
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-900 mb-2">
+                  <TrendingUp className="h-3 w-3 text-amber-700" />
+                  Community Favorites
+                </div>
+                <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[var(--color-navy)] tracking-tight">
+                  Best Sellers
+                </h2>
+              </div>
+
+              <Link
+                href="/shop"
+                className="group inline-flex shrink-0 items-center gap-2 text-xs sm:text-sm font-bold text-[var(--color-navy)] transition-colors hover:text-[var(--color-sky)]"
+              >
+                <span>Explore All Best Sellers</span>
+                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+              </Link>
+            </div>
+          </ScrollReveal>
+
+          <div className="mt-8 md:mt-12">
+            <ScrollReveal selector="[data-product-card]" stagger={0.06}>
+              <ProductGrid products={bestSellers} />
+            </ScrollReveal>
+          </div>
+        </div>
+      </section>
     </>
   );
 }
