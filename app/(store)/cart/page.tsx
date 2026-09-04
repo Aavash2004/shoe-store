@@ -64,11 +64,13 @@ export default function CartPage() {
         ? prev.filter((i) => i.variant.id !== variantId)
         : prev.map((i) => (i.variant.id === variantId ? { ...i, quantity } : i))
     );
+    window.dispatchEvent(new Event("cart-updated"));
   }
 
   async function handleDbRemove(variantId: string) {
     await fetch(`/api/cart?variantId=${variantId}`, { method: "DELETE" });
     setDbItems((prev) => prev.filter((i) => i.variant.id !== variantId));
+    window.dispatchEvent(new Event("cart-updated"));
   }
 
   if (status === "loading" || loading) {

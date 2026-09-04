@@ -57,10 +57,27 @@ export default function WishlistPage() {
     }
   };
 
-  const handleAddToCart = (product: WishlistProduct) => {
+  const handleAddToCart = async (product: WishlistProduct) => {
     const firstVariant = product.variants?.[0];
+    const variantId = firstVariant?.id || product.productId;
+
+    try {
+      const res = await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId, quantity: 1 }),
+      });
+      if (res.ok) {
+        window.dispatchEvent(new Event("cart-updated"));
+        window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
+        return;
+      }
+    } catch {
+      // Fallback to local cart if unauthenticated or network failure
+    }
+
     addItemToCart({
-      variantId: firstVariant?.id || product.productId,
+      variantId,
       productId: product.productId,
       productName: product.name,
       slug: product.slug,
@@ -70,6 +87,7 @@ export default function WishlistPage() {
       color: firstVariant?.color || "Default",
       quantity: 1,
     });
+    window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
   };
 
   return (

@@ -181,21 +181,19 @@ function HeaderInner() {
         {/* Logo */}
         <Link
           href="/"
-          className="group flex flex-col items-center justify-center font-[family-name:var(--font-display)] transition-opacity hover:opacity-90 leading-none py-1"
+          className="group flex items-center gap-2.5 font-[family-name:var(--font-display)] text-xl font-extrabold tracking-wider text-[var(--color-navy)] transition-opacity hover:opacity-90 md:text-2xl"
         >
-          <div className="relative h-10 w-12 sm:h-11 sm:w-14 shrink-0 overflow-hidden">
+          <div className="relative h-15 w-15 shrink-0 overflow-hidden p-0.5">
             <Image
-              src="/logo.png"
+              src="/images/Shoes/logo.png"
               alt="ABXV Sneaker Logo"
               fill
               className="object-contain"
               priority
             />
           </div>
-          <span className="text-[11px] sm:text-xs font-black tracking-widest text-[var(--color-navy)] uppercase -mt-0.5">
-            ABXV
-          </span>
         </Link>
+
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-8 md:flex">
           {links.map((link) => {

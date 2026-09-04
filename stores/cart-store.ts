@@ -21,12 +21,18 @@ type CartState ={
     clearCart: () => void;
 } ;
 
+const notifyCartUpdated = () => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("cart-updated"));
+  }
+};
+
 export const useCartStore = create<CartState>()(
-    persist(
-        (set, get) => ({
-            items:[],
-            addItem: (item) => {
-                 const existing = get().items.find((i) => i.variantId === item.variantId);
+  persist(
+    (set, get) => ({
+      items: [],
+      addItem: (item) => {
+        const existing = get().items.find((i) => i.variantId === item.variantId);
         if (existing) {
           set({
             items: get().items.map((i) =>
@@ -38,9 +44,11 @@ export const useCartStore = create<CartState>()(
         } else {
           set({ items: [...get().items, item] });
         }
+        notifyCartUpdated();
       },
-      removeItem: (variantId) =>{
-       set({ items: get().items.filter((i) => i.variantId !== variantId) });
+      removeItem: (variantId) => {
+        set({ items: get().items.filter((i) => i.variantId !== variantId) });
+        notifyCartUpdated();
       },
 
       updateQuantity: (variantId, quantity) => {
@@ -53,10 +61,14 @@ export const useCartStore = create<CartState>()(
             i.variantId === variantId ? { ...i, quantity } : i
           ),
         });
+        notifyCartUpdated();
       },
 
-      clearCart: () => set({ items: [] }),
+      clearCart: () => {
+        set({ items: [] });
+        notifyCartUpdated();
+      },
     }),
     { name: "shoe-store-cart" }
-  )    
+  )
 );

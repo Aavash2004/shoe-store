@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
 
+const nepaliPhoneRegex = /^(\+?977)?(98|97)\d{8}$/;
+
 const formSchema = z.object({
   guestEmail: z
     .string()
@@ -52,33 +54,29 @@ const formSchema = z.object({
     .max(100, "Full name must be less than 100 characters.")
     .regex(
       /^[\p{L}\p{M}]+(?:[\s'-][\p{L}\p{M}]+)*$/u,
-      "Please enter a valid name."
+      "Please enter a valid full name."
     ),
 
   phone: z
     .string()
     .trim()
-    .min(7, "Phone number must be at least 7 digits.")
-    .max(20, "Phone number is too long.")
-    .regex(
-      /^\+?[0-9\s\-()]+$/,
-      "Please enter a valid phone number."
-    )
+    .min(1, "Phone number is required.")
+    .transform((val) => val.replace(/[\s-]/g, ""))
     .refine(
-      (value) => value.replace(/\D/g, "").length >= 7,
-      "Phone number must contain at least 7 digits."
+      (val) => nepaliPhoneRegex.test(val),
+      "Phone number must be a valid 10-digit Nepali mobile number starting with 98 or 97 (e.g., 9841234567 or +977 9841234567)."
     ),
 
   line1: z
     .string()
     .trim()
-    .min(5, "Address must be at least 5 characters.")
-    .max(200, "Address must be less than 200 characters."),
+    .min(3, "Street address must be at least 3 characters.")
+    .max(200, "Address is too long."),
 
   line2: z
     .string()
     .trim()
-    .max(100, "Address line 2 must be less than 100 characters.")
+    .max(100, "Apartment/Suite info must be less than 100 characters.")
     .optional()
     .or(z.literal("")),
 
@@ -86,7 +84,7 @@ const formSchema = z.object({
     .string()
     .trim()
     .min(2, "City must be at least 2 characters.")
-    .max(100, "City must be less than 100 characters.")
+    .max(100, "City name is too long.")
     .regex(
       /^[\p{L}\p{M}]+(?:[\s'-][\p{L}\p{M}]+)*$/u,
       "Please enter a valid city name."
@@ -95,17 +93,13 @@ const formSchema = z.object({
   state: z
     .string()
     .trim()
-    .min(2, "State / province must be at least 2 characters.")
-    .max(100, "State / province must be less than 100 characters.")
-    .regex(
-      /^[\p{L}\p{M}0-9]+(?:[\s.'-][\p{L}\p{M}0-9]+)*$/u,
-      "Please enter a valid state or province."
-    ),
+    .min(2, "State or province is required.")
+    .max(100, "State/province is too long."),
 
   country: z
     .string()
     .trim()
-    .min(2, "Please enter a country.")
+    .min(2, "Please enter a country name.")
     .max(100, "Country name is too long."),
 });
 
@@ -143,23 +137,23 @@ export default function CheckoutPage() {
 
   const items = isLoggedIn
     ? dbItems.map((i) => ({
-        variantId: i.variant.id,
-        quantity: i.quantity,
-        price: Number(i.variant.price),
-        productName: i.variant.product.name,
-        image: i.variant.product.images?.[0]?.url || "/images/Shoes/s05.avif",
-        size: i.variant.size,
-        color: i.variant.color,
-      }))
+      variantId: i.variant.id,
+      quantity: i.quantity,
+      price: Number(i.variant.price),
+      productName: i.variant.product.name,
+      image: i.variant.product.images?.[0]?.url || "/images/Shoes/s05.avif",
+      size: i.variant.size,
+      color: i.variant.color,
+    }))
     : localItems.map((i) => ({
-        variantId: i.variantId,
-        quantity: i.quantity,
-        price: i.price,
-        productName: i.productName,
-        image: i.image || "/images/Shoes/s05.avif",
-        size: i.size,
-        color: i.color,
-      }));
+      variantId: i.variantId,
+      quantity: i.quantity,
+      price: i.price,
+      productName: i.productName,
+      image: i.image || "/images/Shoes/s05.avif",
+      size: i.size,
+      color: i.color,
+    }));
 
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const freeShippingThreshold = 75;
@@ -195,10 +189,29 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!isLoggedIn) clearLocalCart();
+    clearLocalCart();
+    setDbItems([]);
     window.dispatchEvent(new Event("cart-updated"));
 
     router.push(`/checkout/success?order=${result.order.orderNumber}`);
+  }
+
+  function onInvalid(errors: any) {
+    const errorKeys = Object.keys(errors);
+    const errorCount = errorKeys.length;
+    const firstKey = errorKeys[0];
+
+    setError(
+      `Please correct the ${errorCount} highlighted error${
+        errorCount > 1 ? "s" : ""
+      } below before completing your order.`
+    );
+
+    const firstErrorElement = document.querySelector(`[name="${firstKey}"]`);
+    if (firstErrorElement) {
+      firstErrorElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      (firstErrorElement as HTMLElement).focus();
+    }
   }
 
   if (items.length === 0) {
@@ -242,16 +255,13 @@ export default function CheckoutPage() {
             <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-[var(--color-navy)] md:text-4xl">
               Express Checkout
             </h1>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-600/30 bg-emerald-50 px-3.5 py-1.5 text-xs font-medium text-emerald-800">
-              <Lock className="h-3.5 w-3.5 text-emerald-700" />
-              <span>256-Bit Encrypted & Secure</span>
-            </div>
+
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_420px] lg:gap-14">
           {/* Main Form Area */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-8">
             {/* Step 1: Contact Information (Guest Only) */}
             {!isLoggedIn && (
               <section className="rounded-2xl border border-[var(--color-sand)] bg-white/80 p-6 md:p-8 shadow-sm backdrop-blur-xs transition-all hover:shadow-md">
@@ -354,7 +364,7 @@ export default function CheckoutPage() {
                         <Phone className="h-4 w-4" />
                       </div>
                       <Input
-                        placeholder="+1 555-019-2834"
+                        placeholder="98XXXXXXXX or 97XXXXXXXX"
                         {...register("phone")}
                         className="h-12 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream)]/50 pl-10 text-sm focus:bg-white focus:ring-2 focus:ring-[var(--color-navy)]"
                       />
@@ -376,7 +386,7 @@ export default function CheckoutPage() {
                       <MapPin className="h-4 w-4" />
                     </div>
                     <Input
-                      placeholder="123 Main Street, Apt or Suite"
+                      placeholder="123 Main Street"
                       {...register("line1")}
                       className="h-12 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream)]/50 pl-10 text-sm focus:bg-white focus:ring-2 focus:ring-[var(--color-navy)]"
                     />
@@ -476,18 +486,16 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("cod")}
-                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-                    paymentMethod === "cod"
-                      ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
-                      : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
-                  }`}
+                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${paymentMethod === "cod"
+                    ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
+                    : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
+                    }`}
                 >
                   <CheckCircle2
-                    className={`mt-0.5 h-5 w-5 shrink-0 ${
-                      paymentMethod === "cod"
-                        ? "text-[var(--color-navy)]"
-                        : "text-gray-300"
-                    }`}
+                    className={`mt-0.5 h-5 w-5 shrink-0 ${paymentMethod === "cod"
+                      ? "text-[var(--color-navy)]"
+                      : "text-gray-300"
+                      }`}
                   />
                   <div>
                     <p className="font-bold text-sm text-[var(--color-navy)]">
@@ -502,18 +510,16 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("card")}
-                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-                    paymentMethod === "card"
-                      ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
-                      : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
-                  }`}
+                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${paymentMethod === "card"
+                    ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
+                    : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
+                    }`}
                 >
                   <CreditCard
-                    className={`mt-0.5 h-5 w-5 shrink-0 ${
-                      paymentMethod === "card"
-                        ? "text-[var(--color-navy)]"
-                        : "text-gray-400"
-                    }`}
+                    className={`mt-0.5 h-5 w-5 shrink-0 ${paymentMethod === "card"
+                      ? "text-[var(--color-navy)]"
+                      : "text-gray-400"
+                      }`}
                   />
                   <div>
                     <p className="font-bold text-sm text-[var(--color-navy)]">

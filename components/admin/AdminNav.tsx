@@ -40,9 +40,9 @@ export function AdminNav({ email }: { email: string }) {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
           <Link href="/admin" className="flex items-center gap-2 font-[family-name:var(--font-display)] text-lg font-extrabold tracking-wider text-navy">
-            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white border border-[var(--color-sand)] p-0.5 shadow-2xs">
+            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-transparent">
               <Image
-                src="/logo.png"
+                src="/images/Shoes/logo.png"
                 alt="ABXV Sneaker Logo"
                 fill
                 className="object-contain"
@@ -54,7 +54,7 @@ export function AdminNav({ email }: { email: string }) {
             Admin
           </span>
         </div>
-        
+
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-7 md:flex">
@@ -64,11 +64,10 @@ export function AdminNav({ email }: { email: string }) {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`relative pb-1 text-sm font-medium transition-colors ${
-                  active
-                    ? "text-navy after:absolute after:-bottom-[1px] after:left-0 after:h-px after:w-full after:bg-navy"
-                    : "text-navy/55 hover:text-navy"
-                }`}
+                className={`relative pb-1 text-sm font-medium transition-colors ${active
+                  ? "text-navy after:absolute after:-bottom-[1px] after:left-0 after:h-px after:w-full after:bg-navy"
+                  : "text-navy/55 hover:text-navy"
+                  }`}
               >
                 {link.label}
               </Link>
@@ -98,9 +97,8 @@ export function AdminNav({ email }: { email: string }) {
 
       {/* Mobile panel */}
       <div
-        className={`overflow-hidden border-t border-sand bg-cream transition-[max-height,opacity] duration-300 ease-in-out md:hidden ${
-          open ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-        }`}
+        className={`overflow-hidden border-t border-sand bg-cream transition-[max-height,opacity] duration-300 ease-in-out md:hidden ${open ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          }`}
       >
         <nav className="flex flex-col px-6 py-2">
           {links.map((link) => {
@@ -110,9 +108,8 @@ export function AdminNav({ email }: { email: string }) {
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className={`border-b border-sand/60 py-3 text-sm font-medium last:border-b-0 ${
-                  active ? "text-navy" : "text-navy/60"
-                }`}
+                className={`border-b border-sand/60 py-3 text-sm font-medium last:border-b-0 ${active ? "text-navy" : "text-navy/60"
+                  }`}
               >
                 {link.label}
               </Link>

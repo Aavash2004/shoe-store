@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
 import { adminLoginSchema, AdminLoginInput } from "@/lib/validations/auth";
 import { ShieldCheck, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
-
+import Image from "next/image";
 function AdminLoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/admin";
@@ -55,8 +55,8 @@ function AdminLoginForm() {
       <div className="w-full max-w-md space-y-8">
         {/* Header Branding */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--color-sky)]/20 border border-[var(--color-sky)]/40 text-[var(--color-navy)] shadow-xs mb-2">
-            <ShieldCheck className="w-8 h-8 text-[var(--color-navy)]" />
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-transparent">
+            <Image src="/images/Shoes/logo.png" alt="ABXV Logo" width={100} height={100} className="object-contain" />
           </div>
           <p className="text-xs text-[var(--color-navy)]/60 uppercase tracking-[0.25em] font-semibold">
             ADMINISTRATOR

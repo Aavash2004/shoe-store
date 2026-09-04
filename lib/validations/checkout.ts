@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+// Nepali mobile number regex: 10 digits starting with 98 or 97, optionally prefixed with +977 or 977
+const nepaliPhoneRegex = /^(\+?977)?(98|97)\d{8}$/;
+
 export const checkoutSchema = z.object({
   guestEmail: z
     .string()
@@ -13,8 +16,15 @@ export const checkoutSchema = z.object({
     .or(z.literal(""))
     .transform((v) => (v === "" ? undefined : v)),
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
-  phone: z.string().min(7, "Phone number must be at least 7 digits."),
-  line1: z.string().min(5, "Address must be at least 5 characters."),
+  phone: z
+    .string()
+    .min(1, "Phone number is required.")
+    .transform((val) => val.trim().replace(/[\s-]/g, ""))
+    .refine(
+      (val) => nepaliPhoneRegex.test(val),
+      "Please enter a valid 10-digit Nepali mobile number starting with 98 or 97 (e.g. 9841234567 or +977 9841234567)."
+    ),
+  line1: z.string().min(3, "Street address is required."),
   line2: z
     .string()
     .optional()
