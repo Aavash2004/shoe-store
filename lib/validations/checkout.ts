@@ -38,6 +38,10 @@ export const checkoutSchema = z.object({
     .or(z.literal(""))
     .transform((v) => (!v ? "" : v)),
   country: z.string().min(2, "Country is required."),
+  paymentMethod: z
+    .enum(["KHALTI", "ESEWA", "COD", "STRIPE"])
+    .optional()
+    .default("COD"),
   items: z
     .array(
       z.object({

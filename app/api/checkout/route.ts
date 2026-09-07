@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
 import { checkoutSchema } from "@/lib/validations/checkout";
+import { initiateKhaltiPayment } from "@/lib/services/khalti";
 
 function generateOrderNumber() {
   const random = Math.floor(10000 + Math.random() * 90000);
@@ -103,19 +104,23 @@ export async function POST(request: NextRequest) {
       });
 
       // Create order + items + initial status history
-      const newOrder = await tx.order.create({
+      const newOrder = await (tx.order.create as any)({
         data: {
           orderNumber: generateOrderNumber(),
           userId,
           guestEmail: userId ? null : data.guestEmail,
           guestName: userId ? null : data.guestName,
           addressId: address.id,
+          paymentMethod: data.paymentMethod || "COD",
           subtotal,
           shipping,
           total,
           items: { create: orderItemsData },
           statusHistory: {
-            create: { status: "PENDING", note: "Order placed" },
+            create: {
+              status: "PENDING",
+              note: `Order placed via ${data.paymentMethod || "COD"}`,
+            },
           },
         },
       });
@@ -131,6 +136,41 @@ export async function POST(request: NextRequest) {
       return newOrder;
     });
 
+    // Handle Khalti Payment Initiation if paymentMethod === "KHALTI"
+    let paymentUrl: string | undefined = undefined;
+    let pidx: string | undefined = undefined;
+
+    if (data.paymentMethod === "KHALTI") {
+      try {
+        const host = request.headers.get("host") || "localhost:3001";
+        const protocol = host.includes("localhost") ? "http" : "https";
+        const returnUrl = `${protocol}://${host}/api/webhooks/khalti`;
+
+        const khaltiResponse = await initiateKhaltiPayment({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          totalNpr: Number(order.total),
+          customerName: data.fullName,
+          customerEmail: data.guestEmail || (session?.user?.email as string) || "customer@example.com",
+          customerPhone: data.phone,
+          returnUrl,
+          websiteUrl: `${protocol}://${host}`,
+        });
+
+        paymentUrl = khaltiResponse.payment_url;
+        pidx = khaltiResponse.pidx;
+
+        // Save pidx transactionId on order
+        await (prisma.order.update as any)({
+          where: { id: order.id },
+          data: { transactionId: pidx },
+        });
+      } catch (khaltiErr: any) {
+        console.error("[Checkout Khalti Initiate Error]:", khaltiErr);
+        // Fallback: order stays created as PENDING
+      }
+    }
+
     try {
       revalidatePath("/");
       revalidatePath("/shop");
@@ -139,7 +179,7 @@ export async function POST(request: NextRequest) {
       console.warn("[Checkout] Revalidation warning:", e);
     }
 
-    return NextResponse.json({ order }, { status: 201 });
+    return NextResponse.json({ order, paymentUrl, pidx }, { status: 201 });
   } catch (err: any) {
     console.error("[Checkout Route Error]:", err);
     const errMsg = String(err?.message || err);
