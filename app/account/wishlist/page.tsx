@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Heart, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCartStore } from "@/stores/cart-store";
+import { useWishlistStore } from "@/stores/wishlist-store";
 
 interface WishlistProduct {
   id: string;
@@ -34,7 +35,10 @@ export default function WishlistPage() {
       const res = await fetch("/api/me/wishlist");
       if (res.ok) {
         const data = await res.json();
-        setItems(data.items || []);
+        const loadedItems = data.items || [];
+        setItems(loadedItems);
+        const ids = loadedItems.map((item: any) => item.productId).filter(Boolean);
+        useWishlistStore.getState().setWishlistIds(ids);
       }
     } catch (err) {
       console.error("Failed to load wishlist:", err);
@@ -44,8 +48,9 @@ export default function WishlistPage() {
   };
 
   const handleRemove = async (itemId: string, productId: string) => {
-    // Optimistic UI update
+    // Optimistic UI update locally and in global store
     setItems((prev) => prev.filter((item) => item.id !== itemId && item.productId !== productId));
+    useWishlistStore.getState().removeItem(productId);
 
     try {
       await fetch(`/api/me/wishlist/${productId}`, {

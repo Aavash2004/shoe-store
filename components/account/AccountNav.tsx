@@ -18,11 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useWishlistStore } from "@/stores/wishlist-store";
 
 export function AccountNav() {
   const pathname = usePathname();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const wishlistCount = useWishlistStore((state) => state.wishlistIds.length);
 
   async function handleLogout() {
     setLoading(true);
@@ -82,6 +84,11 @@ export function AccountNav() {
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
               <span>{item.name}</span>
+              {item.name === "Wishlist" && wishlistCount > 0 && (
+                <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[9px] font-bold text-white shadow-xs">
+                  {wishlistCount > 99 ? "99+" : wishlistCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -129,7 +136,12 @@ export function AccountNav() {
                         : "text-[#6E7575]"
                     }`}
                   />
-                  <span>{item.name}</span>
+                  <span className="flex-1">{item.name}</span>
+                  {item.name === "Wishlist" && wishlistCount > 0 && (
+                    <span className="flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1.5 text-[10px] font-bold text-white shadow-xs">
+                      {wishlistCount > 99 ? "99+" : wishlistCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}

@@ -8,6 +8,7 @@ import { ShoppingBag, Heart, User, Menu, X, Search, Loader2 } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
+import { useWishlistStore } from "@/stores/wishlist-store";
 
 interface SuggestionItem {
   id: string;
@@ -122,9 +123,13 @@ function HeaderInner() {
   );
 
   const [dbCount, setDbCount] = useState(0);
+  const wishlistCount = useWishlistStore((state) => state.wishlistIds.length);
 
   useEffect(() => {
     if (!isLoggedIn) return;
+
+    // Fetch initial wishlist state
+    useWishlistStore.getState().fetchWishlist();
 
     function fetchCount() {
       fetch("/api/cart")
@@ -324,10 +329,18 @@ function HeaderInner() {
             variant="ghost"
             size="icon"
             asChild
-            className="hidden sm:inline-flex rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1"
+            className="relative hidden sm:inline-flex rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1"
           >
-            <Link href="/account/wishlist" aria-label="Wishlist">
+            <Link
+              href="/account/wishlist"
+              aria-label={`Wishlist${wishlistCount ? `, ${wishlistCount} items` : ""}`}
+            >
               <Heart className="h-5 w-5" strokeWidth={1.5} />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs">
+                  {wishlistCount > 99 ? "99+" : wishlistCount}
+                </span>
+              )}
             </Link>
           </Button>
 
@@ -415,7 +428,12 @@ function HeaderInner() {
               className="flex items-center gap-2 text-sm font-medium text-[var(--color-navy)]/70"
             >
               <Heart className="h-4 w-4" strokeWidth={1.5} />
-              Wishlist
+              <span>Wishlist</span>
+              {wishlistCount > 0 && (
+                <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[9px] font-bold text-white shadow-xs">
+                  {wishlistCount > 99 ? "99+" : wishlistCount}
+                </span>
+              )}
             </Link>
             <span className="text-[var(--color-navy)]/30">·</span>
             <Link
