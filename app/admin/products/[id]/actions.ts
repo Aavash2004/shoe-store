@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 import {
@@ -205,8 +206,16 @@ export async function updateProduct(data: UpdateProductInput) {
 export async function deleteProduct(id: string) {
   await requireAdmin();
 
+  const idCheck = z.string().min(1, "Product ID is required.").safeParse(id);
+  if (!idCheck.success) {
+    return {
+      success: false as const,
+      error: "Invalid product ID",
+    };
+  }
+
   const existing = await prisma.product.findUnique({
-    where: { id },
+    where: { id: idCheck.data },
   });
 
   if (!existing) {

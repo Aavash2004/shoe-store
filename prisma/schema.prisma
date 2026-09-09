@@ -293,8 +293,6 @@ model Order {
 
   status        String        @default("PENDING")
   paymentStatus PaymentStatus @default(PENDING)
-  paymentMethod String        @default("COD")
-  transactionId String?
 
   subtotal Decimal @db.Decimal(10, 2)
   shipping Decimal @db.Decimal(10, 2) @default(0)

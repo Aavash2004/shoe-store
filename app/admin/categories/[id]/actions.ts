@@ -1,8 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
+
+const UpdateCategorySchema = z.object({
+  id: z.string().min(1, "Category ID is required."),
+  name: z.string().trim().min(1, "Category name is required.").max(100, "Category name cannot exceed 100 characters."),
+  slug: z.string().trim().max(120, "Slug cannot exceed 120 characters.").optional(),
+  isActive: z.boolean().optional().default(true),
+});
 
 function generateSlug(text: string): string {
   return text
@@ -15,7 +23,7 @@ function generateSlug(text: string): string {
 
 export async function updateCategory(
   id: string,
-  formData: {
+  rawInput: {
     name: string;
     slug?: string;
     isActive?: boolean;
@@ -23,16 +31,21 @@ export async function updateCategory(
 ) {
   await requireAdmin();
 
-  const name = formData.name?.trim();
-  if (!name) {
-    return { success: false, error: "Category name is required." };
+  const parseResult = UpdateCategorySchema.safeParse({ ...rawInput, id });
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error.issues[0]?.message || "Invalid category data." };
   }
 
-  let slug = (formData.slug || "").trim();
+  const { name, isActive } = parseResult.data;
+  let slug = (parseResult.data.slug || "").trim();
   if (!slug) {
     slug = generateSlug(name);
   } else {
     slug = generateSlug(slug);
+  }
+
+  if (!slug) {
+    return { success: false, error: "Invalid category slug." };
   }
 
   try {
@@ -52,7 +65,7 @@ export async function updateCategory(
       data: {
         name,
         slug,
-        isActive: formData.isActive ?? true,
+        isActive: isActive ?? true,
       },
     });
 
@@ -71,9 +84,14 @@ export async function updateCategory(
 export async function deleteCategory(id: string) {
   await requireAdmin();
 
+  const idCheck = z.string().min(1, "Valid category ID is required.").safeParse(id);
+  if (!idCheck.success) {
+    return { success: false, error: "Invalid category ID." };
+  }
+
   try {
     const category = await prisma.category.findUnique({
-      where: { id },
+      where: { id: idCheck.data },
       include: {
         _count: { select: { products: true } },
       },

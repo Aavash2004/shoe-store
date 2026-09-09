@@ -130,7 +130,7 @@ function CustomerLoginForm() {
                   Password
                 </label>
                 <Link
-                  href="/auth/forgot-password"
+                  href="/auth/register"
                   className="text-xs text-navy/45 hover:text-accent"
                 >
                   Forgot password?

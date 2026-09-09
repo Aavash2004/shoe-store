@@ -2,8 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
+
+const CreateCategorySchema = z.object({
+  name: z.string().trim().min(1, "Category name is required.").max(100, "Category name cannot exceed 100 characters."),
+  slug: z.string().trim().max(120, "Slug cannot exceed 120 characters.").optional(),
+  isActive: z.boolean().optional().default(true),
+});
 
 function generateSlug(text: string): string {
   return text
@@ -14,19 +21,20 @@ function generateSlug(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export async function createCategory(formData: {
+export async function createCategory(rawInput: {
   name: string;
   slug?: string;
   isActive?: boolean;
 }) {
   await requireAdmin();
 
-  const name = formData.name?.trim();
-  if (!name) {
-    return { success: false, error: "Category name is required." };
+  const parseResult = CreateCategorySchema.safeParse(rawInput);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error.issues[0]?.message || "Invalid category data." };
   }
 
-  let slug = (formData.slug || "").trim();
+  const { name, isActive } = parseResult.data;
+  let slug = (parseResult.data.slug || "").trim();
   if (!slug) {
     slug = generateSlug(name);
   } else {
@@ -50,7 +58,7 @@ export async function createCategory(formData: {
       data: {
         name,
         slug,
-        isActive: formData.isActive ?? true,
+        isActive: isActive ?? true,
       },
     });
 

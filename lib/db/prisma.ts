@@ -8,7 +8,10 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function getCleanConnectionString(): string {
-  const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || "";
+  // At runtime, prioritize the pooled connection string (DATABASE_URL)
+  // Fall back to unpooled or direct URLs only if DATABASE_URL is not set
+  const url = process.env.DATABASE_URL || process.env.DATABASE_URL_UNPOOLED || process.env.DIRECT_URL || "";
+  // Strip unsupported query parameters if needed, but maintain standard ssl connection
   return url.split("?")[0];
 }
 
@@ -21,6 +24,8 @@ function createPrismaClient(): PrismaClient {
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000,
       idleTimeoutMillis: 30000,
+      // In serverless environments, limit max connections per container to prevent pool exhaustion under concurrency
+      max: process.env.NODE_ENV === "production" ? 2 : 10,
     });
 
   if (process.env.NODE_ENV !== "production") {

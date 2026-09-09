@@ -1,15 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 
-export async function submitProductReview({
-  productId,
-  productSlug,
-  rating,
-  comment,
-}: {
+const SubmitReviewSchema = z.object({
+  productId: z.string().min(1, "Product ID is required"),
+  productSlug: z.string().min(1, "Product slug is required"),
+  rating: z.number().int().min(1, "Please select a rating between 1 and 5 stars.").max(5, "Please select a rating between 1 and 5 stars."),
+  comment: z.string().max(1000, "Review comment cannot exceed 1,000 characters.").optional().default(""),
+});
+
+export async function submitProductReview(rawInput: {
   productId: string;
   productSlug: string;
   rating: number;
@@ -21,9 +24,12 @@ export async function submitProductReview({
     return { success: false, error: "You must be signed in to post a review." };
   }
 
-  if (rating < 1 || rating > 5) {
-    return { success: false, error: "Please select a rating between 1 and 5 stars." };
+  const parseResult = SubmitReviewSchema.safeParse(rawInput);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error.issues[0]?.message || "Invalid review submission." };
   }
+
+  const { productId, productSlug, rating, comment } = parseResult.data;
 
   try {
     const existing = await prisma.review.findUnique({

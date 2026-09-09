@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 
@@ -8,14 +9,26 @@ function generateCuid(): string {
   return "c" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 }
 
-export async function createCoupon({
-  code,
-  discountType,
-  discountValue,
-  minSubtotal,
-  maxUses,
-  expiresAt,
-}: {
+const CreateCouponSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(3, "Coupon code must be at least 3 characters.")
+      .max(30, "Coupon code cannot exceed 30 characters.")
+      .regex(/^[A-Za-z0-9_-]+$/, "Coupon code can only contain letters, numbers, dashes, and underscores."),
+    discountType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]),
+    discountValue: z.number().positive("Discount value must be greater than 0."),
+    minSubtotal: z.number().nonnegative("Minimum subtotal cannot be negative.").optional().default(0),
+    maxUses: z.number().int("Max uses must be a whole number.").positive().nullable().optional(),
+    expiresAt: z.string().nullable().optional(),
+  })
+  .refine(
+    (data) => data.discountType !== "PERCENTAGE" || data.discountValue <= 100,
+    { message: "Percentage discount cannot exceed 100%.", path: ["discountValue"] }
+  );
+
+export async function createCoupon(rawInput: {
   code: string;
   discountType: "PERCENTAGE" | "FIXED_AMOUNT";
   discountValue: number;
@@ -25,14 +38,13 @@ export async function createCoupon({
 }) {
   await requireAdmin();
 
-  const formattedCode = code.trim().toUpperCase();
-  if (!formattedCode) {
-    return { success: false, error: "Coupon code is required." };
+  const parseResult = CreateCouponSchema.safeParse(rawInput);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error.issues[0]?.message || "Invalid coupon data." };
   }
 
-  if (discountValue <= 0) {
-    return { success: false, error: "Discount value must be greater than 0." };
-  }
+  const { code, discountType, discountValue, minSubtotal, maxUses, expiresAt } = parseResult.data;
+  const formattedCode = code.toUpperCase();
 
   try {
     const existing = await prisma.$queryRawUnsafe<any[]>(
@@ -70,11 +82,16 @@ export async function createCoupon({
 export async function toggleCouponStatus(id: string, currentActive: boolean) {
   await requireAdmin();
 
+  const idCheck = z.string().min(1, "Valid coupon ID is required.").safeParse(id);
+  if (!idCheck.success) {
+    return { success: false, error: "Invalid coupon ID." };
+  }
+
   try {
     await prisma.$executeRawUnsafe(
       `UPDATE "coupons" SET "isActive" = $1, "updatedAt" = NOW() WHERE "id" = $2`,
       !currentActive,
-      id
+      idCheck.data
     );
 
     revalidatePath("/admin/coupons");
@@ -88,10 +105,15 @@ export async function toggleCouponStatus(id: string, currentActive: boolean) {
 export async function deleteCoupon(id: string) {
   await requireAdmin();
 
+  const idCheck = z.string().min(1, "Valid coupon ID is required.").safeParse(id);
+  if (!idCheck.success) {
+    return { success: false, error: "Invalid coupon ID." };
+  }
+
   try {
     await prisma.$executeRawUnsafe(
       `DELETE FROM "coupons" WHERE "id" = $1`,
-      id
+      idCheck.data
     );
 
     revalidatePath("/admin/coupons");
