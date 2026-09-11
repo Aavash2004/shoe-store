@@ -63,7 +63,7 @@ export function AdminNav({ email }: { email: string }) {
             return (
               <Link
                 key={link.href}
-                href={link.href}
+                href={link}
                 className={`relative pb-1 text-sm font-medium transition-colors ${active
                   ? "text-navy after:absolute after:-bottom-[1px] after:left-0 after:h-px after:w-full after:bg-navy"
                   : "text-navy/55 hover:text-navy"
@@ -106,7 +106,7 @@ export function AdminNav({ email }: { email: string }) {
             return (
               <Link
                 key={link.href}
-                href={link.href}
+                href={link}
                 onClick={() => setOpen(false)}
                 className={`border-b border-sand/60 py-3 text-sm font-medium last:border-b-0 ${active ? "text-navy" : "text-navy/60"
                   }`}

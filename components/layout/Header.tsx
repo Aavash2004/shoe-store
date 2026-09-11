@@ -4,11 +4,13 @@ import { Suspense, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Heart, User, Menu, X, Search, Loader2 } from "lucide-react";
+import { ShoppingBag, Heart, User, Menu, X, Search, Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
+
+import type { Route } from "next";
 
 interface SuggestionItem {
   id: string;
@@ -20,10 +22,16 @@ interface SuggestionItem {
   price: number;
 }
 
-const links = [
+interface NavLink {
+  href: Route;
+  label: string;
+  category: string | null;
+}
+
+const links: NavLink[] = [
   { href: "/shop", label: "Shop", category: null },
-  { href: "/shop?category=Running", label: "Running", category: "Running" },
-  { href: "/shop?category=Lifestyle", label: "Lifestyle", category: "Lifestyle" },
+  { href: "/shop?category=Running" as Route, label: "Running", category: "Running" },
+  { href: "/shop?category=Lifestyle" as Route, label: "Lifestyle", category: "Lifestyle" },
 ];
 
 function HeaderInner() {
@@ -401,60 +409,96 @@ function HeaderInner() {
       {/* Mobile menu panel */}
       <div
         id="mobile-menu"
-        className={`overflow-hidden border-t border-[var(--color-sand)]/70 bg-[var(--color-cream)] transition-[max-height,opacity] duration-300 ease-in-out md:hidden ${mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-          }`}
+        className={`overflow-hidden border-t border-[var(--color-sand)]/80 bg-[var(--color-cream)]/95 backdrop-blur-md transition-all duration-300 ease-in-out md:hidden ${
+          mobileOpen ? "max-h-[500px] opacity-100 py-3" : "max-h-0 opacity-0 py-0 pointer-events-none"
+        }`}
       >
-        <nav className="flex flex-col px-4 py-2">
-          {links.map((link) => {
-            const active = isLinkActive(link);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={`border-b border-[var(--color-sand)]/40 py-3 text-base font-medium last:border-b-0 ${active
-                  ? "text-[var(--color-navy)]"
-                  : "text-[var(--color-navy)]/70"
+        <div className="px-4 space-y-4">
+          {/* Category Navigation Links */}
+          <nav className="space-y-1">
+            <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/40">
+              Explore Shoes
+            </p>
+            {links.map((link) => {
+              const active = isLinkActive(link);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                    active
+                      ? "bg-[var(--color-navy)] text-white shadow-xs"
+                      : "text-[var(--color-navy)]/75 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 active:scale-[0.99]"
                   }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+                >
+                  <div className="flex items-center gap-2.5">
+                    {active && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-sky)]" />}
+                    <span>{link.label}</span>
+                  </div>
+                  <ChevronRight className={`w-4 h-4 transition-transform ${active ? "text-white/70" : "text-[var(--color-navy)]/30"}`} />
+                </Link>
+              );
+            })}
+          </nav>
 
-          <div className="flex items-center gap-2 py-3 sm:hidden">
-            <Link
-              href="/account/wishlist"
-              className="flex items-center gap-2 text-sm font-medium text-[var(--color-navy)]/70"
-            >
-              <Heart className="h-4 w-4" strokeWidth={1.5} />
-              <span>Wishlist</span>
-              {wishlistCount > 0 && (
-                <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[9px] font-bold text-white shadow-xs">
-                  {wishlistCount > 99 ? "99+" : wishlistCount}
+          {/* Quick Action Tiles (Wishlist & Account) */}
+          <div className="pt-2 border-t border-[var(--color-sand)]/60 sm:hidden">
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/40">
+              Personal
+            </p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Link
+                href={"/account/wishlist" as Route}
+                onClick={() => setMobileOpen(false)}
+                className="flex flex-col gap-1 p-3 rounded-2xl bg-[var(--color-cream-alt)] border border-[var(--color-sand)] hover:border-[var(--color-navy)]/30 transition-colors shadow-2xs"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="p-1.5 rounded-xl bg-rose-50 text-rose-500">
+                    <Heart className="h-4 w-4" strokeWidth={2} />
+                  </div>
+                  {wishlistCount > 0 && (
+                    <span className="flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1.5 text-[10px] font-bold text-white shadow-xs">
+                      {wishlistCount > 99 ? "99+" : wishlistCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-[var(--color-navy)] mt-1">Wishlist</span>
+                <span className="text-[10px] text-[var(--color-navy)]/50 font-medium">
+                  {wishlistCount === 0 ? "Saved items" : `${wishlistCount} shoe${wishlistCount === 1 ? "" : "s"}`}
                 </span>
-              )}
-            </Link>
-            <span className="text-[var(--color-navy)]/30">·</span>
-            <Link
-              href={
-                session?.user
-                  ? session.user.role === "ADMIN"
-                    ? "/admin"
-                    : "/account"
-                  : "/login"
-              }
-              className="flex items-center gap-2 text-sm font-medium text-[var(--color-navy)]/70"
-            >
-              <User className="h-4 w-4" strokeWidth={1.5} />
-              {session?.user
-                ? session.user.role === "ADMIN"
-                  ? "Admin Console"
-                  : "Account"
-                : "Log in"}
-            </Link>
+              </Link>
+
+              <Link
+                href={
+                  (session?.user
+                    ? session.user.role === "ADMIN"
+                      ? "/admin"
+                      : "/account"
+                    : "/login") as Route
+                }
+                onClick={() => setMobileOpen(false)}
+                className="flex flex-col gap-1 p-3 rounded-2xl bg-[var(--color-cream-alt)] border border-[var(--color-sand)] hover:border-[var(--color-navy)]/30 transition-colors shadow-2xs"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="p-1.5 rounded-xl bg-blue-50 text-blue-600">
+                    <User className="h-4 w-4" strokeWidth={2} />
+                  </div>
+                  <span className="text-[10px] font-bold text-[var(--color-sky)]">
+                    {session?.user ? "Active" : "Guest"}
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-[var(--color-navy)] mt-1">
+                  {session?.user ? (session.user.role === "ADMIN" ? "Admin Console" : "Account") : "Sign In"}
+                </span>
+                <span className="text-[10px] text-[var(--color-navy)]/50 font-medium truncate">
+                  {session?.user ? session.user.name || "My Portal" : "Join or Log in"}
+                </span>
+              </Link>
+            </div>
           </div>
-        </nav>
+        </div>
       </div>
     </header>
   );

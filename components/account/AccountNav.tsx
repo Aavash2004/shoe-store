@@ -20,6 +20,15 @@ import {
 } from "@/components/ui/dialog";
 import { useWishlistStore } from "@/stores/wishlist-store";
 
+import type { Route } from "next";
+
+interface NavItem {
+  name: string;
+  href: Route;
+  icon: React.ComponentType<{ className?: string }>;
+  exact: boolean;
+}
+
 export function AccountNav() {
   const pathname = usePathname();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -31,34 +40,34 @@ export function AccountNav() {
     await signOut({ callbackUrl: "/" });
   }
 
-  const navItems = [
+  const navItems: NavItem[] = [
     {
       name: "Overview",
-      href: "/account",
+      href: "/account" as Route,
       icon: LayoutDashboard,
       exact: true,
     },
     {
       name: "Orders",
-      href: "/account/orders",
+      href: "/account/orders" as Route,
       icon: ShoppingBag,
       exact: false,
     },
     {
       name: "Wishlist",
-      href: "/account/wishlist",
+      href: "/account/wishlist" as Route,
       icon: Heart,
       exact: false,
     },
     {
       name: "Profile & Addresses",
-      href: "/account/profile",
+      href: "/account/profile" as Route,
       icon: User,
       exact: false,
     },
   ];
 
-  const isLinkActive = (item: (typeof navItems)[0]) => {
+  const isLinkActive = (item: NavItem) => {
     if (item.exact) {
       return pathname === item.href;
     }
@@ -67,55 +76,64 @@ export function AccountNav() {
 
   return (
     <>
-      {/* Mobile Horizontal Navigation Bar */}
-      <div className="md:hidden -mx-4 px-4 pb-3 mb-6 border-b border-[var(--color-sand)] flex items-center gap-2 overflow-x-auto no-scrollbar">
-        {navItems.map((item) => {
-          const active = isLinkActive(item);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] ${
-                active
-                  ? "bg-[var(--color-navy)] text-[var(--color-cream)] shadow-xs"
-                  : "bg-[var(--color-cream-alt)] text-[#6E7575] border border-[var(--color-sand)] hover:bg-[var(--color-sand)]/50 hover:text-[var(--color-navy)]"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5 shrink-0" />
-              <span>{item.name}</span>
-              {item.name === "Wishlist" && wishlistCount > 0 && (
-                <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[9px] font-bold text-white shadow-xs">
-                  {wishlistCount > 99 ? "99+" : wishlistCount}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+      {/* Mobile Horizontal Segmented Luxury Nav Bar */}
+      <div className="md:hidden -mx-4 px-4 mb-6">
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-[var(--color-sand)]/35 border border-[var(--color-sand)]/70 backdrop-blur-md overflow-x-auto no-scrollbar shadow-2xs">
+          {navItems.map((item) => {
+            const active = isLinkActive(item);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 focus-visible:outline-none ${
+                  active
+                    ? "bg-[var(--color-navy)] text-white shadow-xs"
+                    : "text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] hover:bg-white/60 active:scale-95"
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? "text-[var(--color-sky)]" : "text-[var(--color-navy)]/50"}`} />
+                <span>{item.name}</span>
+                {item.name === "Wishlist" && wishlistCount > 0 && (
+                  <span className={`flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold shadow-xs ${
+                    active ? "bg-[#FC563C] text-white" : "bg-[var(--color-navy)] text-white"
+                  }`}>
+                    {wishlistCount > 99 ? "99+" : wishlistCount}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
 
-        <button
-          type="button"
-          onClick={() => setShowLogoutConfirm(true)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-        >
-          <LogOut className="w-3.5 h-3.5 shrink-0" />
-          <span>Logout</span>
-        </button>
+          <div className="h-4 w-px bg-[var(--color-sand)] shrink-0 mx-1" />
+
+          <button
+            type="button"
+            onClick={() => setShowLogoutConfirm(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors text-rose-600/80 hover:text-rose-600 hover:bg-rose-50/80 shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5 shrink-0" />
+            <span>Logout</span>
+          </button>
+        </div>
       </div>
 
       {/* Desktop Left Sidebar */}
-      <aside className="hidden md:block w-60 shrink-0">
-        <div className="bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-2xl p-5 shadow-xs space-y-5">
-          <div className="pb-3 border-b border-[var(--color-sand)]">
-            <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)] tracking-tight">
-              My Account
-            </h2>
-            <p className="text-[11px] text-[#6E7575] mt-0.5 font-medium">
-              Storefront Customer Portal
-            </p>
+      <aside className="hidden md:block w-64 shrink-0">
+        <div className="bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-3xl p-5 shadow-xs space-y-6">
+          <div className="pb-4 border-b border-[var(--color-sand)] flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[var(--color-navy)]/50">
+                Customer Portal
+              </span>
+              <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)] tracking-tight">
+                My Account
+              </h2>
+            </div>
+            <span className="h-2 w-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" title="Active Session" />
           </div>
 
-          <nav className="space-y-1" aria-label="Account navigation">
+          <nav className="space-y-1.5" aria-label="Account navigation">
             {navItems.map((item) => {
               const active = isLinkActive(item);
               const Icon = item.icon;
@@ -123,22 +141,24 @@ export function AccountNav() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] ${
+                  className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] ${
                     active
-                      ? "bg-[var(--color-navy)] text-[var(--color-cream)] shadow-xs"
-                      : "text-[#6E7575] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)]"
+                      ? "bg-[var(--color-navy)] text-white shadow-xs"
+                      : "text-[#6E7575] hover:bg-white/80 hover:text-[var(--color-navy)]"
                   }`}
                 >
-                  <Icon
-                    className={`w-4 h-4 transition-colors ${
-                      active
-                        ? "text-[var(--color-sky)]"
-                        : "text-[#6E7575]"
-                    }`}
-                  />
-                  <span className="flex-1">{item.name}</span>
+                  <div className={`p-1.5 rounded-xl transition-colors ${
+                    active
+                      ? "bg-white/15 text-[var(--color-sky)]"
+                      : "bg-[var(--color-sand)]/40 text-[#6E7575] group-hover:text-[var(--color-navy)] group-hover:bg-[var(--color-sand)]/70"
+                  }`}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="flex-1 font-medium">{item.name}</span>
                   {item.name === "Wishlist" && wishlistCount > 0 && (
-                    <span className="flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1.5 text-[10px] font-bold text-white shadow-xs">
+                    <span className={`flex h-4.5 min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold shadow-xs ${
+                      active ? "bg-[#FC563C] text-white" : "bg-[var(--color-navy)] text-white"
+                    }`}>
                       {wishlistCount > 99 ? "99+" : wishlistCount}
                     </span>
                   )}
@@ -150,9 +170,11 @@ export function AccountNav() {
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(true)}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50/80 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-rose-600 hover:bg-rose-50/80 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 group"
               >
-                <LogOut className="w-4 h-4 text-rose-500" />
+                <div className="p-1.5 rounded-xl bg-rose-100/60 text-rose-600 group-hover:bg-rose-100 transition-colors">
+                  <LogOut className="w-3.5 h-3.5" />
+                </div>
                 <span>Log Out</span>
               </button>
             </div>
