@@ -139,7 +139,9 @@ function HeaderInner() {
     // Fetch initial wishlist state
     useWishlistStore.getState().fetchWishlist();
 
-    function fetchCount() {
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    function queryCount() {
       fetch("/api/cart")
         .then((res) => res.json())
         .then((data) => {
@@ -148,12 +150,21 @@ function HeaderInner() {
             0
           );
           setDbCount(count);
-        });
+        })
+        .catch(() => {});
     }
 
-    fetchCount();
-    window.addEventListener("cart-updated", fetchCount);
-    return () => window.removeEventListener("cart-updated", fetchCount);
+    function onCartUpdated() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(queryCount, 300);
+    }
+
+    queryCount();
+    window.addEventListener("cart-updated", onCartUpdated);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener("cart-updated", onCartUpdated);
+    };
   }, [isLoggedIn]);
 
   const cartCount = isLoggedIn ? dbCount : localCount;

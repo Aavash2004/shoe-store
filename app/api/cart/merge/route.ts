@@ -30,14 +30,31 @@ export async function POST(request: NextRequest) {
     cart =await prisma.cart.create({data: {userId}});
  }
 
-for (const item of parsed.data.items) {
-    await prisma.cartItem.upsert({
-        where:{cartId_variantId: { cartId: cart.id, variantId: item.variantId }},
-        update: { quantity: { increment: item.quantity}},
-        create: { cartId:cart.id, variantId: item.variantId, quantity:item.quantity},
+  for (const item of parsed.data.items) {
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: item.variantId },
+      select: { stock: true, isActive: true },
     });
 
-} 
+    if (!variant || !variant.isActive || variant.stock <= 0) continue;
 
-return NextResponse.json({ success:true});
+    const existing = await prisma.cartItem.findUnique({
+      where: { cartId_variantId: { cartId: cart.id, variantId: item.variantId } },
+    });
+
+    if (existing) {
+      const mergedQty = Math.min(existing.quantity + item.quantity, variant.stock);
+      await prisma.cartItem.update({
+        where: { id: existing.id },
+        data: { quantity: mergedQty },
+      });
+    } else {
+      const initialQty = Math.min(item.quantity, variant.stock);
+      await prisma.cartItem.create({
+        data: { cartId: cart.id, variantId: item.variantId, quantity: initialQty },
+      });
+    }
+  }
+
+  return NextResponse.json({ success: true });
 }

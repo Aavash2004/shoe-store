@@ -77,6 +77,13 @@ export default function WishlistPage() {
         window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
         return;
       }
+      if (res.status === 400) {
+        const err = await res.json().catch(() => ({}));
+        window.dispatchEvent(
+          new CustomEvent("show-toast", { detail: err.error || "Could not add to cart" })
+        );
+        return;
+      }
     } catch {
       // Fallback to local cart if unauthenticated or network failure
     }
@@ -91,6 +98,7 @@ export default function WishlistPage() {
       size: firstVariant?.size || "40",
       color: firstVariant?.color || "Default",
       quantity: 1,
+      stock: firstVariant?.stock ?? 999,
     });
     window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
   };

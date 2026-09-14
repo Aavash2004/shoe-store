@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
@@ -36,6 +36,15 @@ export default function CartPage() {
   const [loading, setLoading] = useState(isLoggedIn);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
+  const pendingUpdatesRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      pendingUpdatesRef.current.forEach((timer) => clearTimeout(timer));
+      pendingUpdatesRef.current.clear();
+    };
+  }, []);
+
   useEffect(() => {
     if (!isLoggedIn) return;
 
@@ -45,29 +54,81 @@ export default function CartPage() {
       .finally(() => setLoading(false));
   }, [isLoggedIn]);
 
-  async function handleDbUpdate(variantId: string, quantity: number) {
-    const item = dbItems.find((i) => i.variant.id === variantId);
-    if (item && quantity > item.variant.stock) {
+  function debouncedSyncQuantity(variantId: string, quantity: number) {
+    const existingTimer = pendingUpdatesRef.current.get(variantId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(async () => {
+      pendingUpdatesRef.current.delete(variantId);
+      try {
+        const res = await fetch("/api/cart", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ variantId, quantity }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: data.error || "Could not update quantity",
+            })
+          );
+          fetch("/api/cart")
+            .then((r) => r.json())
+            .then((d) => setDbItems(d.items ?? []));
+        } else {
+          window.dispatchEvent(new Event("cart-updated"));
+        }
+      } catch {
+        window.dispatchEvent(
+          new CustomEvent("show-toast", { detail: "Network error updating cart" })
+        );
+      }
+    }, 400);
+
+    pendingUpdatesRef.current.set(variantId, timer);
+  }
+
+  function handleQuantityChange(variantId: string, newQty: number, maxStock: number) {
+    if (newQty <= 0) {
+      if (isLoggedIn) {
+        handleDbRemove(variantId);
+      } else {
+        localRemove(variantId);
+      }
+      return;
+    }
+
+    if (newQty > maxStock) {
       window.dispatchEvent(
-        new CustomEvent("show-toast", { detail: `Only ${item.variant.stock} left in stock` })
+        new CustomEvent("show-toast", {
+          detail: maxStock <= 0 ? "Out of stock" : `Only ${maxStock} left in stock`,
+        })
       );
       return;
     }
 
-    await fetch("/api/cart", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ variantId, quantity }),
-    });
-    setDbItems((prev) =>
-      quantity === 0
-        ? prev.filter((i) => i.variant.id !== variantId)
-        : prev.map((i) => (i.variant.id === variantId ? { ...i, quantity } : i))
-    );
-    window.dispatchEvent(new Event("cart-updated"));
+    if (isLoggedIn) {
+      setDbItems((prev) =>
+        prev.map((i) =>
+          i.variant.id === variantId ? { ...i, quantity: newQty } : i
+        )
+      );
+      debouncedSyncQuantity(variantId, newQty);
+    } else {
+      localUpdate(variantId, newQty);
+    }
   }
 
   async function handleDbRemove(variantId: string) {
+    const timer = pendingUpdatesRef.current.get(variantId);
+    if (timer) {
+      clearTimeout(timer);
+      pendingUpdatesRef.current.delete(variantId);
+    }
+
     await fetch(`/api/cart?variantId=${variantId}`, { method: "DELETE" });
     setDbItems((prev) => prev.filter((i) => i.variant.id !== variantId));
     window.dispatchEvent(new Event("cart-updated"));
@@ -87,8 +148,12 @@ export default function CartPage() {
         color: i.variant.color,
         price: Number(i.variant.price),
         quantity: i.quantity,
+        stock: i.variant.stock,
       }))
-    : localItems;
+    : localItems.map((i) => ({
+        ...i,
+        stock: typeof i.stock === "number" ? i.stock : 999,
+      }));
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discount = appliedCoupon ? Math.min(appliedCoupon.discountAmount, subtotal) : 0;
@@ -138,23 +203,38 @@ export default function CartPage() {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() =>
-                  isLoggedIn
-                    ? handleDbUpdate(item.variantId, item.quantity - 1)
-                    : localUpdate(item.variantId, item.quantity - 1)
+                  handleQuantityChange(item.variantId, item.quantity - 1, item.stock)
                 }
-                className="h-7 w-7 rounded-lg border border-[var(--color-sand)] text-xs text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
+                className="h-7 w-7 rounded-lg border border-[var(--color-sand)] text-xs text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30 transition-colors"
+                aria-label="Decrease quantity"
               >
                 −
               </button>
-              <span className="w-5 text-center text-xs font-bold text-[var(--color-navy)]">{item.quantity}</span>
+              <span className="w-6 text-center text-xs font-bold text-[var(--color-navy)]">{item.quantity}</span>
               <button
-                onClick={() =>
-                  isLoggedIn
-                    ? handleDbUpdate(item.variantId, item.quantity + 1)
-                    : localUpdate(item.variantId, item.quantity + 1)
-                }
-                className="h-7 w-7 rounded-lg border border-[var(--color-sand)] text-xs text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
+                type="button"
+                onClick={() => {
+                  if (item.quantity >= item.stock) {
+                    window.dispatchEvent(
+                      new CustomEvent("show-toast", {
+                        detail:
+                          item.stock <= 0
+                            ? "Out of stock"
+                            : `Only ${item.stock} left in stock`,
+                      })
+                    );
+                    return;
+                  }
+                  handleQuantityChange(item.variantId, item.quantity + 1, item.stock);
+                }}
+                className={`h-7 w-7 rounded-lg border border-[var(--color-sand)] text-xs text-[var(--color-navy)] transition-colors ${
+                  item.quantity >= item.stock
+                    ? "opacity-40 cursor-not-allowed hover:bg-rose-50"
+                    : "hover:bg-[var(--color-sand)]/30"
+                }`}
+                aria-label="Increase quantity"
               >
                 +
               </button>

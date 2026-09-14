@@ -38,6 +38,7 @@ export function ProductDetailInteractive({
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const addItem = useCartStore((state) => state.addItem);
@@ -78,7 +79,7 @@ export function ProductDetailInteractive({
   }, []);
 
   async function handleAddToCart() {
-    if (!matchedVariant) return;
+    if (isSubmitting || !matchedVariant) return;
 
     if (matchedVariant.stock <= 0) {
       window.dispatchEvent(
@@ -99,31 +100,50 @@ export function ProductDetailInteractive({
       }
     }
 
-    if (isLoggedIn) {
-      await fetch("/api/cart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variantId: matchedVariant.id, quantity: 1 }),
-      });
-    } else {
-      addItem({
-        variantId: matchedVariant.id,
-        productId: product.id,
-        productName: product.name,
-        slug: product.slug,
-        image: product.image,
-        size: matchedVariant.size,
-        color: matchedVariant.color,
-        price: matchedVariant.price,
-        quantity: 1,
-      });
+    setIsSubmitting(true);
+    try {
+      if (isLoggedIn) {
+        const res = await fetch("/api/cart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ variantId: matchedVariant.id, quantity: 1 }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail:
+                data.error ||
+                (matchedVariant.stock <= 0
+                  ? "Out of stock"
+                  : `Only ${matchedVariant.stock} left in stock`),
+            })
+          );
+          return;
+        }
+      } else {
+        addItem({
+          variantId: matchedVariant.id,
+          productId: product.id,
+          productName: product.name,
+          slug: product.slug,
+          image: product.image,
+          size: matchedVariant.size,
+          color: matchedVariant.color,
+          price: matchedVariant.price,
+          quantity: 1,
+          stock: matchedVariant.stock,
+        });
+      }
+
+      window.dispatchEvent(new Event("cart-updated"));
+      window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
+
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1500);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    window.dispatchEvent(new Event("cart-updated"));
-    window.dispatchEvent(new CustomEvent("show-toast", { detail: "added to cart" }));
-
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1500);
   }
 
   return (
@@ -225,16 +245,18 @@ export function ProductDetailInteractive({
           <Button
             className="flex-1 h-12 text-sm font-bold"
             size="lg"
-            disabled={!canAddToCart || (matchedVariant?.stock ?? 0) <= 0}
+            disabled={isSubmitting || !canAddToCart || (matchedVariant?.stock ?? 0) <= 0}
             onClick={handleAddToCart}
           >
-            {added
-              ? "Added!"
-              : !canAddToCart
-                ? "Select size & color"
-                : (matchedVariant?.stock ?? 0) <= 0
-                  ? "Out of Stock"
-                  : "Add to Cart"}
+            {isSubmitting
+              ? "Adding..."
+              : added
+                ? "Added!"
+                : !canAddToCart
+                  ? "Select size & color"
+                  : (matchedVariant?.stock ?? 0) <= 0
+                    ? "Out of Stock"
+                    : "Add to Cart"}
           </Button>
           <div className="shrink-0">
             <WishlistButton
