@@ -6,6 +6,12 @@ import { useCartStore } from "@/stores/cart-store";
 import { useSession } from "next-auth/react";
 import { gsap } from "@/lib/gsap";
 import { WishlistButton } from "@/components/product/WishlistButton";
+import { Ruler } from "lucide-react";
+import { SizeFitGuideModal } from "@/components/product/SizeFitGuideModal";
+import {
+  SizeSystem,
+  getDualDisplaySize,
+} from "@/lib/constants/sizing";
 
 type Variant = {
   id: string;
@@ -27,6 +33,7 @@ type ProductDetailData = {
   images: string[];
   sizes: string[];
   colors: string[];
+  gender?: string;
   variants: Variant[];
 };
 
@@ -37,6 +44,8 @@ export function ProductDetailInteractive({
 }) {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [sizeSystem, setSizeSystem] = useState<SizeSystem>("US_MEN");
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [added, setAdded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -192,30 +201,100 @@ export function ProductDetailInteractive({
       </div>
 
       <div className="mt-8">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-[var(--color-navy)]">Size</p>
-          {selectedSize && (
-            <span className="text-sm text-[var(--color-navy)]/60"></span>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-[var(--color-navy)]">Select Size</span>
+            {/* Region system selector */}
+            <div className="inline-flex items-center rounded-lg border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-0.5 text-[11px] font-bold">
+              {(
+                [
+                  { id: "US_MEN", label: "US" },
+                  { id: "UK", label: "UK" },
+                  { id: "EU", label: "EU" },
+                  { id: "CM", label: "CM" },
+                ] as const
+              ).map((sys) => (
+                <button
+                  key={sys.id}
+                  type="button"
+                  onClick={() => setSizeSystem(sys.id)}
+                  className={`rounded-md px-2 py-0.5 transition-all ${
+                    sizeSystem === sys.id
+                      ? "bg-[var(--color-navy)] text-[var(--color-cream)] shadow-2xs"
+                      : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
+                  }`}
+                >
+                  {sys.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Size & Fit Guide Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsGuideOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-navy)]/70 hover:text-[var(--color-navy)] transition-colors underline-offset-4 hover:underline"
+          >
+            <Ruler className="h-3.5 w-3.5 text-[var(--color-navy)]/80" />
+            <span>Size & Fit Guide</span>
+          </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        {/* Dual-Label Size Pills Grid */}
+        <div className="mt-3.5 grid grid-cols-3 sm:grid-cols-4 gap-2.5">
           {product.sizes.map((size) => {
             const isSelected = selectedSize === size;
+            const dual = getDualDisplaySize(size, sizeSystem, product.gender);
+
             return (
               <button
                 key={size}
+                type="button"
                 onClick={() => setSelectedSize(size)}
-                className={`flex h-11 w-11 items-center justify-center rounded-lg border text-sm font-medium transition-all ${isSelected
-                  ? "border-[var(--color-accent)] bg-[var(--color-cream-alt)] text-[var(--color-navy)]"
-                  : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40"
-                  }`}
+                className={`relative flex flex-col items-center justify-center rounded-xl border py-2.5 px-2 text-center transition-all ${
+                  isSelected
+                    ? "border-[var(--color-navy)] bg-[var(--color-cream-alt)] shadow-xs ring-1 ring-[var(--color-navy)]"
+                    : "border-[var(--color-sand)] bg-white/70 hover:border-[var(--color-navy)]/40 hover:bg-white"
+                }`}
               >
-                {size}
+                <span
+                  className={`text-sm font-bold tracking-tight ${
+                    isSelected ? "text-[var(--color-navy)]" : "text-[var(--color-navy)]/90"
+                  }`}
+                >
+                  {dual.primary}
+                </span>
+                <span className="mt-0.5 text-[10px] font-semibold text-[var(--color-navy)]/55 truncate max-w-full">
+                  {dual.secondary}
+                </span>
+                {dual.isApproximate && (
+                  <span className="text-[8px] uppercase tracking-wider text-amber-700 font-bold mt-0.5">
+                    approx.
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+
+        {/* Active Size Cross-System Breakdown Strip */}
+        {selectedSize && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60 px-3.5 py-2 text-xs text-[var(--color-navy)]/75">
+            <span className="font-bold text-[var(--color-navy)]">
+              All Equivalents:
+            </span>
+            {(() => {
+              const d = getDualDisplaySize(selectedSize, sizeSystem, product.gender);
+              const isWomen = product.gender?.toUpperCase().includes("WOMEN");
+              return (
+                <span className="font-mono font-semibold text-[11px] text-[var(--color-navy)]/90">
+                  US {isWomen ? d.conversions.usWomen : d.conversions.usMen} · UK {d.conversions.uk} · EU {d.conversions.eu} · {d.conversions.cm} cm
+                </span>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* Stock status indicator */}
@@ -271,6 +350,14 @@ export function ProductDetailInteractive({
           Free shipping on orders over $150
         </p>
       </div>
+
+      {/* Size & Fit Guide Accessible Modal */}
+      <SizeFitGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        selectedSize={selectedSize}
+        gender={product.gender}
+      />
     </div>
   );
 }

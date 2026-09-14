@@ -110,6 +110,7 @@ export default async function ProductDetailPage({
             images: product.images.map((img) => img.url),
             sizes,
             colors,
+            gender: product.gender ?? "UNISEX",
             variants: product.variants.map((v) => ({
               id: v.id,
               size: v.size,
