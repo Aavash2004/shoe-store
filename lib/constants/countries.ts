@@ -22,8 +22,6 @@ export const COUNTRIES: Record<string, Country> = {
     allowedPaymentMethods: ["COD"],
     isCheckoutEnabled: true,
   },
-  // NOTE: US and GB entries flip to true only in Phase 4/11,
-  // once Stripe integration is live and the Nepal regression gate has passed.
   US: {
     code: "US",
     name: "United States",
@@ -33,10 +31,8 @@ export const COUNTRIES: Record<string, Country> = {
     postalCodeRegex: /^\d{5}(?:-\d{4})?$/, // 5-digit ZIP or ZIP+4
     postalCodePlaceholder: "e.g. 90210 or 90210-1234",
     allowedPaymentMethods: ["STRIPE"],
-    isCheckoutEnabled: false,
+    isCheckoutEnabled: true,
   },
-  // NOTE: US and GB entries flip to true only in Phase 4/11,
-  // once Stripe integration is live and the Nepal regression gate has passed.
   GB: {
     code: "GB",
     name: "United Kingdom",
@@ -46,7 +42,7 @@ export const COUNTRIES: Record<string, Country> = {
     postalCodeRegex: /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i, // Standard UK outward + inward postcode
     postalCodePlaceholder: "e.g. SW1A 1AA",
     allowedPaymentMethods: ["STRIPE"],
-    isCheckoutEnabled: false,
+    isCheckoutEnabled: true,
   },
 };
 

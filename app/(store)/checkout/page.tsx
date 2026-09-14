@@ -39,6 +39,9 @@ import {
 } from "@/lib/constants/countries";
 import { CURRENCIES, formatCurrency } from "@/lib/constants/currencies";
 import { calculateShipping } from "@/lib/checkout/shipping";
+import { Elements } from "@stripe/react-stripe-js";
+import { getStripeClient } from "@/lib/services/stripe-client";
+import { StripePaymentForm } from "@/components/checkout/StripePaymentForm";
 
 type FormData = CheckoutAddressInput;
 
@@ -62,6 +65,16 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+
+  // Stripe state
+  const [stripePromise] = useState(() => getStripeClient());
+  const [stripeData, setStripeData] = useState<{
+    clientSecret: string;
+    orderId: string;
+    orderNumber: string;
+    amount: number;
+    currency: string;
+  } | null>(null);
 
   const enabledCountries = getEnabledCountries();
 
@@ -96,8 +109,9 @@ export default function CheckoutPage() {
       : Math.round(converted * 100) / 100;
   };
 
-  // Synchronize payment method when country changes
+  // Synchronize payment method and reset Stripe intent when country changes
   useEffect(() => {
+    setStripeData(null);
     if (selectedCountry) {
       const allowed = selectedCountry.allowedPaymentMethods;
       if (!allowed.includes(currentPaymentMethod)) {
@@ -148,6 +162,46 @@ export default function CheckoutPage() {
     const guestNameToSend = data.guestName?.trim() || data.fullName?.trim();
 
     try {
+      if (data.paymentMethod === "STRIPE") {
+        const res = await fetch("/api/checkout/stripe/create-intent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKeyRef.current,
+          },
+          body: JSON.stringify({
+            ...data,
+            paymentMethod: "STRIPE",
+            idempotencyKey: idempotencyKeyRef.current,
+            couponCode: appliedCoupon?.code,
+            guestEmail: isLoggedIn ? undefined : data.guestEmail,
+            guestName: isLoggedIn ? undefined : guestNameToSend,
+            items: items.map((i) => ({
+              variantId: i.variantId,
+              quantity: i.quantity,
+            })),
+          }),
+        });
+
+        const result = await res.json();
+        setLoading(false);
+
+        if (!res.ok) {
+          setError(result.error ?? "Failed to initialize card payment. Please try again.");
+          return;
+        }
+
+        setStripeData({
+          clientSecret: result.clientSecret,
+          orderId: result.orderId,
+          orderNumber: result.orderNumber,
+          amount: result.amount,
+          currency: result.currency,
+        });
+        return;
+      }
+
+      // COD payment flow
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: {
@@ -179,7 +233,7 @@ export default function CheckoutPage() {
       setDbItems([]);
       window.dispatchEvent(new Event("cart-updated"));
 
-      router.push(`/checkout/success?order=${result.order.orderNumber}`);
+      router.push(`/order-confirmation/${result.order.id}`);
     } catch (err: any) {
       setLoading(false);
       setError("Network or server connection failed. Please check your connection.");
@@ -572,33 +626,86 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Place Order CTA Button */}
-            <div className="space-y-3 pt-2">
-              <Button
-                type="submit"
-                disabled={loading}
-                className="h-14 w-full rounded-2xl bg-[var(--color-navy)] text-base font-bold tracking-wide text-[var(--color-cream)] shadow-lg shadow-[var(--color-navy)]/20 transition-all hover:bg-[var(--color-navy)]/90 hover:shadow-xl active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-cream)] border-t-transparent" />
-                    <span>Processing Order...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="h-5 w-5" />
-                    <span>
-                      Complete Order · {formatCurrency(total, currency)}
-                    </span>
-                  </>
-                )}
-              </Button>
+            {/* Payment Execution Section */}
+            {stripeData && currentPaymentMethod === "STRIPE" ? (
+              <section className="rounded-2xl border-2 border-[var(--color-navy)] bg-white p-6 md:p-8 shadow-lg transition-all animate-in fade-in-50">
+                <div className="mb-5 flex items-center justify-between border-b border-[var(--color-sand)] pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <CreditCard className="h-5 w-5 text-[var(--color-navy)]" />
+                    <h3 className="text-base font-bold text-[var(--color-navy)]">
+                      Enter Payment Details
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStripeData(null)}
+                    className="text-xs font-semibold text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] underline cursor-pointer"
+                  >
+                    Edit Shipping Information
+                  </button>
+                </div>
 
-              <p className="flex items-center justify-center gap-2 text-center text-xs font-medium text-[var(--color-navy)]/60">
-                <Lock className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Guaranteed Safe & Secure Checkout</span>
-              </p>
-            </div>
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: stripeData.clientSecret,
+                    appearance: {
+                      theme: "stripe",
+                      variables: {
+                        colorPrimary: "#1b2a4a",
+                        borderRadius: "12px",
+                      },
+                    },
+                  }}
+                >
+                  <StripePaymentForm
+                    orderId={stripeData.orderId}
+                    orderNumber={stripeData.orderNumber}
+                    amount={stripeData.amount}
+                    currency={stripeData.currency}
+                    onPaymentSuccess={() => {
+                      clearLocalCart();
+                      setDbItems([]);
+                      window.dispatchEvent(new Event("cart-updated"));
+                    }}
+                  />
+                </Elements>
+              </section>
+            ) : (
+              <div className="space-y-3 pt-2">
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="h-14 w-full rounded-2xl bg-[var(--color-navy)] text-base font-bold tracking-wide text-[var(--color-cream)] shadow-lg shadow-[var(--color-navy)]/20 transition-all hover:bg-[var(--color-navy)]/90 hover:shadow-xl active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {loading ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-cream)] border-t-transparent" />
+                      <span>Processing...</span>
+                    </>
+                  ) : currentPaymentMethod === "STRIPE" ? (
+                    <>
+                      <CreditCard className="h-5 w-5" />
+                      <span>
+                        Continue to Card Payment · {formatCurrency(total, currency)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="h-5 w-5" />
+                      <span>
+                        Complete Order (COD) · {formatCurrency(total, currency)}
+                      </span>
+                    </>
+                  )}
+                </Button>
+
+                <p className="flex items-center justify-center gap-2 text-center text-xs font-medium text-[var(--color-navy)]/60">
+                  <Lock className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Guaranteed Safe & Secure Checkout</span>
+                </p>
+              </div>
+            )}
           </form>
 
           {/* Sticky Order Summary Panel */}
