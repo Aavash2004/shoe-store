@@ -3,6 +3,7 @@ import Image from "next/image";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { ArrowRight, Plus, ShoppingBag, Boxes, Tag, Users } from "lucide-react";
+import { formatCurrency } from "@/lib/constants/currencies";
 
 export const dynamic = "force-dynamic";
 
@@ -212,7 +213,7 @@ export default async function AdminDashboardPage() {
                           </td>
                           <td className="px-5 py-3.5 text-center text-xs text-[var(--color-navy)]/70">{totalQty}</td>
                           <td className="px-5 py-3.5 text-right font-bold text-[var(--color-navy)]">
-                            ${Number(order.total).toFixed(2)}
+                            {formatCurrency(Number(order.total), order.currency || "USD")}
                           </td>
                           <td className="px-5 py-3.5 text-right">
                             <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-navy)]/70">

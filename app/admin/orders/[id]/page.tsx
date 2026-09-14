@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
 import { OrderStatusControl } from "@/components/admin/OrderStatusControl";
+import { formatCurrency } from "@/lib/constants/currencies";
 
 export default async function AdminOrderDetailPage({
     params,
@@ -65,7 +66,7 @@ export default async function AdminOrderDetailPage({
                                         </p>
                                     </div>
                                     <p className="font-medium text-navy">
-                                        ${(Number(item.price) * item.quantity).toFixed(2)}
+                                        {formatCurrency(Number(item.price) * item.quantity, order.currency)}
                                     </p>
                                 </div>
                             ))}
@@ -73,15 +74,19 @@ export default async function AdminOrderDetailPage({
                         <div className="mt-4 flex flex-col gap-1 border-t border-sand pt-4 text-sm">
                             <div className="flex justify-between text-navy/60">
                                 <span>Subtotal</span>
-                                <span>${Number(order.subtotal).toFixed(2)}</span>
+                                <span>{formatCurrency(Number(order.subtotal), order.currency)}</span>
                             </div>
                             <div className="flex justify-between text-navy/60">
                                 <span>Shipping</span>
-                                <span>${Number(order.shipping).toFixed(2)}</span>
+                                <span>
+                                    {Number(order.shipping) === 0
+                                        ? "FREE"
+                                        : formatCurrency(Number(order.shipping), order.currency)}
+                                </span>
                             </div>
                             <div className="flex justify-between font-medium text-navy">
                                 <span>Total</span>
-                                <span>${Number(order.total).toFixed(2)}</span>
+                                <span>{formatCurrency(Number(order.total), order.currency)}</span>
                             </div>
                         </div>
                     </div>

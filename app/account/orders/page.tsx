@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Search, ShoppingBag, ArrowRight, Loader2 } from "lucide-react";
+import { formatCurrency } from "@/lib/constants/currencies";
 
 interface OrderItemData {
   id: string;
@@ -25,6 +26,7 @@ interface OrderData {
   createdAt: string;
   status: string;
   total: string;
+  currency?: string;
   items: OrderItemData[];
 }
 
@@ -245,7 +247,7 @@ export default function CustomerOrdersPage() {
                       {totalItems} {totalItems === 1 ? "item" : "items"}
                     </span>
                     <span className="font-bold text-base text-[var(--color-navy)] ml-3">
-                      ${Number(order.total).toFixed(2)}
+                      {formatCurrency(Number(order.total), order.currency || "USD")}
                     </span>
                   </div>
 

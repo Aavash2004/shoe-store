@@ -13,6 +13,7 @@ import {
   MapPin,
   FileText,
 } from "lucide-react";
+import { formatCurrency } from "@/lib/constants/currencies";
 
 export default async function OrderDetailPage({
   params,
@@ -205,13 +206,13 @@ export default async function OrderDetailPage({
                       Size: {item.size} · Color: {item.color} · SKU: {item.sku}
                     </p>
                     <p className="text-xs text-[var(--color-navy)]/60 mt-0.5">
-                      Qty: {item.quantity} × ${Number(item.price).toFixed(2)}
+                      Qty: {item.quantity} × {formatCurrency(Number(item.price), order.currency)}
                     </p>
                   </div>
                 </div>
 
                 <span className="font-semibold text-sm text-[var(--color-navy)]">
-                  ${(Number(item.price) * item.quantity).toFixed(2)}
+                  {formatCurrency(Number(item.price) * item.quantity, order.currency)}
                 </span>
               </div>
             );
@@ -265,19 +266,19 @@ export default async function OrderDetailPage({
           <div className="space-y-2 text-xs text-[var(--color-navy)]/80">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span className="font-medium">${Number(order.subtotal).toFixed(2)}</span>
+              <span className="font-medium">{formatCurrency(Number(order.subtotal), order.currency)}</span>
             </div>
             <div className="flex justify-between">
               <span>Shipping</span>
               <span className="font-medium">
                 {Number(order.shipping) === 0
                   ? "FREE"
-                  : `$${Number(order.shipping).toFixed(2)}`}
+                  : formatCurrency(Number(order.shipping), order.currency)}
               </span>
             </div>
             <div className="flex justify-between pt-2 border-t border-[var(--color-sand)] text-sm font-bold text-[var(--color-navy)]">
               <span>Total</span>
-              <span>${Number(order.total).toFixed(2)}</span>
+              <span>{formatCurrency(Number(order.total), order.currency)}</span>
             </div>
           </div>
         </div>

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
+import { formatCurrency } from "@/lib/constants/currencies";
 
 type OrderWithRelations = {
   id: string;
   orderNumber: string;
   total: any;
+  currency?: string;
   status: string;
   createdAt: Date;
   user: {
@@ -92,7 +94,7 @@ export default async function AdminOrdersPage() {
                     {totalQty}
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-[var(--color-navy)]">
-                    ${Number(order.total).toFixed(2)}
+                    {formatCurrency(Number(order.total), order.currency || "USD")}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span

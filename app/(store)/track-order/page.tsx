@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Truck, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { formatCurrency } from "@/lib/constants/currencies";
 
 function formatDate(dateString?: string | null) {
   if (!dateString) return "";
@@ -235,7 +236,10 @@ export default function TrackOrderPage() {
                       </p>
                     </div>
                     <p className="text-sm font-bold text-[var(--color-navy)]">
-                      ${(Number(item.price || 0) * (item.quantity || 1)).toFixed(2)}
+                      {formatCurrency(
+                        Number(item.price || 0) * (item.quantity || 1),
+                        result.currency || "USD"
+                      )}
                     </p>
                   </div>
                 ))}
@@ -246,15 +250,32 @@ export default function TrackOrderPage() {
             <div className="border-t border-[var(--color-sand)]/60 pt-4 space-y-2 text-sm text-[var(--color-navy)]">
               <div className="flex justify-between text-[var(--color-navy)]/70">
                 <span>Subtotal</span>
-                <span>${Number(result.subtotal || 0).toFixed(2)}</span>
+                <span>
+                  {formatCurrency(
+                    Number(result.subtotal || 0),
+                    result.currency || "USD"
+                  )}
+                </span>
               </div>
               <div className="flex justify-between text-[var(--color-navy)]/70">
                 <span>Shipping</span>
-                <span>${Number(result.shipping || 0).toFixed(2)}</span>
+                <span>
+                  {Number(result.shipping || 0) === 0
+                    ? "FREE"
+                    : formatCurrency(
+                        Number(result.shipping || 0),
+                        result.currency || "USD"
+                      )}
+                </span>
               </div>
               <div className="flex justify-between font-bold text-base border-t border-[var(--color-sand)]/60 pt-2">
                 <span>Total Amount</span>
-                <span>${Number(result.total || 0).toFixed(2)}</span>
+                <span>
+                  {formatCurrency(
+                    Number(result.total || 0),
+                    result.currency || "USD"
+                  )}
+                </span>
               </div>
             </div>
           </div>

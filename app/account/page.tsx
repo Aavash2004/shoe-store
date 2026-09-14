@@ -3,6 +3,7 @@ import Image from "next/image";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { ShoppingBag, Heart, User, ArrowRight, PackageCheck } from "lucide-react";
+import { formatCurrency } from "@/lib/constants/currencies";
 
 function getTimeGreeting() {
   const hour = new Date().getHours();
@@ -311,7 +312,7 @@ export default async function AccountPage() {
                           Total
                         </span>
                         <span className="font-bold text-sm text-[var(--color-navy)]">
-                          ${Number(order.total).toFixed(2)}
+                          {formatCurrency(Number(order.total), order.currency)}
                         </span>
                       </div>
 
