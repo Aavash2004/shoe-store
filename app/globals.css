@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+:root {
+  --font-display: AdihausDIN, Helvetica, Arial, sans-serif;
+  --font-body: AdihausDIN, Helvetica, Arial, sans-serif;
+  --font-sans: AdihausDIN, Helvetica, Arial, sans-serif;
+}
+
 /* ========================================
    Design Tokens
 ======================================== */
@@ -13,8 +19,9 @@
   --color-sand: #E2E8F0;
 
   /* Fonts */
-  --font-display: "Manrope", sans-serif;
-  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: AdihausDIN, Helvetica, Arial, sans-serif;
+  --font-body: AdihausDIN, Helvetica, Arial, sans-serif;
+  --font-sans: AdihausDIN, Helvetica, Arial, sans-serif;
 
   /* Semantic colors */
   --color-background: var(--color-cream);
@@ -79,6 +86,7 @@
   0% {
     transform: translateX(0%);
   }
+
   100% {
     transform: translateX(-33.333%);
   }

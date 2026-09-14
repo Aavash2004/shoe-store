@@ -18,10 +18,10 @@ ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "gender" TEXT NOT NULL DEFAULT '
 -- CreateIndex: Unique index on stripePaymentIntentId
 CREATE UNIQUE INDEX IF NOT EXISTS "orders_stripePaymentIntentId_key" ON "orders"("stripePaymentIntentId");
 
--- Backfill existing rows that predate these columns
+-- One-time backfill for pre-existing orders: safe against re-runs (will not touch future USD Stripe orders)
 UPDATE "orders"
 SET "currency" = 'USD',
     "exchangeRate" = 1.0000,
     "tax" = 0.00,
     "paymentMethod" = 'COD'
-WHERE "currency" IS NULL OR "currency" = 'USD';
+WHERE "paymentMethod" IS NULL;

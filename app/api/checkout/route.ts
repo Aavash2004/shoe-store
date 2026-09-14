@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
           guestEmail: userId ? null : data.guestEmail,
           guestName: userId ? null : data.guestName,
           addressId: address.id,
+          paymentMethod: data.paymentMethod,
           subtotal,
           shipping,
           total,

@@ -31,79 +31,16 @@ import {
 } from "lucide-react";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
 
-const nepaliPhoneRegex = /^(\+?977)?(98|97)\d{8}$/;
+import {
+  checkoutAddressSchema,
+  CheckoutAddressInput,
+} from "@/lib/validations/checkout";
+import {
+  getEnabledCountries,
+  getCountryByCode,
+} from "@/lib/constants/countries";
 
-const formSchema = z.object({
-  guestEmail: z
-    .string()
-    .trim()
-    .email("Please enter a valid email address.")
-    .optional()
-    .or(z.literal("")),
-
-  guestName: z
-    .string()
-    .trim()
-    .max(100, "Name must be less than 100 characters.")
-    .optional(),
-
-  fullName: z
-    .string()
-    .trim()
-    .min(2, "Full name must be at least 2 characters.")
-    .max(100, "Full name must be less than 100 characters.")
-    .regex(
-      /^[\p{L}\p{M}]+(?:[\s'-][\p{L}\p{M}]+)*$/u,
-      "Please enter a valid full name."
-    ),
-
-  phone: z
-    .string()
-    .trim()
-    .min(1, "Phone number is required.")
-    .transform((val) => val.replace(/[\s-]/g, ""))
-    .refine(
-      (val) => nepaliPhoneRegex.test(val),
-      "Phone number must be a valid 10-digit Nepali mobile number starting with 98 or 97 (e.g., 9841234567 or +977 9841234567)."
-    ),
-
-  line1: z
-    .string()
-    .trim()
-    .min(3, "Street address must be at least 3 characters.")
-    .max(200, "Address is too long."),
-
-  line2: z
-    .string()
-    .trim()
-    .max(100, "Apartment/Suite info must be less than 100 characters.")
-    .optional()
-    .or(z.literal("")),
-
-  city: z
-    .string()
-    .trim()
-    .min(2, "City must be at least 2 characters.")
-    .max(100, "City name is too long.")
-    .regex(
-      /^[\p{L}\p{M}]+(?:[\s'-][\p{L}\p{M}]+)*$/u,
-      "Please enter a valid city name."
-    ),
-
-  state: z
-    .string()
-    .trim()
-    .min(2, "State or province is required.")
-    .max(100, "State/province is too long."),
-
-  country: z
-    .string()
-    .trim()
-    .min(2, "Please enter a country name.")
-    .max(100, "Country name is too long."),
-});
-
-type FormData = z.infer<typeof formSchema>;
+type FormData = CheckoutAddressInput;
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -118,14 +55,25 @@ export default function CheckoutPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "card">("cod");
 
+  const enabledCountries = getEnabledCountries();
+
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(checkoutAddressSchema),
+    defaultValues: {
+      country: enabledCountries[0]?.code || "NP",
+      paymentMethod: "COD",
+    },
     mode: "onChange",
   });
+
+  const selectedCountryCode = watch("country") || "NP";
+  const selectedCountry = getCountryByCode(selectedCountryCode);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -359,15 +307,17 @@ export default function CheckoutPage() {
                     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/70">
                       Phone Number
                     </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[var(--color-navy)]/40">
-                        <Phone className="h-4 w-4" />
+                    <div className="relative flex rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream)]/50 focus-within:bg-white focus-within:ring-2 focus-within:ring-[var(--color-navy)] overflow-hidden transition-all">
+                      <div className="flex items-center px-3.5 bg-[var(--color-sand)]/25 border-r border-[var(--color-sand)] text-xs font-bold text-[var(--color-navy)] select-none">
+                        <span>{selectedCountry?.dialCode || "+977"}</span>
                       </div>
-                      <Input
-                        placeholder="98XXXXXXXX or 97XXXXXXXX"
-                        {...register("phone")}
-                        className="h-12 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream)]/50 pl-10 text-sm focus:bg-white focus:ring-2 focus:ring-[var(--color-navy)]"
-                      />
+                      <div className="relative flex-1">
+                        <Input
+                          placeholder={selectedCountry?.code === "NP" ? "98XXXXXXXX" : "Mobile number"}
+                          {...register("phone")}
+                          className="h-12 border-0 bg-transparent px-3.5 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                        />
+                      </div>
                     </div>
                     {errors.phone && (
                       <p className="mt-1.5 text-xs font-medium text-rose-600">
@@ -409,7 +359,30 @@ export default function CheckoutPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/70">
+                      Country
+                    </label>
+                    <div className="relative">
+                      <select
+                        {...register("country")}
+                        className="h-12 w-full appearance-none rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream)]/50 px-4 text-sm font-medium text-[var(--color-navy)] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-navy)] cursor-pointer"
+                      >
+                        {enabledCountries.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.flag} {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {errors.country && (
+                      <p className="mt-1.5 text-xs font-medium text-rose-600">
+                        {errors.country.message}
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/70">
                       City
@@ -449,21 +422,16 @@ export default function CheckoutPage() {
 
                   <div>
                     <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/70">
-                      Country
+                      Postal Code
                     </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[var(--color-navy)]/40">
-                        <Globe className="h-4 w-4" />
-                      </div>
-                      <Input
-                        placeholder="Country"
-                        {...register("country")}
-                        className="h-12 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream)]/50 pl-10 text-sm focus:bg-white focus:ring-2 focus:ring-[var(--color-navy)]"
-                      />
-                    </div>
-                    {errors.country && (
+                    <Input
+                      placeholder={selectedCountry?.postalCodePlaceholder || "Postal code"}
+                      {...register("postalCode")}
+                      className="h-12 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream)]/50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-[var(--color-navy)]"
+                    />
+                    {errors.postalCode && (
                       <p className="mt-1.5 text-xs font-medium text-rose-600">
-                        {errors.country.message}
+                        {errors.postalCode.message}
                       </p>
                     )}
                   </div>
@@ -485,7 +453,10 @@ export default function CheckoutPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod("cod")}
+                  onClick={() => {
+                    setPaymentMethod("cod");
+                    setValue("paymentMethod", "COD", { shouldValidate: true });
+                  }}
                   className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${paymentMethod === "cod"
                     ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
                     : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
@@ -509,7 +480,10 @@ export default function CheckoutPage() {
 
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod("card")}
+                  onClick={() => {
+                    setPaymentMethod("card");
+                    setValue("paymentMethod", "STRIPE", { shouldValidate: true });
+                  }}
                   className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${paymentMethod === "card"
                     ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
                     : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { ArrowRight, Sparkles, TrendingUp } from "lucide-react";
 import { Hero } from "@/components/layout/Hero";
 import { PerksMarquee } from "@/components/layout/PerksMarquee";
@@ -8,18 +9,18 @@ import { prisma } from "@/lib/db/prisma";
 
 export const revalidate = 60;
 
-const categoryChips = [
-  { name: "All Shoes", href: "/shop" },
-  { name: "Running", href: "/shop?category=running" },
-  { name: "Lifestyle", href: "/shop?category=lifestyle" },
-  { name: "Training", href: "/shop?category=training" },
-  { name: "Basketball", href: "/shop?category=basketball" },
-];
+function formatCategoryName(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
 
 async function executeHomePageData() {
   const fetchAll = async () => {
-    // 1. Fetch New Arrivals & Best Sellers top variants in parallel
-    const [newArrivalsData, topVariants] = await Promise.all([
+    // 1. Fetch New Arrivals, Best Sellers variants, and Available Categories in parallel
+    const [newArrivalsData, topVariants, dbCategories] = await Promise.all([
       prisma.product.findMany({
         where: { isActive: true, deletedAt: null },
         orderBy: { createdAt: "desc" },
@@ -36,6 +37,25 @@ async function executeHomePageData() {
           _sum: { quantity: true },
           orderBy: { _sum: { quantity: "desc" } },
           take: 8,
+        })
+        .catch(() => []),
+      prisma.category
+        .findMany({
+          where: {
+            isActive: true,
+            products: {
+              some: {
+                isActive: true,
+                deletedAt: null,
+              },
+            },
+          },
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
         })
         .catch(() => []),
     ]);
@@ -67,7 +87,23 @@ async function executeHomePageData() {
       bestSellersData = [...bestSellersData, ...fallbacks].slice(0, 8);
     }
 
-    return { newArrivalsData, bestSellersData };
+    // Deduce categories fallback from products if dbCategories query was empty
+    let categories = dbCategories;
+    if (!categories || categories.length === 0) {
+      const map = new Map<string, { id: string; name: string; slug: string }>();
+      for (const p of newArrivalsData) {
+        if (p.category && p.category.isActive && !map.has(p.category.slug)) {
+          map.set(p.category.slug, {
+            id: p.category.id,
+            name: p.category.name,
+            slug: p.category.slug,
+          });
+        }
+      }
+      categories = Array.from(map.values());
+    }
+
+    return { newArrivalsData, bestSellersData, categories };
   };
 
   try {
@@ -79,13 +115,13 @@ async function executeHomePageData() {
       return await fetchAll();
     } catch (retryErr) {
       console.error("[HomePage DB] Retry failed:", retryErr);
-      return { newArrivalsData: [], bestSellersData: [] };
+      return { newArrivalsData: [], bestSellersData: [], categories: [] };
     }
   }
 }
 
 export default async function HomePage() {
-  const { newArrivalsData, bestSellersData } = await executeHomePageData();
+  const { newArrivalsData, bestSellersData, categories } = await executeHomePageData();
 
   const formatProduct = (p: typeof newArrivalsData[number]) => ({
     id: p.id,
@@ -102,20 +138,28 @@ export default async function HomePage() {
   const newArrivals = newArrivalsData.map(formatProduct);
   const bestSellers = bestSellersData.map(formatProduct);
 
+  const categoryChips = [
+    { name: "All Shoes", href: "/shop" },
+    ...categories.map((c) => ({
+      name: formatCategoryName(c.name),
+      href: `/shop?category=${encodeURIComponent(c.slug)}`,
+    })),
+  ];
+
   return (
     <>
       <Hero />
 
       {/* Category quick-filter chips bar */}
       <section className="border-b border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60 py-3.5 px-6 overflow-x-auto no-scrollbar">
-        <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 sm:gap-3 text-xs font-semibold">
+        <div className="mx-auto flex max-w-7xl items-center justify-start sm:justify-center gap-2 sm:gap-3 text-xs font-semibold">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50 mr-1 hidden sm:inline">
             Explore Categories:
           </span>
           {categoryChips.map((chip) => (
             <Link
               key={chip.name}
-              href={chip.href}
+              href={chip.href as Route}
               className="shrink-0 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream)] px-4 py-1.5 text-[var(--color-navy)] transition-all duration-200 hover:border-[var(--color-navy)]/40 hover:bg-white hover:shadow-xs active:scale-95"
             >
               {chip.name}
