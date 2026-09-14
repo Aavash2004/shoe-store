@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/stores/cart-store";
@@ -18,16 +17,15 @@ import {
   ShieldCheck,
   User,
   Mail,
-  Phone,
-  MapPin,
   Building,
-  Globe,
+  MapPin,
   CheckCircle2,
   ChevronRight,
   Sparkles,
   CreditCard,
   RotateCcw,
   BadgeCheck,
+  Banknote,
 } from "lucide-react";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
 
@@ -39,21 +37,31 @@ import {
   getEnabledCountries,
   getCountryByCode,
 } from "@/lib/constants/countries";
+import { CURRENCIES, formatCurrency } from "@/lib/constants/currencies";
+import { calculateShipping } from "@/lib/checkout/shipping";
 
 type FormData = CheckoutAddressInput;
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const isLoggedIn = status === "authenticated";
   const localItems = useCartStore((state) => state.items);
   const clearLocalCart = useCartStore((state) => state.clearCart);
+
+  // Client session-stable idempotency key (persists across re-renders and form edits)
+  const idempotencyKeyRef = useRef<string>("");
+  if (!idempotencyKeyRef.current) {
+    idempotencyKeyRef.current =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `idem_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+  }
 
   const [dbItems, setDbItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "card">("cod");
 
   const enabledCountries = getEnabledCountries();
 
@@ -74,6 +82,29 @@ export default function CheckoutPage() {
 
   const selectedCountryCode = watch("country") || "NP";
   const selectedCountry = getCountryByCode(selectedCountryCode);
+  const currentPaymentMethod = watch("paymentMethod") || "COD";
+
+  const currency = selectedCountry?.currency || "NPR";
+  const currencyConfig = CURRENCIES[currency] || CURRENCIES.NPR;
+  const exchangeRate = currencyConfig.rateToBaseUSD || 1.0;
+
+  // Price conversion helper ensuring Display = Charge
+  const toLocalPrice = (usdPrice: number) => {
+    const converted = usdPrice * exchangeRate;
+    return currency === "NPR"
+      ? Math.round(converted)
+      : Math.round(converted * 100) / 100;
+  };
+
+  // Synchronize payment method when country changes
+  useEffect(() => {
+    if (selectedCountry) {
+      const allowed = selectedCountry.allowedPaymentMethods;
+      if (!allowed.includes(currentPaymentMethod)) {
+        setValue("paymentMethod", allowed[0] || "COD", { shouldValidate: true });
+      }
+    }
+  }, [selectedCountryCode, selectedCountry, currentPaymentMethod, setValue]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -83,29 +114,30 @@ export default function CheckoutPage() {
     }
   }, [isLoggedIn]);
 
-  const items = isLoggedIn
-    ? dbItems.map((i) => ({
-      variantId: i.variant.id,
+  const items = (isLoggedIn ? dbItems : localItems).map((i) => {
+    const rawUsdPrice = Number(isLoggedIn ? i.variant?.price : i.price) || 0;
+    const localPrice = toLocalPrice(rawUsdPrice);
+    return {
+      variantId: isLoggedIn ? i.variant.id : i.variantId,
       quantity: i.quantity,
-      price: Number(i.variant.price),
-      productName: i.variant.product.name,
-      image: i.variant.product.images?.[0]?.url || "/images/Shoes/s05.avif",
-      size: i.variant.size,
-      color: i.variant.color,
-    }))
-    : localItems.map((i) => ({
-      variantId: i.variantId,
-      quantity: i.quantity,
-      price: i.price,
-      productName: i.productName,
-      image: i.image || "/images/Shoes/s05.avif",
-      size: i.size,
-      color: i.color,
-    }));
+      usdPrice: rawUsdPrice,
+      localPrice,
+      productName: isLoggedIn ? i.variant.product.name : i.productName,
+      image: isLoggedIn
+        ? i.variant.product.images?.[0]?.url || "/images/Shoes/s05.avif"
+        : i.image || "/images/Shoes/s05.avif",
+      size: isLoggedIn ? i.variant.size : i.size,
+      color: isLoggedIn ? i.variant.color : i.color,
+    };
+  });
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  const freeShippingThreshold = 75;
-  const shipping = subtotal >= freeShippingThreshold ? 0 : 8.5;
+  const subtotal = items.reduce(
+    (sum, i) => sum + i.localPrice * i.quantity,
+    0
+  );
+
+  const shippingQuote = calculateShipping(subtotal, selectedCountryCode);
+  const shipping = shippingQuote.shippingCost;
   const discountAmount = appliedCoupon?.discountAmount ?? 0;
   const total = Math.max(0, subtotal + shipping - discountAmount);
 
@@ -115,33 +147,43 @@ export default function CheckoutPage() {
 
     const guestNameToSend = data.guestName?.trim() || data.fullName?.trim();
 
-    const res = await fetch("/api/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...data,
-        guestEmail: isLoggedIn ? undefined : data.guestEmail,
-        guestName: isLoggedIn ? undefined : guestNameToSend,
-        items: items.map((i) => ({
-          variantId: i.variantId,
-          quantity: i.quantity,
-        })),
-      }),
-    });
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKeyRef.current,
+        },
+        body: JSON.stringify({
+          ...data,
+          idempotencyKey: idempotencyKeyRef.current,
+          couponCode: appliedCoupon?.code,
+          guestEmail: isLoggedIn ? undefined : data.guestEmail,
+          guestName: isLoggedIn ? undefined : guestNameToSend,
+          items: items.map((i) => ({
+            variantId: i.variantId,
+            quantity: i.quantity,
+          })),
+        }),
+      });
 
-    const result = await res.json();
-    setLoading(false);
+      const result = await res.json();
+      setLoading(false);
 
-    if (!res.ok) {
-      setError(result.error ?? "Checkout failed");
-      return;
+      if (!res.ok) {
+        setError(result.error ?? "Checkout could not be completed. Please try again.");
+        return;
+      }
+
+      clearLocalCart();
+      setDbItems([]);
+      window.dispatchEvent(new Event("cart-updated"));
+
+      router.push(`/checkout/success?order=${result.order.orderNumber}`);
+    } catch (err: any) {
+      setLoading(false);
+      setError("Network or server connection failed. Please check your connection.");
     }
-
-    clearLocalCart();
-    setDbItems([]);
-    window.dispatchEvent(new Event("cart-updated"));
-
-    router.push(`/checkout/success?order=${result.order.orderNumber}`);
   }
 
   function onInvalid(errors: any) {
@@ -203,7 +245,6 @@ export default function CheckoutPage() {
             <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-[var(--color-navy)] md:text-4xl">
               Express Checkout
             </h1>
-
           </div>
         </div>
 
@@ -274,9 +315,9 @@ export default function CheckoutPage() {
                     Shipping Address
                   </h2>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-[var(--color-navy)]/60">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-navy)]/70">
                   <Truck className="h-4 w-4 text-[var(--color-navy)]" />
-                  <span>Doorstep Delivery</span>
+                  <span>{shippingQuote.carrierName}</span>
                 </div>
               </div>
 
@@ -336,7 +377,7 @@ export default function CheckoutPage() {
                       <MapPin className="h-4 w-4" />
                     </div>
                     <Input
-                      placeholder="123 Main Street"
+                      placeholder="Street address and building"
                       {...register("line1")}
                       className="h-12 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream)]/50 pl-10 text-sm focus:bg-white focus:ring-2 focus:ring-[var(--color-navy)]"
                     />
@@ -451,60 +492,77 @@ export default function CheckoutPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPaymentMethod("cod");
-                    setValue("paymentMethod", "COD", { shouldValidate: true });
-                  }}
-                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${paymentMethod === "cod"
-                    ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
-                    : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
+                {selectedCountry?.allowedPaymentMethods.includes("COD") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue("paymentMethod", "COD", { shouldValidate: true });
+                    }}
+                    className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
+                      currentPaymentMethod === "COD"
+                        ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
+                        : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
                     }`}
-                >
-                  <CheckCircle2
-                    className={`mt-0.5 h-5 w-5 shrink-0 ${paymentMethod === "cod"
-                      ? "text-[var(--color-navy)]"
-                      : "text-gray-300"
+                  >
+                    <CheckCircle2
+                      className={`mt-0.5 h-5 w-5 shrink-0 ${
+                        currentPaymentMethod === "COD"
+                          ? "text-[var(--color-navy)]"
+                          : "text-gray-300"
                       }`}
-                  />
-                  <div>
-                    <p className="font-bold text-sm text-[var(--color-navy)]">
-                      Cash on Delivery (COD)
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--color-navy)]/60">
-                      Pay with cash upon package delivery.
-                    </p>
-                  </div>
-                </button>
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Banknote className="h-4 w-4 text-[var(--color-navy)]" />
+                        <p className="font-bold text-sm text-[var(--color-navy)]">
+                          Cash on Delivery (COD)
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--color-navy)]/60">
+                        Pay with cash upon domestic doorstep package delivery.
+                      </p>
+                    </div>
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPaymentMethod("card");
-                    setValue("paymentMethod", "STRIPE", { shouldValidate: true });
-                  }}
-                  className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${paymentMethod === "card"
-                    ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
-                    : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
+                {selectedCountry?.allowedPaymentMethods.includes("STRIPE") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue("paymentMethod", "STRIPE", { shouldValidate: true });
+                    }}
+                    className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
+                      currentPaymentMethod === "STRIPE"
+                        ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
+                        : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
                     }`}
-                >
-                  <CreditCard
-                    className={`mt-0.5 h-5 w-5 shrink-0 ${paymentMethod === "card"
-                      ? "text-[var(--color-navy)]"
-                      : "text-gray-400"
+                  >
+                    <CreditCard
+                      className={`mt-0.5 h-5 w-5 shrink-0 ${
+                        currentPaymentMethod === "STRIPE"
+                          ? "text-[var(--color-navy)]"
+                          : "text-gray-400"
                       }`}
-                  />
-                  <div>
-                    <p className="font-bold text-sm text-[var(--color-navy)]">
-                      Credit / Debit Card
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--color-navy)]/60">
-                      Standard card processing upon order validation.
-                    </p>
-                  </div>
-                </button>
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-[var(--color-navy)]" />
+                        <p className="font-bold text-sm text-[var(--color-navy)]">
+                          Credit / Debit Card
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--color-navy)]/60">
+                        Secure card processing powered by Stripe.
+                      </p>
+                    </div>
+                  </button>
+                )}
               </div>
+              {errors.paymentMethod && (
+                <p className="mt-2 text-xs font-medium text-rose-600">
+                  {errors.paymentMethod.message}
+                </p>
+              )}
             </section>
 
             {error && (
@@ -529,7 +587,9 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     <ShieldCheck className="h-5 w-5" />
-                    <span>Complete Order · ${total.toFixed(2)}</span>
+                    <span>
+                      Complete Order · {formatCurrency(total, currency)}
+                    </span>
                   </>
                 )}
               </Button>
@@ -563,7 +623,7 @@ export default function CheckoutPage() {
                     </span>
                   ) : (
                     <span className="text-[var(--color-navy)]/70">
-                      ${(freeShippingThreshold - subtotal).toFixed(2)} away
+                      {formatCurrency(shippingQuote.amountNeededForFree, currency)} away
                     </span>
                   )}
                 </div>
@@ -571,10 +631,7 @@ export default function CheckoutPage() {
                   <div
                     className="h-full bg-emerald-600 transition-all duration-500 rounded-full"
                     style={{
-                      width: `${Math.min(
-                        100,
-                        (subtotal / freeShippingThreshold) * 100
-                      )}%`,
+                      width: `${shippingQuote.thresholdProgress}%`,
                     }}
                   />
                 </div>
@@ -618,7 +675,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <p className="font-bold text-sm text-[var(--color-navy)] shrink-0">
-                      ${(item.price * item.quantity).toFixed(2)}
+                      {formatCurrency(item.localPrice * item.quantity, currency)}
                     </p>
                   </div>
                 ))}
@@ -641,14 +698,14 @@ export default function CheckoutPage() {
                 <div className="flex justify-between text-[var(--color-navy)]/70">
                   <span>Subtotal</span>
                   <span className="font-bold text-[var(--color-navy)]">
-                    ${subtotal.toFixed(2)}
+                    {formatCurrency(subtotal, currency)}
                   </span>
                 </div>
 
                 {appliedCoupon && (
                   <div className="flex justify-between text-xs font-bold text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
                     <span>Discount ({appliedCoupon.code})</span>
-                    <span>-${appliedCoupon.discountAmount.toFixed(2)}</span>
+                    <span>-{formatCurrency(appliedCoupon.discountAmount, currency)}</span>
                   </div>
                 )}
 
@@ -661,11 +718,18 @@ export default function CheckoutPage() {
                       </span>
                     ) : (
                       <span className="font-bold text-[var(--color-navy)]">
-                        ${shipping.toFixed(2)}
+                        {formatCurrency(shipping, currency)}
                       </span>
                     )}
                   </span>
                 </div>
+
+                {selectedCountryCode === "NP" && (
+                  <div className="flex justify-between text-xs text-[var(--color-navy)]/50 pt-1">
+                    <span>Includes 13% Nepal VAT</span>
+                    <span>{formatCurrency(Math.round(subtotal - subtotal / 1.13), currency)}</span>
+                  </div>
+                )}
               </div>
 
               {/* Grand Total */}
@@ -675,11 +739,11 @@ export default function CheckoutPage() {
                     Total Due
                   </p>
                   <p className="text-[10px] font-normal text-[var(--color-navy)]/50">
-                    Includes taxes & shipping
+                    {selectedCountryCode === "NP" ? "VAT included · Payable via COD" : "Taxes & shipping included"}
                   </p>
                 </div>
                 <span className="font-mono text-2xl font-black tracking-tight text-[var(--color-navy)]">
-                  ${total.toFixed(2)}
+                  {formatCurrency(total, currency)}
                 </span>
               </div>
 

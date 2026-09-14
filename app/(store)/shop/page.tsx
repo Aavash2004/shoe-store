@@ -189,7 +189,7 @@ export default async function ShopPage({
 
             {q && (
               <Link
-                href={buildHref("q")}
+                href={buildHref("q") as any}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Query: &ldquo;{q}&rdquo;</span>
@@ -199,7 +199,7 @@ export default async function ShopPage({
 
             {category && (
               <Link
-                href={buildHref("category")}
+                href={buildHref("category") as any}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Category: {category}</span>
@@ -209,7 +209,7 @@ export default async function ShopPage({
 
             {size && (
               <Link
-                href={buildHref("size")}
+                href={buildHref("size") as any}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Size: {size}</span>
@@ -219,7 +219,7 @@ export default async function ShopPage({
 
             {color && (
               <Link
-                href={buildHref("color")}
+                href={buildHref("color") as any}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Color: {color}</span>

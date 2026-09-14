@@ -56,7 +56,7 @@ function ShopFiltersInner({
     if (draftColor) params.set("color", draftColor);
     else params.delete("color");
 
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    router.push(`${pathname}?${params.toString()}` as any, { scroll: false });
     setDrawerOpen(false);
   };
 
@@ -73,7 +73,7 @@ function ShopFiltersInner({
     } else {
       params.set("sort", value);
     }
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    router.push(`${pathname}?${params.toString()}` as any, { scroll: false });
   };
 
   return (

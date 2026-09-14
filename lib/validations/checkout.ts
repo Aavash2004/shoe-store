@@ -106,6 +106,8 @@ export const checkoutAddressSchema = z
       .string()
       .trim()
       .min(1, "Payment method is required."),
+
+    couponCode: z.string().trim().optional().or(z.literal("")),
   })
   .superRefine((data, ctx) => {
     // 1. Validate Phone Number with libphonenumber-js
@@ -156,6 +158,7 @@ export const checkoutAddressSchema = z
  */
 export const checkoutSchema = checkoutAddressSchema.and(
   z.object({
+    idempotencyKey: z.string().trim().min(1, "Idempotency key is required").optional(),
     items: z
       .array(
         z.object({
