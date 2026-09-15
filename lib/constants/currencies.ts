@@ -40,7 +40,7 @@ export const CURRENCIES: Record<string, CurrencyConfig> = {
 const DEFAULT_LOCALES: Record<string, string> = {
   USD: "en-US",
   GBP: "en-GB",
-  NPR: "ne-NP",
+  NPR: "en-US", // Standardize on English numerals and prefix for NPR
 };
 
 /**
@@ -56,10 +56,18 @@ export function formatCurrency(
   const targetLocale = locale || DEFAULT_LOCALES[upperCurrency] || "en-US";
 
   try {
+    if (upperCurrency === "NPR") {
+      // Formats as "NPR 12,000" in English numerals rather than Devnagari script
+      const formattedNumber = new Intl.NumberFormat(targetLocale, {
+        maximumFractionDigits: 0,
+      }).format(amount);
+      return `NPR ${formattedNumber}`;
+    }
+
     return new Intl.NumberFormat(targetLocale, {
       style: "currency",
       currency: upperCurrency,
-      minimumFractionDigits: upperCurrency === "NPR" ? 0 : 2,
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
   } catch (err) {
