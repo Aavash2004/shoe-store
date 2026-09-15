@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useCartStore } from "@/stores/cart-store";
 import { Button } from "@/components/ui/button";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
+import { debounce, type DebouncedFunction } from "@/lib/utils/debounce";
 
 type DbCartItem = {
   variant: {
@@ -36,12 +37,21 @@ export default function CartPage() {
   const [loading, setLoading] = useState(isLoggedIn);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
-  const pendingUpdatesRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  // Per-variant debounce instance map guaranteeing independent timers per line item
+  const debouncedSyncMapRef = useRef<Map<string, DebouncedFunction<(quantity: number) => void>>>(
+    new Map()
+  );
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      pendingUpdatesRef.current.forEach((timer) => clearTimeout(timer));
-      pendingUpdatesRef.current.clear();
+      isMountedRef.current = false;
+      // Flush all pending debounced quantity updates on unmount so changes commit to DB
+      debouncedSyncMapRef.current.forEach((debouncedFn) => {
+        debouncedFn.flush();
+      });
+      debouncedSyncMapRef.current.clear();
     };
   }, []);
 
@@ -55,40 +65,49 @@ export default function CartPage() {
   }, [isLoggedIn]);
 
   function debouncedSyncQuantity(variantId: string, quantity: number) {
-    const existingTimer = pendingUpdatesRef.current.get(variantId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
+    let debouncedFn = debouncedSyncMapRef.current.get(variantId);
+
+    if (!debouncedFn) {
+      debouncedFn = debounce(async (qty: number) => {
+        try {
+          const res = await fetch("/api/cart", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ variantId, quantity: qty }),
+          });
+
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            if (isMountedRef.current) {
+              window.dispatchEvent(
+                new CustomEvent("show-toast", {
+                  detail: data.error || "Could not update quantity",
+                })
+              );
+              fetch("/api/cart")
+                .then((r) => r.json())
+                .then((d) => {
+                  if (isMountedRef.current) {
+                    setDbItems(d.items ?? []);
+                  }
+                });
+            }
+          } else {
+            window.dispatchEvent(new Event("cart-updated"));
+          }
+        } catch {
+          if (isMountedRef.current) {
+            window.dispatchEvent(
+              new CustomEvent("show-toast", { detail: "Network error updating cart" })
+            );
+          }
+        }
+      }, 400);
+
+      debouncedSyncMapRef.current.set(variantId, debouncedFn);
     }
 
-    const timer = setTimeout(async () => {
-      pendingUpdatesRef.current.delete(variantId);
-      try {
-        const res = await fetch("/api/cart", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ variantId, quantity }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          window.dispatchEvent(
-            new CustomEvent("show-toast", {
-              detail: data.error || "Could not update quantity",
-            })
-          );
-          fetch("/api/cart")
-            .then((r) => r.json())
-            .then((d) => setDbItems(d.items ?? []));
-        } else {
-          window.dispatchEvent(new Event("cart-updated"));
-        }
-      } catch {
-        window.dispatchEvent(
-          new CustomEvent("show-toast", { detail: "Network error updating cart" })
-        );
-      }
-    }, 400);
-
-    pendingUpdatesRef.current.set(variantId, timer);
+    debouncedFn(quantity);
   }
 
   function handleQuantityChange(variantId: string, newQty: number, maxStock: number) {
@@ -123,10 +142,10 @@ export default function CartPage() {
   }
 
   async function handleDbRemove(variantId: string) {
-    const timer = pendingUpdatesRef.current.get(variantId);
-    if (timer) {
-      clearTimeout(timer);
-      pendingUpdatesRef.current.delete(variantId);
+    const debouncedFn = debouncedSyncMapRef.current.get(variantId);
+    if (debouncedFn) {
+      debouncedFn.cancel();
+      debouncedSyncMapRef.current.delete(variantId);
     }
 
     await fetch(`/api/cart?variantId=${variantId}`, { method: "DELETE" });

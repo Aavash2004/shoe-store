@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
+import { useDebouncedValue } from "@/hooks/use-debounce";
+import { debounce } from "@/lib/utils/debounce";
 
 import type { Route } from "next";
 
@@ -50,13 +52,16 @@ function HeaderInner() {
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
 
+  // Debounce search query changes by 200ms to avoid unnecessary network requests while typing
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
+
   useEffect(() => {
     setSearchQuery(searchParams.get("q") || "");
   }, [searchParams]);
 
-  // Fast 80ms debounced search autocomplete fetch with instant 0ms memory cache
+  // Reactive autocomplete suggestions fetch driven by debounced search query with 0ms memory cache
   useEffect(() => {
-    const trimmed = searchQuery.trim().toLowerCase();
+    const trimmed = debouncedSearchQuery.trim().toLowerCase();
     if (trimmed.length < 1) {
       setSuggestions([]);
       setShowDropdown(false);
@@ -70,24 +75,31 @@ function HeaderInner() {
       return;
     }
 
-    const timer = setTimeout(async () => {
-      setIsFetchingSuggestions(true);
-      try {
-        const res = await fetch(`/api/products/search?q=${encodeURIComponent(trimmed)}`);
-        const data = await res.json();
+    let isCancelled = false;
+    setIsFetchingSuggestions(true);
+
+    fetch(`/api/products/search?q=${encodeURIComponent(trimmed)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (isCancelled) return;
         const results = data.suggestions ?? [];
         searchCacheRef.current.set(trimmed, results);
         setSuggestions(results);
         setShowDropdown(true);
-      } catch (err) {
+      })
+      .catch((err) => {
         console.error("Autocomplete fetch error:", err);
-      } finally {
-        setIsFetchingSuggestions(false);
-      }
-    }, 80);
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsFetchingSuggestions(false);
+        }
+      });
 
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [debouncedSearchQuery]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -139,8 +151,6 @@ function HeaderInner() {
     // Fetch initial wishlist state
     useWishlistStore.getState().fetchWishlist();
 
-    let debounceTimer: NodeJS.Timeout | null = null;
-
     function queryCount() {
       fetch("/api/cart")
         .then((res) => res.json())
@@ -154,16 +164,13 @@ function HeaderInner() {
         .catch(() => {});
     }
 
-    function onCartUpdated() {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(queryCount, 300);
-    }
+    const debouncedQueryCount = debounce(queryCount, 300);
 
     queryCount();
-    window.addEventListener("cart-updated", onCartUpdated);
+    window.addEventListener("cart-updated", debouncedQueryCount);
     return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      window.removeEventListener("cart-updated", onCartUpdated);
+      debouncedQueryCount.cancel();
+      window.removeEventListener("cart-updated", debouncedQueryCount);
     };
   }, [isLoggedIn]);
 
