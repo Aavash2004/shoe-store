@@ -19,6 +19,14 @@ export const CURRENCIES: Record<string, CurrencyConfig> = {
     isCodAllowed: false,
     rateToBaseUSD: 1.0,
   },
+  EUR: {
+    code: "EUR",
+    name: "Euro",
+    symbol: "€",
+    isStripeChargeable: true,
+    isCodAllowed: false,
+    rateToBaseUSD: 0.92, // Approximate EUR/USD peg
+  },
   GBP: {
     code: "GBP",
     name: "British Pound",
@@ -39,9 +47,30 @@ export const CURRENCIES: Record<string, CurrencyConfig> = {
 
 const DEFAULT_LOCALES: Record<string, string> = {
   USD: "en-US",
+  EUR: "de-DE",
   GBP: "en-GB",
   NPR: "en-US", // Standardize on English numerals and prefix for NPR
 };
+
+/**
+ * Convert an amount between currencies using base USD exchange rates.
+ */
+export function convertCurrency(
+  amount: number,
+  fromCurrency: string = "USD",
+  toCurrency: string = "USD"
+): number {
+  const from = fromCurrency.toUpperCase();
+  const to = toCurrency.toUpperCase();
+  if (from === to || !amount) return amount;
+
+  const fromRate = CURRENCIES[from]?.rateToBaseUSD ?? 1.0;
+  const toRate = CURRENCIES[to]?.rateToBaseUSD ?? 1.0;
+
+  // Convert from source currency to base USD, then from USD to target currency
+  const inUSD = amount / fromRate;
+  return inUSD * toRate;
+}
 
 /**
  * Standardized currency formatting utility using Intl.NumberFormat.
