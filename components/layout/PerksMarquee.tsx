@@ -39,7 +39,7 @@ export function PerksMarquee() {
             return (
               <div
                 key={index}
-                className="flex items-center gap-2 whitespace-nowrap cursor-pointer hover:opacity-85 transition-opacity"
+                className="flex items-center gap-2 whitespace-nowrap hover:opacity-85 transition-opacity"
               >
                 <Icon className="h-3.5 w-3.5 text-[#89B4D9] shrink-0" />
                 <span className="text-xs font-bold uppercase tracking-wider text-[#F5F2EB]">

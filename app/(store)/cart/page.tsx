@@ -8,6 +8,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { Button } from "@/components/ui/button";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
 import { debounce, type DebouncedFunction } from "@/lib/utils/debounce";
+import { Price } from "@/components/ui/Price";
 
 type DbCartItem = {
   variant: {
@@ -217,7 +218,7 @@ export default function CartPage() {
               <p className="mt-0.5 text-xs text-[var(--color-navy)]/60">
                 {item.color} · Size {item.size}
               </p>
-              <p className="mt-1 text-xs font-bold text-[var(--color-navy)]">${item.price.toFixed(2)}</p>
+              <p className="mt-1 text-xs font-bold text-[var(--color-navy)]"><Price amount={item.price} /></p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -287,19 +288,19 @@ export default function CartPage() {
         <div className="space-y-3 rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-6 text-xs">
           <div className="flex justify-between text-[var(--color-navy)]/70">
             <span>Subtotal</span>
-            <span className="font-semibold">${subtotal.toFixed(2)}</span>
+            <span className="font-semibold"><Price amount={subtotal} /></span>
           </div>
 
           {appliedCoupon && (
             <div className="flex justify-between text-emerald-700 font-medium">
               <span>Promo Discount ({appliedCoupon.code})</span>
-              <span>-${discount.toFixed(2)}</span>
+              <span>-<Price amount={discount} /></span>
             </div>
           )}
 
           <div className="flex justify-between border-t border-[var(--color-sand)] pt-3 text-base font-bold text-[var(--color-navy)]">
             <span>Estimated Total</span>
-            <span>${finalTotal.toFixed(2)}</span>
+            <span><Price amount={finalTotal} /></span>
           </div>
 
           <Button size="lg" className="w-full mt-3 rounded-xl h-11 bg-[var(--color-navy)] text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 font-semibold" asChild>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { PlaceholderProduct } from "@/types";
 import { WishlistButton } from "@/components/product/WishlistButton";
+import { Price } from "@/components/ui/Price";
 
 export function ProductCard({ product }: { product: PlaceholderProduct }) {
   const hasValidBrand =
@@ -47,9 +48,9 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
           {product.name}
         </h3>
 
-        <p className="text-xs sm:text-sm font-semibold text-[var(--color-navy)] pt-0.5">
-          ${product.price.toFixed(2)}
-        </p>
+        <div className="text-xs sm:text-sm font-semibold text-[var(--color-navy)] pt-0.5">
+          <Price amount={product.price} />
+        </div>
       </div>
     </Link>
   );

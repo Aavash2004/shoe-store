@@ -12,6 +12,8 @@ import {
   SizeSystem,
   getDualDisplaySize,
 } from "@/lib/constants/sizing";
+import { Price } from "@/components/ui/Price";
+import { CurrencySwitcher } from "@/components/layout/CurrencySwitcher";
 
 type Variant = {
   id: string;
@@ -165,9 +167,18 @@ export function ProductDetailInteractive({
         {product.name}
       </h1>
 
-      <p className="mt-4 text-2xl font-medium tracking-tight text-[var(--color-navy)]">
-        ${product.price.toFixed(2)}
-      </p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <Price
+            amount={matchedVariant ? matchedVariant.price : product.price}
+            className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-navy)]"
+          />
+        </div>
+        <div className="flex items-center gap-1.5" data-testid="product-pricing-currency-switcher">
+          <span className="text-xs font-semibold text-[var(--color-navy)]/60">Currency:</span>
+          <CurrencySwitcher variant="dropdown" />
+        </div>
+      </div>
 
       <p className="mt-6 max-w-md text-[15px] leading-relaxed text-[var(--color-navy)]/70">
         {product.description}

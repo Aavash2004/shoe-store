@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Heart, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCartStore } from "@/stores/cart-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
+import { Price } from "@/components/ui/Price";
 
 interface WishlistProduct {
   id: string;
@@ -181,9 +182,9 @@ export default function WishlistPage() {
                   >
                     {item.name}
                   </Link>
-                  <p className="text-sm font-semibold text-[var(--color-navy)] mt-2">
-                    ${item.price.toFixed(2)}
-                  </p>
+                  <div className="text-sm font-semibold text-[var(--color-navy)] mt-2">
+                    <Price amount={item.price} />
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-[var(--color-sand)]/60 flex items-center gap-2">

@@ -63,15 +63,30 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
         data: { orderId: validOrderId, status: validStatus, note: validNote || null },
     });
 
-    await prisma.adminActivityLog.create({
-        data: {
-            adminId: (session.user as any).id,
-            action: "CHANGED_ORDER_STATUS",
-            entity: "Order",
-            entityId: validOrderId,
-            metadata: { newStatus: validStatus },
+    // Safely resolve admin user to guarantee foreign key integrity
+    const sessionUserId = (session.user as any)?.id;
+    const sessionEmail = session.user?.email?.toLowerCase();
+    const adminUser = await prisma.user.findFirst({
+        where: {
+            OR: [
+                ...(sessionUserId ? [{ id: sessionUserId }] : []),
+                ...(sessionEmail ? [{ email: sessionEmail }] : []),
+            ],
         },
+        select: { id: true },
     });
+
+    if (adminUser) {
+        await prisma.adminActivityLog.create({
+            data: {
+                adminId: adminUser.id,
+                action: "CHANGED_ORDER_STATUS",
+                entity: "Order",
+                entityId: validOrderId,
+                metadata: { newStatus: validStatus },
+            },
+        });
+    }
 
     revalidatePath(`/admin/orders/${validOrderId}`);
     revalidatePath("/admin/orders");

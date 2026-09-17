@@ -11,6 +11,8 @@ import { useCartStore } from "@/stores/cart-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
 import { useDebouncedValue } from "@/hooks/use-debounce";
 import { debounce } from "@/lib/utils/debounce";
+import { CurrencySwitcher } from "@/components/layout/CurrencySwitcher";
+import { Price } from "@/components/ui/Price";
 
 import type { Route } from "next";
 
@@ -321,9 +323,7 @@ function HeaderInner() {
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-xs font-bold text-[var(--color-navy)]">
-                            ${item.price.toFixed(2)}
-                          </span>
+                          <Price amount={item.price} className="text-xs font-bold text-[var(--color-navy)]" />
                         </div>
                       </Link>
                     ))
@@ -349,6 +349,9 @@ function HeaderInner() {
               </div>
             )}
           </div>
+
+          {/* Desktop Currency Switcher */}
+          <CurrencySwitcher variant="dropdown" className="hidden sm:inline-block" />
 
           {/* Wishlist */}
           <Button
@@ -514,6 +517,16 @@ function HeaderInner() {
                   {session?.user ? session.user.name || "My Portal" : "Join or Log in"}
                 </span>
               </Link>
+            </div>
+          </div>
+
+          {/* Currency Selection for Mobile */}
+          <div className="pt-2 border-t border-[var(--color-sand)]/60">
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/40">
+              Currency
+            </p>
+            <div className="px-3 pb-2">
+              <CurrencySwitcher variant="segmented" />
             </div>
           </div>
         </div>
