@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
       {
         amount: amountInSmallestUnit,
         currency: pricing.currency.toLowerCase(),
-        automatic_payment_methods: { enabled: true },
+        payment_method_types: ["card"],
         metadata: {
           idempotencyKey,
           guestEmail: data.guestEmail || "",

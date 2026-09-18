@@ -69,9 +69,17 @@ export function StripePaymentForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-8">
       <div className="rounded-xl border border-[var(--color-sand)] bg-white p-4 shadow-xs">
-        <PaymentElement options={{ layout: "tabs" }} />
+        <PaymentElement
+          options={{
+            layout: "tabs",
+            wallets: {
+              applePay: "never",
+              googlePay: "never",
+            },
+          }}
+        />
       </div>
 
       {errorMessage && (
