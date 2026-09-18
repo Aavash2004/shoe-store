@@ -200,7 +200,40 @@ export default function CheckoutPage() {
         });
         return;
       }
-
+      if (data.paymentMethod === "KHALTI") {
+        const res = await fetch("/api/checkout/khalti/initiate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKeyRef.current,
+          },
+          body: JSON.stringify({
+            ...data,
+            paymentMethod: "KHALTI",
+            idempotencyKey: idempotencyKeyRef.current,
+            couponCode: appliedCoupon?.code,
+            guestEmail: isLoggedIn ? undefined : data.guestEmail,
+            guestName: isLoggedIn ? undefined : guestNameToSend,
+            items: items.map((i) => ({
+              variantId: i.variantId,
+              quantity: i.quantity,
+            })),
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          setLoading(false);
+          setError(result.error ?? "Failed to initialize Khalti payment.");
+          return;
+        }
+        // Clear local cart before redirecting
+        clearLocalCart();
+        setDbItems([]);
+        window.dispatchEvent(new Event("cart-updated"));
+        // Redirect browser to Khalti payment gateway
+        window.location.href = result.paymentUrl;
+        return;
+      }
       // COD payment flow
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -246,8 +279,7 @@ export default function CheckoutPage() {
     const firstKey = errorKeys[0];
 
     setError(
-      `Please correct the ${errorCount} highlighted error${
-        errorCount > 1 ? "s" : ""
+      `Please correct the ${errorCount} highlighted error${errorCount > 1 ? "s" : ""
       } below before completing your order.`
     );
 
@@ -552,18 +584,16 @@ export default function CheckoutPage() {
                     onClick={() => {
                       setValue("paymentMethod", "COD", { shouldValidate: true });
                     }}
-                    className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-                      currentPaymentMethod === "COD"
+                    className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${currentPaymentMethod === "COD"
                         ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
                         : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
-                    }`}
+                      }`}
                   >
                     <CheckCircle2
-                      className={`mt-0.5 h-5 w-5 shrink-0 ${
-                        currentPaymentMethod === "COD"
+                      className={`mt-0.5 h-5 w-5 shrink-0 ${currentPaymentMethod === "COD"
                           ? "text-[var(--color-navy)]"
                           : "text-gray-300"
-                      }`}
+                        }`}
                     />
                     <div>
                       <div className="flex items-center gap-2">
@@ -585,18 +615,16 @@ export default function CheckoutPage() {
                     onClick={() => {
                       setValue("paymentMethod", "STRIPE", { shouldValidate: true });
                     }}
-                    className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-                      currentPaymentMethod === "STRIPE"
+                    className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${currentPaymentMethod === "STRIPE"
                         ? "border-[var(--color-navy)] bg-[var(--color-cream)]/80 ring-2 ring-[var(--color-navy)]/20 shadow-xs"
                         : "border-[var(--color-sand)] bg-white hover:border-[var(--color-navy)]/40"
-                    }`}
+                      }`}
                   >
                     <CreditCard
-                      className={`mt-0.5 h-5 w-5 shrink-0 ${
-                        currentPaymentMethod === "STRIPE"
+                      className={`mt-0.5 h-5 w-5 shrink-0 ${currentPaymentMethod === "STRIPE"
                           ? "text-[var(--color-navy)]"
                           : "text-gray-400"
-                      }`}
+                        }`}
                     />
                     <div>
                       <div className="flex items-center gap-2">
@@ -607,6 +635,39 @@ export default function CheckoutPage() {
                       </div>
                       <p className="mt-1 text-xs text-[var(--color-navy)]/60">
                         Secure card processing powered by Stripe.
+                      </p>
+                    </div>
+                  </button>
+                )}
+
+                {selectedCountry?.allowedPaymentMethods.includes("KHALTI") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue("paymentMethod", "KHALTI", { shouldValidate: true });
+                    }}
+                    className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${currentPaymentMethod === "KHALTI"
+                        ? "border-[#5C2D91] bg-purple-50/70 ring-2 ring-[#5C2D91]/25 shadow-xs"
+                        : "border-[var(--color-sand)] bg-white hover:border-[#5C2D91]/40"
+                      }`}
+                  >
+                    <CheckCircle2
+                      className={`mt-0.5 h-5 w-5 shrink-0 ${currentPaymentMethod === "KHALTI"
+                          ? "text-[#5C2D91]"
+                          : "text-gray-300"
+                        }`}
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#5C2D91] text-[11px] font-black text-white">
+                          K
+                        </span>
+                        <p className="font-bold text-sm text-[var(--color-navy)]">
+                          Khalti Digital Wallet
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--color-navy)]/60">
+                        Pay with Khalti Wallet, e-Banking, or Mobile Banking in Nepal.
                       </p>
                     </div>
                   </button>
@@ -688,6 +749,15 @@ export default function CheckoutPage() {
                       <CreditCard className="h-5 w-5" />
                       <span>
                         Continue to Card Payment · {formatCurrency(total, currency)}
+                      </span>
+                    </>
+                  ) : currentPaymentMethod === "KHALTI" ? (
+                    <>
+                      <span className="flex h-5 w-5 items-center justify-center rounded bg-[#5C2D91] text-[10px] font-black text-white">
+                        K
+                      </span>
+                      <span>
+                        Pay with Khalti · {formatCurrency(total, currency)}
                       </span>
                     </>
                   ) : (

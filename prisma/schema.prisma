@@ -305,6 +305,7 @@ model Order {
   total    Decimal @db.Decimal(10, 2)
 
   stripePaymentIntentId String? @unique
+  khaltiPidx            String? @unique
 
   items         OrderItem[]
   statusHistory OrderStatusHistory[]

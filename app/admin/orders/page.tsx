@@ -8,6 +8,8 @@ type OrderWithRelations = {
   total: any;
   currency?: string;
   status: string;
+  paymentStatus: string;
+  paymentMethod: string | null;
   createdAt: Date;
   user: {
     name: string | null;
@@ -42,6 +44,35 @@ export default async function AdminOrdersPage() {
     }
   };
 
+  const paymentBadge = (status: string, method: string | null) => {
+    const isPaid = status === "PAID";
+    const isFailed = status === "FAILED";
+    const label = method === "STRIPE" ? "Stripe" : method === "KHALTI" ? "Khalti" : method || "COD";
+
+    if (isPaid) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          PAID · {label}
+        </span>
+      );
+    }
+    if (isFailed) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+          FAILED · {label}
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        PENDING · {label}
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -64,6 +95,7 @@ export default async function AdminOrdersPage() {
               <th className="px-6 py-4">Customer</th>
               <th className="px-6 py-4 text-center">Items</th>
               <th className="px-6 py-4 text-right">Total</th>
+              <th className="px-6 py-4 text-center">Payment</th>
               <th className="px-6 py-4 text-right">Status</th>
               <th className="px-6 py-4 text-right">Date</th>
             </tr>
@@ -95,6 +127,9 @@ export default async function AdminOrdersPage() {
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-[var(--color-navy)]">
                     {formatCurrency(Number(order.total), order.currency || "USD")}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    {paymentBadge(order.paymentStatus, order.paymentMethod)}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span

@@ -139,10 +139,71 @@ export default async function AdminOrderDetailPage({
                         </div>
                     )}
 
-                    {/* Payment */}
-                    <div>
-                        <h2 className="text-xs font-bold uppercase tracking-wider text-navy">Payment</h2>
-                        <p className="mt-3 text-sm text-navy/70">{order.paymentStatus}</p>
+                    {/* Payment Information */}
+                    <div className="rounded-xl border border-sand bg-cream-alt/40 p-4">
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-navy">Payment Details</h2>
+                        
+                        <div className="mt-3 space-y-2 text-sm">
+                            <div className="flex items-center justify-between">
+                                <span className="text-navy/60">Method:</span>
+                                <span className="font-semibold text-navy">
+                                    {order.paymentMethod === "STRIPE"
+                                        ? "Credit / Debit Card (Stripe)"
+                                        : order.paymentMethod === "KHALTI"
+                                        ? "Khalti Digital Wallet"
+                                        : order.paymentMethod === "COD"
+                                        ? "Cash on Delivery"
+                                        : order.paymentMethod || "N/A"}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <span className="text-navy/60">Payment Status:</span>
+                                <span
+                                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                                        order.paymentStatus === "PAID"
+                                            ? "bg-emerald-100 text-emerald-800"
+                                            : order.paymentStatus === "FAILED"
+                                            ? "bg-rose-100 text-rose-800"
+                                            : "bg-amber-100 text-amber-800"
+                                    }`}
+                                >
+                                    {order.paymentStatus}
+                                </span>
+                            </div>
+
+                            {order.stripePaymentIntentId && (
+                                <div className="pt-2 border-t border-sand/60">
+                                    <span className="text-xs text-navy/50 block">Stripe Payment Intent:</span>
+                                    <a
+                                        href={`https://dashboard.stripe.com/test/payments/${order.stripePaymentIntentId}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-xs font-mono text-sky-700 hover:underline break-all block mt-0.5"
+                                    >
+                                        {order.stripePaymentIntentId} ↗
+                                    </a>
+                                </div>
+                            )}
+
+                            {order.khaltiPidx && (
+                                <div className="pt-2 border-t border-sand/60">
+                                    <span className="text-xs text-navy/50 block">Khalti PIDX:</span>
+                                    <span className="text-xs font-mono text-purple-800 break-all block mt-0.5">
+                                        {order.khaltiPidx}
+                                    </span>
+                                </div>
+                            )}
+
+                            {order.transactionId && !order.stripePaymentIntentId && !order.khaltiPidx && (
+                                <div className="pt-2 border-t border-sand/60">
+                                    <span className="text-xs text-navy/50 block">Transaction ID:</span>
+                                    <span className="text-xs font-mono text-navy/70 break-all block mt-0.5">
+                                        {order.transactionId}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -19,7 +19,7 @@ export const COUNTRIES: Record<string, Country> = {
     currency: "NPR",
     postalCodeRegex: /^(?:\d{5})?$/, // Nepal 5-digit postal code (optional in many rural areas)
     postalCodePlaceholder: "e.g. 44600 (optional)",
-    allowedPaymentMethods: ["COD"],
+    allowedPaymentMethods: ["COD", "KHALTI"],
     isCheckoutEnabled: true,
   },
   US: {
