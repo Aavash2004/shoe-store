@@ -65,7 +65,9 @@ export default async function CheckoutSuccessPage({
           <Link href="/shop">Continue Shopping</Link>
         </Button>
         <Button variant="outline" asChild className="rounded-full">
-          <Link href="/track-order">Track Order</Link>
+          <Link href={order ? `/track-order?orderNumber=${encodeURIComponent(order)}` : "/track-order"}>
+            Track Order
+          </Link>
         </Button>
       </div>
     </div>
