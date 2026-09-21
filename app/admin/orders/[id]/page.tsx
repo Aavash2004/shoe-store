@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, Package, ExternalLink } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
 import { OrderStatusControl } from "@/components/admin/OrderStatusControl";
 import { formatCurrency } from "@/lib/constants/currencies";
@@ -15,7 +16,25 @@ export default async function AdminOrderDetailPage({
     const order = await prisma.order.findUnique({
         where: { id },
         include: {
-            items: true,
+            items: {
+                include: {
+                    variant: {
+                        include: {
+                            product: {
+                                include: {
+                                    images: {
+                                        orderBy: [
+                                            { isPrimary: "desc" },
+                                            { position: "asc" },
+                                        ],
+                                        take: 1,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
             address: true,
             user: { select: { name: true, email: true } },
             statusHistory: { orderBy: { createdAt: "asc" } },
@@ -57,19 +76,68 @@ export default async function AdminOrderDetailPage({
                     <div>
                         <h2 className="text-xs font-bold uppercase tracking-wider text-navy">Items</h2>
                         <div className="mt-4 flex flex-col divide-y divide-sand">
-                            {order.items.map((item) => (
-                                <div key={item.id} className="flex justify-between py-3 text-sm">
-                                    <div>
-                                        <p className="font-medium text-navy">{item.productName}</p>
-                                        <p className="text-navy/50">
-                                            {item.color} · Size {item.size} · Qty {item.quantity}
-                                        </p>
+                            {order.items.map((item) => {
+                                const imgUrl = item.variant?.product?.images?.[0]?.url;
+                                const slug = item.variant?.product?.slug;
+
+                                return (
+                                    <div key={item.id} className="flex items-center justify-between gap-4 py-3.5 text-sm first:pt-0 last:pb-0">
+                                        <div className="flex items-center gap-3.5 min-w-0">
+                                            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] shadow-2xs">
+                                                {imgUrl ? (
+                                                    <Image
+                                                        src={imgUrl}
+                                                        alt={item.productName}
+                                                        fill
+                                                        sizes="64px"
+                                                        className="object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="flex h-full w-full items-center justify-center text-[var(--color-navy)]/30">
+                                                        <Package className="h-6 w-6" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="min-w-0">
+                                                {slug ? (
+                                                    <Link
+                                                        href={`/products/${slug}`}
+                                                        target="_blank"
+                                                        className="font-semibold text-sm text-navy hover:underline flex items-center gap-1.5 truncate"
+                                                    >
+                                                        <span>{item.productName}</span>
+                                                        <ExternalLink className="h-3 w-3 opacity-40 shrink-0" />
+                                                    </Link>
+                                                ) : (
+                                                    <p className="font-semibold text-sm text-navy truncate">
+                                                        {item.productName}
+                                                    </p>
+                                                )}
+                                                <p className="text-xs text-navy/60 mt-0.5">
+                                                    {item.color} · Size {item.size} · Qty {item.quantity}
+                                                </p>
+                                                {item.sku && (
+                                                    <p className="text-[11px] font-mono text-navy/40 mt-0.5">
+                                                        SKU: {item.sku}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="text-right shrink-0">
+                                            <p className="font-bold text-sm text-navy">
+                                                {formatCurrency(Number(item.price) * item.quantity, order.currency)}
+                                            </p>
+                                            {item.quantity > 1 && (
+                                                <p className="text-[11px] text-navy/50">
+                                                    {formatCurrency(Number(item.price), order.currency)} each
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
-                                    <p className="font-medium text-navy">
-                                        {formatCurrency(Number(item.price) * item.quantity, order.currency)}
-                                    </p>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         <div className="mt-4 flex flex-col gap-1 border-t border-sand pt-4 text-sm">
                             <div className="flex justify-between text-navy/60">

@@ -123,12 +123,19 @@ function TrackOrderInner() {
   const initialOrderNumber = searchParams.get("orderNumber") || searchParams.get("order") || "";
   const initialEmail = searchParams.get("email") || "";
 
+  const { data: session } = useSession();
   const [orderNumber, setOrderNumber] = useState(initialOrderNumber);
-  const [email, setEmail] = useState(initialEmail);
+  const [email, setEmail] = useState(initialEmail || session?.user?.email || "");
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (session?.user?.email && !email) {
+      setEmail(session.user.email);
+    }
+  }, [session, email]);
 
   const fetchOrder = useCallback(async (num: string, mail: string) => {
     setError("");
@@ -272,6 +279,20 @@ function TrackOrderInner() {
                   </span>
                 )}
               </Button>
+
+              <div className="pt-2 border-t border-[var(--color-sand)]/50 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderNumber("SH-MU54B9OV-6601");
+                    setEmail("proto@gmail.com");
+                    fetchOrder("SH-MU54B9OV-6601", "proto@gmail.com");
+                  }}
+                  className="text-xs font-semibold text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] underline transition-colors"
+                >
+                  Quick Test: Load Sample Order (SH-MU54B9OV-6601)
+                </button>
+              </div>
             </form>
           </div>
         )}
