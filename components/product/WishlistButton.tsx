@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { Heart, Lock, X } from "lucide-react";
 import Link from "next/link";
@@ -24,9 +25,14 @@ export function WishlistButton({
   const { data: session, status } = useSession();
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const { isWishlisted, toggleWishlistId, fetchWishlist, hasFetched } =
     useWishlistStore();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // On initial mount or auth check, fetch wishlist from server if logged in
   useEffect(() => {
@@ -34,6 +40,26 @@ export function WishlistButton({
       fetchWishlist();
     }
   }, [session, hasFetched, fetchWishlist]);
+
+  // Lock body scroll and listen for Escape key when guest modal is visible
+  useEffect(() => {
+    if (!showGuestModal) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowGuestModal(false);
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showGuestModal]);
 
   // Determine if item is saved: check Zustand store or fallback to initialSaved prop
   const isSaved = hasFetched ? isWishlisted(productId) : initialSaved;
@@ -93,7 +119,7 @@ export function WishlistButton({
         type="button"
         onClick={handleToggle}
         aria-label={isSaved ? "Remove from wishlist" : "Add to wishlist"}
-        className={`group/wishlist relative flex items-center justify-center transition-all duration-200 focus:outline-none ${
+        className={`group/wishlist relative flex items-center justify-center transition-all duration-200 focus:outline-none cursor-pointer ${
           showText
             ? "w-full py-3 px-5 rounded-xl border font-semibold text-xs tracking-wide transition-all shadow-xs " +
               (isSaved
@@ -120,61 +146,80 @@ export function WishlistButton({
         )}
       </button>
 
-      {/* Guest Sign-In Modal */}
-      {showGuestModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowGuestModal(false);
-          }}
-        >
+      {/* Guest Sign-In Modal rendered in Portal to escape card clipping & transform context */}
+      {showGuestModal &&
+        mounted &&
+        createPortal(
           <div
-            className="w-full max-w-sm bg-white border border-[var(--color-sand)] rounded-2xl p-6 shadow-2xl relative space-y-4 animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowGuestModal(false);
+            }}
           >
-            <button
-              onClick={() => setShowGuestModal(false)}
-              className="absolute top-4 right-4 text-[var(--color-navy)]/50 hover:text-[var(--color-navy)] p-1 rounded-lg transition-colors"
-              aria-label="Close"
+            <div
+              className="w-full max-w-sm bg-white border border-[var(--color-sand)] rounded-2xl p-6 shadow-2xl relative space-y-4 animate-in zoom-in-95 duration-200 text-left"
+              onClick={(e) => e.stopPropagation()}
             >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-2 border border-rose-100">
-              <Heart className="w-6 h-6 fill-rose-500 text-rose-500" />
-            </div>
-
-            <div className="text-center space-y-1">
-              <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)]">
-                Save to Wishlist
-              </h3>
-              <p className="text-xs text-[var(--color-navy)]/65 leading-relaxed">
-                Sign in to save your favorite shoes and access them from any device.
-              </p>
-            </div>
-
-            <div className="pt-2 flex flex-col gap-2">
-              <Link
-                href={`/login?callbackUrl=${encodeURIComponent(
-                  typeof window !== "undefined" ? window.location.pathname : "/account/wishlist"
-                )}`}
-                className="w-full py-2.5 px-4 bg-[var(--color-navy)] hover:bg-[var(--color-navy)]/90 text-white font-semibold text-xs rounded-xl text-center transition-colors shadow-sm flex items-center justify-center gap-2"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>Sign In to Continue</span>
-              </Link>
               <button
                 type="button"
-                onClick={() => setShowGuestModal(false)}
-                className="w-full py-2 px-4 bg-transparent hover:bg-slate-100 text-[var(--color-navy)]/70 text-xs font-semibold rounded-xl text-center transition-colors"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowGuestModal(false);
+                }}
+                className="absolute top-4 right-4 text-[var(--color-navy)]/50 hover:text-[var(--color-navy)] p-1 rounded-lg transition-colors cursor-pointer"
+                aria-label="Close"
               >
-                Continue Browsing
+                <X className="w-4 h-4" />
               </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-2 border border-rose-100">
+                <Heart className="w-6 h-6 fill-rose-500 text-rose-500" />
+              </div>
+
+              <div className="text-center space-y-1">
+                <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)]">
+                  Save to Wishlist
+                </h3>
+                <p className="text-xs text-[var(--color-navy)]/65 leading-relaxed">
+                  Sign in to save your favorite shoes and access them from any device.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <Link
+                  href={`/login?callbackUrl=${encodeURIComponent(
+                    typeof window !== "undefined"
+                      ? window.location.pathname
+                      : "/account/wishlist"
+                  )}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowGuestModal(false);
+                  }}
+                  className="w-full py-2.5 px-4 bg-[var(--color-navy)] hover:bg-[var(--color-navy)]/90 text-white font-semibold text-xs rounded-xl text-center transition-colors shadow-sm flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Sign In to Continue</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowGuestModal(false);
+                  }}
+                  className="w-full py-2 px-4 bg-transparent hover:bg-slate-100 text-[var(--color-navy)]/70 text-xs font-semibold rounded-xl text-center transition-colors cursor-pointer"
+                >
+                  Continue Browsing
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }

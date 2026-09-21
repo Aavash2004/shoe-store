@@ -55,6 +55,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[PASSWORD RESET] Reset link generated for ${email}: ${resetUrl}`);
 
+    // Dispatch transactional email via Resend service
+    const { sendPasswordResetEmail } = await import("@/lib/services/email");
+    await sendPasswordResetEmail(email, resetUrl);
+
     return NextResponse.json({
       message: "If an account with that email exists, we have generated password reset instructions.",
       // Include direct reset link in development mode for convenience

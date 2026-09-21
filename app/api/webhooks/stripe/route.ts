@@ -81,6 +81,14 @@ export async function POST(request: NextRequest) {
                 ).toFixed(2)}, PI: ${paymentIntentId})`,
               },
             });
+
+            // Send transactional order confirmation email
+            try {
+              const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
+              await sendOrderConfirmationEmail(updatedOrder.id);
+            } catch (emailErr) {
+              console.warn("[Stripe Webhook] Failed to dispatch order confirmation email:", emailErr);
+            }
           }
         }
         break;

@@ -217,6 +217,14 @@ export async function POST(request: NextRequest) {
       console.warn("[Checkout] Revalidation warning:", e);
     }
 
+    // Dispatch transactional order confirmation email
+    try {
+      const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
+      await sendOrderConfirmationEmail(order.id);
+    } catch (emailErr) {
+      console.warn("[Checkout] Failed to dispatch order confirmation email:", emailErr);
+    }
+
     return NextResponse.json({ order }, { status: 201 });
   } catch (err: any) {
     // 6. Handle Database-Level Idempotency deduplication (Prisma P2002)

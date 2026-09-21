@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
@@ -6,6 +7,50 @@ import { ProductDetailInteractive } from "@/components/product/ProductDetailInte
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await prisma.product.findFirst({
+    where: { slug, isActive: true, deletedAt: null },
+    include: {
+      category: true,
+      images: { orderBy: { position: "asc" }, take: 1 },
+    },
+  });
+
+  if (!product) {
+    return {
+      title: "Product Not Found — ABXV",
+    };
+  }
+
+  const title = product.metaTitle || `${product.name} — ABXV`;
+  const description =
+    product.metaDescription ||
+    product.description?.slice(0, 160) ||
+    `Shop ${product.name} from the ${product.category?.name || "Footwear"} collection at ABXV.`;
+  const image = product.ogImage || product.images[0]?.url;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: image ? [{ url: image }] : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: image ? [image] : [],
+    },
+  };
+}
 
 export default async function ProductDetailPage({
   params,

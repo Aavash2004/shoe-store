@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ArrowLeft, Package, ExternalLink } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
 import { OrderStatusControl } from "@/components/admin/OrderStatusControl";
+import { AdminOrderRefundControl } from "@/components/admin/AdminOrderRefundControl";
 import { formatCurrency } from "@/lib/constants/currencies";
 
 export default async function AdminOrderDetailPage({
@@ -67,7 +68,16 @@ export default async function AdminOrderDetailPage({
                     </p>
                 </div>
 
-                <OrderStatusControl orderId={order.id} currentStatus={order.status} />
+                <div className="flex flex-wrap items-center gap-3">
+                    <AdminOrderRefundControl
+                        orderId={order.id}
+                        paymentStatus={order.paymentStatus}
+                        paymentMethod={order.paymentMethod}
+                        stripePaymentIntentId={order.stripePaymentIntentId}
+                        totalFormatted={formatCurrency(Number(order.total), order.currency)}
+                    />
+                    <OrderStatusControl orderId={order.id} currentStatus={order.status} />
+                </div>
             </div>
 
             <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-3">

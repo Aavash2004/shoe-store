@@ -133,7 +133,7 @@ export default function ForgotPasswordPage() {
                     Direct password reset link:
                   </p>
                   <Link
-                    href={debugUrl}
+                    href={debugUrl as any}
                     className="font-mono text-[11px] text-blue-700 underline break-all hover:text-blue-900"
                   >
                     {debugUrl}

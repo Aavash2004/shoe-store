@@ -78,17 +78,17 @@ export function Footer() {
             </p>
             <ul className="mt-2 space-y-1.5 text-sm text-[var(--color-cream)]">
               <li>
-                <Link href="#" className="hover:text-[var(--color-accent)] transition-colors">
+                <Link href={"/contact" as any} className="hover:text-[var(--color-accent)] transition-colors">
                   Contact
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-[var(--color-accent)] transition-colors">
+                <Link href={"/shipping-policy" as any} className="hover:text-[var(--color-accent)] transition-colors">
                   Shipping
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-[var(--color-accent)] transition-colors">
+                <Link href={"/returns" as any} className="hover:text-[var(--color-accent)] transition-colors">
                   Returns
                 </Link>
               </li>
@@ -96,8 +96,17 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-8 border-t border-[var(--color-cream)]/15 pt-4 text-[11px] text-[var(--color-cream)]/45">
-          © {new Date().getFullYear()} ABXV. All rights reserved.
+        <div className="mt-8 border-t border-[var(--color-cream)]/15 pt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-[var(--color-cream)]/45">
+          <p>© {new Date().getFullYear()} ABXV. All rights reserved.</p>
+          <div className="flex items-center gap-4">
+            <Link href={"/privacy" as any} className="hover:text-[var(--color-cream)] transition-colors">
+              Privacy Policy
+            </Link>
+            <span>·</span>
+            <Link href={"/terms" as any} className="hover:text-[var(--color-cream)] transition-colors">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

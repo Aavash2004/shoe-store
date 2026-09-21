@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -14,11 +14,17 @@ import {
   Layers,
   ArrowUpDown,
   Filter,
+  Check,
+  X,
+  Loader2,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useDebouncedValue } from "@/hooks/use-debounce";
 import { formatCurrency } from "@/lib/constants/currencies";
+import { updateVariantStock } from "@/app/admin/inventory/actions";
 
 export type AdminInventoryVariant = {
   id: string;
@@ -42,11 +48,39 @@ interface AdminInventoryClientProps {
 }
 
 export function AdminInventoryClient({ initialVariants }: AdminInventoryClientProps) {
+  const [variants, setVariants] = useState<AdminInventoryVariant[]>(initialVariants);
   const [searchQuery, setSearchQuery] = useState("");
   const [stockFilter, setStockFilter] = useState<"ALL" | "LOW" | "OUT" | "HEALTHY">("ALL");
   const [sortBy, setSortBy] = useState<"STOCK_ASC" | "STOCK_DESC" | "NAME_ASC" | "PRICE_DESC">("STOCK_ASC");
+  const [editingStockId, setEditingStockId] = useState<string | null>(null);
+  const [tempStock, setTempStock] = useState<number>(0);
+  const [isSaving, startTransition] = useTransition();
 
   const debouncedSearch = useDebouncedValue(searchQuery, 150);
+
+  useEffect(() => {
+    setVariants(initialVariants);
+  }, [initialVariants]);
+
+  const handleStartEdit = (v: AdminInventoryVariant) => {
+    setEditingStockId(v.id);
+    setTempStock(v.stock);
+  };
+
+  const handleSaveStock = (variantId: string) => {
+    if (tempStock < 0) return;
+    startTransition(async () => {
+      const res = await updateVariantStock(variantId, tempStock);
+      if (res.success) {
+        setVariants((prev) =>
+          prev.map((item) =>
+            item.id === variantId ? { ...item, stock: tempStock } : item
+          )
+        );
+        setEditingStockId(null);
+      }
+    });
+  };
 
   // Overall Warehouse & Inventory KPIs
   const kpis = useMemo(() => {
@@ -54,24 +88,24 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
     let lowStockCount = 0;
     let outOfStockCount = 0;
 
-    for (const v of initialVariants) {
+    for (const v of variants) {
       totalUnits += v.stock;
       if (v.stock === 0) outOfStockCount++;
       else if (v.stock <= 5) lowStockCount++;
     }
 
     return {
-      totalVariants: initialVariants.length,
+      totalVariants: variants.length,
       totalUnits,
       lowStockCount,
       outOfStockCount,
-      healthyCount: initialVariants.length - lowStockCount - outOfStockCount,
+      healthyCount: variants.length - lowStockCount - outOfStockCount,
     };
-  }, [initialVariants]);
+  }, [variants]);
 
   // Filter & Sort Variants
   const filteredVariants = useMemo(() => {
-    return initialVariants
+    return variants
       .filter((v) => {
         // Stock status filter
         if (stockFilter === "LOW" && (v.stock > 5 || v.stock === 0)) return false;
@@ -355,28 +389,76 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
                         </span>
                       </td>
 
-                      {/* Stock Level with Visual Indicators */}
+                      {/* Stock Level with Visual Indicators or Inline Editor */}
                       <td className="px-6 py-4 text-center">
-                        {v.stock === 0 ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
-                            0 Units · Out of Stock
-                          </span>
-                        ) : v.stock <= 3 ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            <span className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse" />
-                            Critical: {v.stock} left
-                          </span>
-                        ) : v.stock <= 5 ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
-                            Low Stock: {v.stock} left
-                          </span>
+                        {editingStockId === v.id ? (
+                          <div className="inline-flex items-center gap-1.5 bg-white border border-[var(--color-navy)] rounded-xl px-2 py-1 shadow-xs">
+                            <button
+                              type="button"
+                              onClick={() => setTempStock((s) => Math.max(0, s - 1))}
+                              className="p-1 rounded-md text-stone-500 hover:bg-stone-100 cursor-pointer"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={tempStock}
+                              onChange={(e) => setTempStock(Math.max(0, parseInt(e.target.value) || 0))}
+                              className="h-7 w-16 text-center text-xs font-bold px-1 border-sand"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setTempStock((s) => s + 1)}
+                              className="p-1 rounded-md text-stone-500 hover:bg-stone-100 cursor-pointer"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                            <Button
+                              size="sm"
+                              disabled={isSaving}
+                              onClick={() => handleSaveStock(v.id)}
+                              className="h-7 px-2 text-[11px] rounded-lg bg-[var(--color-navy)] text-white hover:bg-[var(--color-navy)]/90 cursor-pointer"
+                            >
+                              {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingStockId(null)}
+                              className="p-1 rounded-md text-stone-400 hover:text-stone-600 cursor-pointer"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                            {v.stock} in stock
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(v)}
+                            className="group/btn cursor-pointer inline-block"
+                            title="Click to adjust stock"
+                          >
+                            {v.stock === 0 ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 group-hover/btn:border-rose-400 transition-colors">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                                0 Units · Out of Stock
+                              </span>
+                            ) : v.stock <= 3 ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 group-hover/btn:border-rose-400 transition-colors">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse" />
+                                Critical: {v.stock} left
+                              </span>
+                            ) : v.stock <= 5 ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 group-hover/btn:border-amber-400 transition-colors">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
+                                Low Stock: {v.stock} left
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 group-hover/btn:border-emerald-400 transition-colors">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                                {v.stock} in stock
+                              </span>
+                            )}
+                          </button>
                         )}
                       </td>
 
@@ -388,6 +470,15 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
                       {/* Action Links */}
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(v)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-[var(--color-sand)] bg-white text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/20 transition-all shadow-2xs cursor-pointer"
+                            title="Quick Adjust Stock"
+                          >
+                            <Edit3 className="h-3 w-3" />
+                            <span>Stock</span>
+                          </button>
                           <Link
                             href={`/products/${v.product.slug}`}
                             target="_blank"
@@ -400,7 +491,6 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
                             href={`/admin/products/${v.productId}`}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[var(--color-sand)] bg-white text-xs font-bold text-[var(--color-navy)] hover:bg-[var(--color-navy)] hover:text-white transition-all shadow-2xs"
                           >
-                            <Edit3 className="h-3 w-3" />
                             Edit
                           </Link>
                         </div>
@@ -448,17 +538,60 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-[var(--color-sand)]/60 text-xs">
-                    <span
-                      className={`font-bold ${
-                        v.stock === 0
-                          ? "text-rose-600"
-                          : v.stock <= 5
-                          ? "text-amber-700"
-                          : "text-emerald-700"
-                      }`}
-                    >
-                      {v.stock === 0 ? "Out of stock" : `${v.stock} units available`}
-                    </span>
+                    {editingStockId === v.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setTempStock((s) => Math.max(0, s - 1))}
+                          className="p-1 rounded-md text-stone-500 hover:bg-stone-100"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={tempStock}
+                          onChange={(e) => setTempStock(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="h-7 w-14 text-center text-xs font-bold px-1 border-sand"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setTempStock((s) => s + 1)}
+                          className="p-1 rounded-md text-stone-500 hover:bg-stone-100"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                        <Button
+                          size="sm"
+                          disabled={isSaving}
+                          onClick={() => handleSaveStock(v.id)}
+                          className="h-7 px-2 text-[11px] rounded-lg bg-[var(--color-navy)] text-white"
+                        >
+                          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingStockId(null)}
+                          className="p-1 rounded-md text-stone-400"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(v)}
+                        className={`font-bold cursor-pointer text-left hover:underline ${
+                          v.stock === 0
+                            ? "text-rose-600"
+                            : v.stock <= 5
+                            ? "text-amber-700"
+                            : "text-emerald-700"
+                        }`}
+                      >
+                        {v.stock === 0 ? "Out of stock (Adjust)" : `${v.stock} units available`}
+                      </button>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-[var(--color-navy)]">

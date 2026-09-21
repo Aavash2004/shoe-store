@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ShopFilters } from "@/components/product/ShopFilters";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
@@ -8,17 +9,20 @@ import { prisma } from "@/lib/db/prisma";
 
 export const revalidate = 60;
 
+const PAGE_SIZE = 12;
+
 type SearchParams = {
   category?: string;
   size?: string;
   color?: string;
   sort?: string;
   q?: string;
+  page?: string;
 };
 
-async function executeShopQueries(whereClause: any) {
+async function executeShopQueries(whereClause: any, skip: number, take: number) {
   const queryAll = async () => {
-    const [products, dbCategories, dbSizes, dbColors] = await Promise.all([
+    const [products, totalCount, dbCategories, dbSizes, dbColors] = await Promise.all([
       prisma.product.findMany({
         where: whereClause,
         include: {
@@ -26,7 +30,10 @@ async function executeShopQueries(whereClause: any) {
           images: { orderBy: { position: "asc" } },
           variants: { where: { isActive: true } },
         },
+        skip,
+        take,
       }),
+      prisma.product.count({ where: whereClause }),
       prisma.category.findMany({
         select: { name: true },
       }),
@@ -43,7 +50,7 @@ async function executeShopQueries(whereClause: any) {
     const sizes = dbSizes.map((s) => s.size);
     const colors = dbColors.map((c) => c.color);
 
-    return [products, dbCategories, sizes, colors] as const;
+    return [products, totalCount, dbCategories, sizes, colors] as const;
   };
 
   try {
@@ -54,7 +61,7 @@ async function executeShopQueries(whereClause: any) {
       return await queryAll();
     } catch (retryErr) {
       console.error("[ShopPage DB] Retry query failed:", retryErr);
-      return [[], [], [], []] as const;
+      return [[], 0, [], [], []] as const;
     }
   }
 }
@@ -64,7 +71,10 @@ export default async function ShopPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { category, size, color, sort, q } = await searchParams;
+  const { category, size, color, sort, q, page } = await searchParams;
+
+  const currentPage = Math.max(1, parseInt(page || "1") || 1);
+  const skip = (currentPage - 1) * PAGE_SIZE;
 
   const whereClause = {
     isActive: true,
@@ -92,7 +102,13 @@ export default async function ShopPage({
       : {}),
   };
 
-  const [products, dbCategories, dbSizes, dbColors] = await executeShopQueries(whereClause);
+  const [products, totalCount, dbCategories, dbSizes, dbColors] = await executeShopQueries(
+    whereClause,
+    skip,
+    PAGE_SIZE
+  );
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const withPrice = products.map((product) => ({
     ...product,
@@ -121,6 +137,18 @@ export default async function ShopPage({
     if (size && remove !== "size") params.set("size", size);
     if (color && remove !== "color") params.set("color", color);
     if (sort) params.set("sort", sort);
+    const qs = params.toString();
+    return qs ? `/shop?${qs}` : "/shop";
+  }
+
+  function buildPageHref(targetPage: number) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (category) params.set("category", category);
+    if (size) params.set("size", size);
+    if (color) params.set("color", color);
+    if (sort) params.set("sort", sort);
+    if (targetPage > 1) params.set("page", targetPage.toString());
     const qs = params.toString();
     return qs ? `/shop?${qs}` : "/shop";
   }
@@ -175,7 +203,7 @@ export default async function ShopPage({
               activeSize={size}
               activeColor={color}
               activeSort={sort}
-              totalProducts={withPrice.length}
+              totalProducts={totalCount}
             />
           </Suspense>
         </div>
@@ -239,19 +267,73 @@ export default async function ShopPage({
         {/* 5. Product Grid or Empty State */}
         <section className="mt-8">
           {withPrice.length > 0 ? (
-            <ScrollReveal>
-              <ProductGrid
-                products={withPrice.map((product) => ({
-                  id: product.id,
-                  name: product.name,
-                  slug: product.slug,
-                  price: product.minPrice,
-                  image: product.images[0]?.url ?? "/images/Shoes/s05.avif",
-                  category: product.category.name,
-                  brand: product.brand ?? "",
-                }))}
-              />
-            </ScrollReveal>
+            <>
+              <ScrollReveal>
+                <ProductGrid
+                  products={withPrice.map((product) => ({
+                    id: product.id,
+                    name: product.name,
+                    slug: product.slug,
+                    price: product.minPrice,
+                    image: product.images[0]?.url ?? "/images/Shoes/s05.avif",
+                    category: product.category.name,
+                    brand: product.brand ?? "",
+                  }))}
+                />
+              </ScrollReveal>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="mt-14 flex items-center justify-center gap-2">
+                  {currentPage > 1 ? (
+                    <Link
+                      href={buildPageHref(currentPage - 1) as any}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-sand)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-sand)]/20 transition-colors shadow-2xs"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-sand)]/50 bg-stone-50 text-[var(--color-navy)]/30 cursor-not-allowed">
+                      <ChevronLeft className="h-4 w-4" />
+                    </span>
+                  )}
+
+                  <div className="flex items-center gap-1.5 px-2">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                      const isCurrent = pageNum === currentPage;
+                      return (
+                        <Link
+                          key={pageNum}
+                          href={buildPageHref(pageNum) as any}
+                          className={`inline-flex h-10 min-w-10 px-3 items-center justify-center rounded-xl text-xs font-bold transition-all shadow-2xs ${
+                            isCurrent
+                              ? "bg-[var(--color-navy)] text-[var(--color-cream)] shadow-xs"
+                              : "border border-[var(--color-sand)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-sand)]/20"
+                          }`}
+                        >
+                          {pageNum}
+                        </Link>
+                      );
+                    })}
+                  </div>
+
+                  {currentPage < totalPages ? (
+                    <Link
+                      href={buildPageHref(currentPage + 1) as any}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-sand)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-sand)]/20 transition-colors shadow-2xs"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-sand)]/50 bg-stone-50 text-[var(--color-navy)]/30 cursor-not-allowed">
+                      <ChevronRight className="h-4 w-4" />
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <div className="py-20 text-center space-y-3">
               <p className="text-xs font-bold uppercase tracking-widest text-[#1E2A38]/40">

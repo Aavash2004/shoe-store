@@ -32,9 +32,10 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
 
         {/* Subtle Wishlist Button */}
         <div className="absolute top-2.5 right-2.5 z-10">
-          <div className="p-1 rounded-full bg-[var(--color-cream)]/85 backdrop-blur-xs border border-[var(--color-sand)]/60 shadow-xs transition-transform hover:scale-105">
-            <WishlistButton productId={product.id} />
-          </div>
+          <WishlistButton
+            productId={product.id}
+            className="border border-[var(--color-sand)]/70 shadow-xs hover:scale-105"
+          />
         </div>
       </div>
 

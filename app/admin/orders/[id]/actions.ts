@@ -88,8 +88,112 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
         });
     }
 
+    // Trigger transactional notification email for status transition
+    try {
+        const { sendShippingUpdateEmail } = await import("@/lib/services/email");
+        await sendShippingUpdateEmail(validOrderId, validNote);
+    } catch (emailErr) {
+        console.warn("[Admin Order Status] Failed to dispatch email notification:", emailErr);
+    }
+
     revalidatePath(`/admin/orders/${validOrderId}`);
     revalidatePath("/admin/orders");
 
     return { success: true as const };
+}
+
+export async function refundStripeOrder(orderId: string, reason?: string) {
+    const session = await requireAdmin();
+
+    const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+    });
+
+    if (!order) {
+        return { success: false as const, error: "Order not found." };
+    }
+
+    if (order.paymentStatus !== "PAID") {
+        return { success: false as const, error: `Order payment status is '${order.paymentStatus}'. Only PAID orders can be refunded.` };
+    }
+
+    if (!order.stripePaymentIntentId) {
+        return { success: false as const, error: "Order does not have a Stripe Payment Intent ID." };
+    }
+
+    try {
+        const { stripe } = await import("@/lib/services/stripe");
+
+        // 1. Trigger Stripe refund API
+        const refund = await stripe.refunds.create({
+            payment_intent: order.stripePaymentIntentId,
+        });
+
+        // 2. Restock inventory if order wasn't already cancelled
+        if (order.status !== "CANCELLED") {
+            for (const item of order.items) {
+                await prisma.productVariant.update({
+                    where: { id: item.variantId },
+                    data: { stock: { increment: item.quantity } },
+                });
+            }
+        }
+
+        // 3. Update order payment & fulfillment status
+        await prisma.order.update({
+            where: { id: orderId },
+            data: {
+                paymentStatus: "REFUNDED",
+                status: "CANCELLED",
+            },
+        });
+
+        // 4. Record status history
+        await prisma.orderStatusHistory.create({
+            data: {
+                orderId,
+                status: "REFUNDED",
+                note: `Stripe payment refunded (Refund ID: ${refund.id}, Amount: ${order.currency} ${order.total}${reason ? `, Reason: ${reason}` : ""})`,
+            },
+        });
+
+        // 5. Admin activity log
+        const sessionUserId = (session.user as any)?.id;
+        const sessionEmail = session.user?.email?.toLowerCase();
+        const adminUser = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    ...(sessionUserId ? [{ id: sessionUserId }] : []),
+                    ...(sessionEmail ? [{ email: sessionEmail }] : []),
+                ],
+            },
+            select: { id: true },
+        });
+
+        if (adminUser) {
+            await prisma.adminActivityLog.create({
+                data: {
+                    adminId: adminUser.id,
+                    action: "REFUNDED_ORDER",
+                    entity: "Order",
+                    entityId: orderId,
+                    metadata: {
+                        refundId: refund.id,
+                        amount: Number(order.total),
+                        currency: order.currency,
+                        reason: reason || "Admin initiated refund",
+                    },
+                },
+            });
+        }
+
+        revalidatePath(`/admin/orders/${orderId}`);
+        revalidatePath("/admin/orders");
+
+        return { success: true as const, refundId: refund.id };
+    } catch (err: any) {
+        console.error("[Stripe Refund Error]:", err);
+        return { success: false as const, error: err.message || "Failed to process Stripe refund." };
+    }
 }

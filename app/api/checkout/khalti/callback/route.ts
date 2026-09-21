@@ -69,6 +69,14 @@ export async function GET(request: NextRequest) {
                 });
             });
 
+            // Send order confirmation transactional email
+            try {
+                const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
+                await sendOrderConfirmationEmail(order.id);
+            } catch (emailErr) {
+                console.warn("[Khalti Callback] Failed to dispatch order confirmation email:", emailErr);
+            }
+
             return NextResponse.redirect(
                 `${baseUrl}/checkout/success?orderId=${order.id}&orderNumber=${order.orderNumber}&method=KHALTI`
             );
