@@ -103,7 +103,7 @@ export default function CartPage() {
             );
           }
         }
-      }, 400);
+      }, 800);
 
       debouncedSyncMapRef.current.set(variantId, debouncedFn);
     }
