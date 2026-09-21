@@ -14,6 +14,7 @@ import {
   FileText,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/constants/currencies";
+import { OrderCustomerActions } from "@/components/account/OrderCustomerActions";
 
 export default async function OrderDetailPage({
   params,
@@ -97,7 +98,8 @@ export default async function OrderDetailPage({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <OrderCustomerActions orderId={order.id} status={order.status} />
             <Link
               href={`/track-order?orderNumber=${order.orderNumber}`}
               className="px-4 py-2 bg-[var(--color-sky)]/20 hover:bg-[var(--color-sky)]/30 text-[var(--color-navy)] font-semibold text-xs rounded-xl border border-[var(--color-sky)]/40 transition-colors"
@@ -276,6 +278,12 @@ export default async function OrderDetailPage({
                   : formatCurrency(Number(order.shipping), order.currency)}
               </span>
             </div>
+            {Number(order.discount) > 0 && (
+              <div className="flex justify-between text-emerald-700 font-medium">
+                <span>Discount {order.couponCode ? `(${order.couponCode})` : ""}</span>
+                <span>-{formatCurrency(Number(order.discount), order.currency)}</span>
+              </div>
+            )}
             <div className="flex justify-between pt-2 border-t border-[var(--color-sand)] text-sm font-bold text-[var(--color-navy)]">
               <span>Total</span>
               <span>{formatCurrency(Number(order.total), order.currency)}</span>

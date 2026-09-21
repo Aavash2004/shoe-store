@@ -44,5 +44,16 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // Automatically link any previous guest purchases made with this email address
+  await prisma.order.updateMany({
+    where: {
+      guestEmail: email,
+      userId: null,
+    },
+    data: {
+      userId: user.id,
+    },
+  });
+
   return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
 }

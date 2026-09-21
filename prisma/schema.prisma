@@ -93,6 +93,17 @@ model Session {
   @@map("sessions")
 }
 
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
 // ============================================================
 // CATALOG
 // ============================================================
@@ -302,7 +313,12 @@ model Order {
 
   subtotal Decimal @db.Decimal(10, 2)
   shipping Decimal @db.Decimal(10, 2) @default(0)
+  discount Decimal @default(0) @db.Decimal(10, 2)
   total    Decimal @db.Decimal(10, 2)
+
+  couponCode String?
+  couponId   String?
+  coupon     Coupon? @relation(fields: [couponId], references: [id])
 
   stripePaymentIntentId String? @unique
   khaltiPidx            String? @unique
@@ -387,6 +403,7 @@ model Coupon {
   usedCount     Int          @default(0)
   isActive      Boolean      @default(true)
   expiresAt     DateTime?
+  orders        Order[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

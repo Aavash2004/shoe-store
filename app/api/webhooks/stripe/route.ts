@@ -65,6 +65,13 @@ export async function POST(request: NextRequest) {
           });
 
           if (updatedOrder) {
+            if (updatedOrder.couponCode) {
+              await prisma.coupon.updateMany({
+                where: { code: updatedOrder.couponCode },
+                data: { usedCount: { increment: 1 } },
+              });
+            }
+
             await prisma.orderStatusHistory.create({
               data: {
                 orderId: updatedOrder.id,
