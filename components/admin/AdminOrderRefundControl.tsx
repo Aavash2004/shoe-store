@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { refundStripeOrder } from "@/app/admin/orders/[id]/actions";
+import { refundOrder } from "@/app/admin/orders/[id]/actions";
 
 export function AdminOrderRefundControl({
   orderId,
@@ -23,18 +23,15 @@ export function AdminOrderRefundControl({
   const [errorMessage, setErrorMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Can only refund if payment is PAID and was paid via STRIPE
-  const canRefund =
-    paymentStatus === "PAID" &&
-    paymentMethod === "STRIPE" &&
-    Boolean(stripePaymentIntentId);
+  // Can refund if payment is PAID
+  const canRefund = paymentStatus === "PAID";
 
   if (!canRefund) return null;
 
   const handleRefund = () => {
     setErrorMessage("");
     startTransition(async () => {
-      const res = await refundStripeOrder(orderId, "Customer refund requested via admin panel");
+      const res = await refundOrder(orderId, "Customer refund requested via admin panel");
       if (res.success) {
         setSuccess(true);
         setShowConfirm(false);

@@ -3,8 +3,22 @@ import { prisma } from "@/lib/db/prisma";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
-const fromEmail = process.env.EMAIL_FROM || "ABXV Store <onboarding@resend.dev>";
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const fromEmail = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "ABXV Store <onboarding@resend.dev>";
+
+function resolveAppUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+}
+
+const appUrl = resolveAppUrl();
 
 /**
  * Base email layout wrapper with modern dark navy / luxury branding

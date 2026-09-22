@@ -102,7 +102,7 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
     return { success: true as const };
 }
 
-export async function refundStripeOrder(orderId: string, reason?: string) {
+export async function refundOrder(orderId: string, reason?: string) {
     const session = await requireAdmin();
 
     const order = await prisma.order.findUnique({
@@ -118,19 +118,32 @@ export async function refundStripeOrder(orderId: string, reason?: string) {
         return { success: false as const, error: `Order payment status is '${order.paymentStatus}'. Only PAID orders can be refunded.` };
     }
 
-    if (!order.stripePaymentIntentId) {
-        return { success: false as const, error: "Order does not have a Stripe Payment Intent ID." };
-    }
+    let refundIdentifier = "MANUAL";
 
     try {
-        const { stripe } = await import("@/lib/services/stripe");
+        if (order.paymentMethod === "STRIPE") {
+            if (!order.stripePaymentIntentId) {
+                return { success: false as const, error: "Order does not have a Stripe Payment Intent ID." };
+            }
+            const { stripe } = await import("@/lib/services/stripe");
+            const refund = await stripe.refunds.create({
+                payment_intent: order.stripePaymentIntentId,
+            });
+            refundIdentifier = refund.id;
+        } else if (order.paymentMethod === "KHALTI") {
+            if (order.khaltiPidx) {
+                const { refundKhaltiPayment } = await import("@/lib/services/khalti");
+                const khaltiResult = await refundKhaltiPayment(order.khaltiPidx);
+                if (khaltiResult.success && khaltiResult.data?.refund_id) {
+                    refundIdentifier = khaltiResult.data.refund_id;
+                } else if (khaltiResult.error) {
+                    console.warn("[Khalti API Refund Notice]:", khaltiResult.error);
+                    refundIdentifier = `KHALTI-${order.khaltiPidx.slice(0, 10)}`;
+                }
+            }
+        }
 
-        // 1. Trigger Stripe refund API
-        const refund = await stripe.refunds.create({
-            payment_intent: order.stripePaymentIntentId,
-        });
-
-        // 2. Restock inventory if order wasn't already cancelled
+        // Restock inventory if order wasn't already cancelled
         if (order.status !== "CANCELLED") {
             for (const item of order.items) {
                 await prisma.productVariant.update({
@@ -140,7 +153,7 @@ export async function refundStripeOrder(orderId: string, reason?: string) {
             }
         }
 
-        // 3. Update order payment & fulfillment status
+        // Update order payment & fulfillment status
         await prisma.order.update({
             where: { id: orderId },
             data: {
@@ -149,16 +162,16 @@ export async function refundStripeOrder(orderId: string, reason?: string) {
             },
         });
 
-        // 4. Record status history
+        // Record status history
         await prisma.orderStatusHistory.create({
             data: {
                 orderId,
                 status: "REFUNDED",
-                note: `Stripe payment refunded (Refund ID: ${refund.id}, Amount: ${order.currency} ${order.total}${reason ? `, Reason: ${reason}` : ""})`,
+                note: `${order.paymentMethod || "Payment"} refunded (Ref: ${refundIdentifier}, Amount: ${order.currency} ${order.total}${reason ? `, Reason: ${reason}` : ""})`,
             },
         });
 
-        // 5. Admin activity log
+        // Admin activity log
         const sessionUserId = (session.user as any)?.id;
         const sessionEmail = session.user?.email?.toLowerCase();
         const adminUser = await prisma.user.findFirst({
@@ -179,7 +192,8 @@ export async function refundStripeOrder(orderId: string, reason?: string) {
                     entity: "Order",
                     entityId: orderId,
                     metadata: {
-                        refundId: refund.id,
+                        paymentMethod: order.paymentMethod,
+                        refundId: refundIdentifier,
                         amount: Number(order.total),
                         currency: order.currency,
                         reason: reason || "Admin initiated refund",
@@ -191,9 +205,11 @@ export async function refundStripeOrder(orderId: string, reason?: string) {
         revalidatePath(`/admin/orders/${orderId}`);
         revalidatePath("/admin/orders");
 
-        return { success: true as const, refundId: refund.id };
+        return { success: true as const, refundId: refundIdentifier };
     } catch (err: any) {
-        console.error("[Stripe Refund Error]:", err);
-        return { success: false as const, error: err.message || "Failed to process Stripe refund." };
+        console.error("[Refund Error]:", err);
+        return { success: false as const, error: err.message || "Failed to process refund." };
     }
 }
+
+export const refundStripeOrder = refundOrder;

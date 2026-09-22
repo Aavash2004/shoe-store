@@ -51,7 +51,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${token}`;
+    const requestOrigin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")
+        ? process.env.NEXT_PUBLIC_APP_URL
+        : requestOrigin || "http://localhost:3000";
+
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
     console.log(`[PASSWORD RESET] Reset link generated for ${email}: ${resetUrl}`);
 

@@ -2,7 +2,14 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/prisma";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://shoestore.com";
+  const baseUrl =
+    (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "https://shoestore.com");
 
   // Static marketing & support pages
   const staticRoutes: MetadataRoute.Sitemap = [

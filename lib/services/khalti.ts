@@ -119,3 +119,44 @@ export async function lookupKhaltiPayment(
 
     return data as KhaltiLookupResponse;
 }
+
+/**
+ * Issues a refund for a Khalti payment via Khalti ePayment v2 API.
+ */
+export async function refundKhaltiPayment(
+    pidx: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!KHALTI_SECRET_KEY) {
+        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables.");
+    }
+
+    const authHeader = KHALTI_SECRET_KEY.startsWith("Key ")
+        ? KHALTI_SECRET_KEY
+        : `Key ${KHALTI_SECRET_KEY}`;
+
+    try {
+        const response = await fetch(`${KHALTI_API_URL}/epayment/refund/`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: authHeader,
+            },
+            body: JSON.stringify({ pidx }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error("[Khalti Refund Error]:", data);
+            return {
+                success: false,
+                error: data.detail || data.error_key || "Failed to process Khalti refund.",
+            };
+        }
+
+        return { success: true, data };
+    } catch (err: any) {
+        console.error("[Khalti Refund Exception]:", err);
+        return { success: false, error: err.message || "Failed to connect to Khalti refund API." };
+    }
+}
