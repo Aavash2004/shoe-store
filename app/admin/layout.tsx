@@ -11,7 +11,7 @@ export default async function AdminLayout({
 
   // If rendering without an active admin session (e.g. on /admin/login page),
   // return plain children without the AdminNav header chrome.
-  // Protection of /admin sub-routes is enforced by middleware.ts & page-level checks.
+  // Protection of /admin sub-routes is enforced by proxy.ts & page-level checks.
   if (!isAdmin) {
     return <>{children}</>;
   }

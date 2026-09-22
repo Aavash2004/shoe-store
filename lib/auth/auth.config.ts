@@ -8,7 +8,7 @@ export const authConfig: NextAuthConfig = {
   providers: [],
   callbacks: {
     authorized() {
-      // Allow custom middleware.ts to control route redirects cleanly without automatic redirect loops
+      // Allow custom proxy.ts to control route redirects cleanly without automatic redirect loops
       return true;
     },
     async jwt({ token, user }) {
