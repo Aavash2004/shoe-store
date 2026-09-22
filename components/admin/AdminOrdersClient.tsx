@@ -27,7 +27,7 @@ import {
   DollarSign,
   TrendingUp,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/constants/currencies";
+import { formatCurrency, convertCurrency, CURRENCIES } from "@/lib/constants/currencies";
 import { updateOrderStatus } from "@/app/admin/orders/[id]/actions";
 
 export type AdminOrderRow = {
@@ -59,10 +59,50 @@ interface AdminOrdersClientProps {
   initialOrders: AdminOrderRow[];
 }
 
+const SUPPORTED_CURRENCIES = ["USD", "NPR", "EUR", "GBP"] as const;
+type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
+
 type FilterTab = "ALL" | "UNFULFILLED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
 
 export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
   const router = useRouter();
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("USD");
+
+  useEffect(() => {
+    const syncCurrency = () => {
+      const saved = localStorage.getItem("admin_selected_currency");
+      if (saved && (SUPPORTED_CURRENCIES as readonly string[]).includes(saved)) {
+        setSelectedCurrency(saved as CurrencyCode);
+      }
+    };
+
+    syncCurrency();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (
+        e.key === "admin_selected_currency" &&
+        e.newValue &&
+        (SUPPORTED_CURRENCIES as readonly string[]).includes(e.newValue)
+      ) {
+        setSelectedCurrency(e.newValue as CurrencyCode);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("admin_currency_change", syncCurrency);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("admin_currency_change", syncCurrency);
+    };
+  }, []);
+
+  const handleCurrencyChange = (code: CurrencyCode) => {
+    setSelectedCurrency(code);
+    try {
+      localStorage.setItem("admin_selected_currency", code);
+      window.dispatchEvent(new Event("admin_currency_change"));
+    } catch {}
+  };
+
   const [orders, setOrders] = useState<AdminOrderRow[]>(initialOrders);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState<FilterTab>("ALL");
@@ -103,7 +143,10 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
     const cancelled = orders.filter((o) => o.status === "CANCELLED").length;
 
     const completedOrders = orders.filter((o) => o.status !== "CANCELLED");
-    const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+    const totalRevenue = completedOrders.reduce((sum, o) => {
+      const converted = convertCurrency(Number(o.total || 0), o.currency || "USD", selectedCurrency);
+      return sum + converted;
+    }, 0);
     const avgOrderValue = completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0;
 
     return {
@@ -116,7 +159,7 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
       totalRevenue,
       avgOrderValue,
     };
-  }, [orders]);
+  }, [orders, selectedCurrency]);
 
   // Filter and Search Logic
   const filteredOrders = useMemo(() => {
@@ -272,7 +315,32 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Currency Switcher Control */}
+          <div className="inline-flex items-center rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-1 shadow-2xs">
+            {SUPPORTED_CURRENCIES.map((code) => {
+              const active = selectedCurrency === code;
+              const symbol = CURRENCIES[code]?.symbol || code;
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => handleCurrencyChange(code)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all duration-150 ${
+                    active
+                      ? "bg-[var(--color-navy)] text-white shadow-xs scale-100"
+                      : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-white/60"
+                  }`}
+                >
+                  <span>{code}</span>{" "}
+                  <span className={active ? "text-white/80" : "text-[var(--color-navy)]/45"}>
+                    ({symbol})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <button
             type="button"
             onClick={handleRefresh}
@@ -364,10 +432,10 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
             <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
           </div>
           <div className="mt-2 text-xl font-bold text-[var(--color-navy)] truncate">
-            {formatCurrency(stats.totalRevenue, "USD")}
+            {formatCurrency(stats.totalRevenue, selectedCurrency)}
           </div>
           <div className="mt-1 text-[10px] font-semibold text-emerald-700">
-            <span>Paid sales</span>
+            <span>Paid sales in {selectedCurrency}</span>
           </div>
         </div>
 
@@ -380,10 +448,10 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
             <TrendingUp className="h-3.5 w-3.5 text-indigo-500" />
           </div>
           <div className="mt-2 text-xl font-bold text-[var(--color-navy)] truncate">
-            {formatCurrency(stats.avgOrderValue, "USD")}
+            {formatCurrency(stats.avgOrderValue, selectedCurrency)}
           </div>
           <div className="mt-1 text-[10px] font-semibold text-[var(--color-navy)]/50">
-            <span>Per customer basket</span>
+            <span>Per basket ({selectedCurrency})</span>
           </div>
         </div>
       </div>
@@ -550,7 +618,7 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
                 <th className="px-5 py-3.5">Customer</th>
                 <th className="px-5 py-3.5">Items</th>
                 <th className="px-5 py-3.5">Destination</th>
-                <th className="px-5 py-3.5 text-right">Total</th>
+                <th className="px-5 py-3.5 text-right">Total ({selectedCurrency})</th>
                 <th className="px-5 py-3.5 text-center">Payment</th>
                 <th className="px-5 py-3.5 text-center">Fulfillment</th>
                 <th className="px-5 py-3.5 text-right">Action</th>
@@ -685,8 +753,27 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
                       </td>
 
                       {/* 5. Total */}
-                      <td className="px-5 py-3.5 text-right font-bold text-[var(--color-navy)]">
-                        {formatCurrency(Number(order.total || 0), order.currency || "USD")}
+                      <td className="px-5 py-3.5 text-right">
+                        {(() => {
+                          const isForeign = (order.currency || "USD").toUpperCase() !== selectedCurrency.toUpperCase();
+                          const converted = convertCurrency(
+                            Number(order.total || 0),
+                            order.currency || "USD",
+                            selectedCurrency
+                          );
+                          return (
+                            <div>
+                              <p className="font-bold text-[var(--color-navy)]">
+                                {formatCurrency(converted, selectedCurrency)}
+                              </p>
+                              {isForeign && (
+                                <p className="text-[10px] font-medium text-[var(--color-navy)]/50">
+                                  Orig: {formatCurrency(Number(order.total || 0), order.currency || "USD")}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* 6. Payment Status Column */}

@@ -29,7 +29,7 @@ export function ProductReviewsSection({
   isLoggedIn,
   reviews,
 }: ProductReviewsSectionProps) {
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -53,6 +53,11 @@ export function ProductReviewsSection({
     setErrorMessage("");
     setSuccessMessage("");
 
+    if (rating === 0) {
+      setErrorMessage("Please select a star rating between 1 and 5.");
+      return;
+    }
+
     startTransition(async () => {
       const res = await submitProductReview({
         productId,
@@ -66,6 +71,8 @@ export function ProductReviewsSection({
       } else {
         setSuccessMessage("Thank you! Your review has been published.");
         setComment("");
+        setRating(0);
+        setHoverRating(null);
       }
     });
   }
@@ -154,31 +161,52 @@ export function ProductReviewsSection({
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Star Picker */}
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--color-navy)]/70 mb-1.5">
-                    Your Rating
-                  </label>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        type="button"
-                        key={star}
-                        onMouseEnter={() => setHoverRating(star)}
-                        onMouseLeave={() => setHoverRating(null)}
-                        onClick={() => setRating(star)}
-                        className="p-0.5 transition-transform hover:scale-110 focus:outline-none"
-                      >
-                        <Star
-                          className={`h-5 w-5 ${
-                            star <= (hoverRating ?? rating)
-                              ? "fill-amber-400 text-amber-500"
-                              : "text-[var(--color-sand)] hover:text-amber-300"
-                          }`}
-                        />
-                      </button>
-                    ))}
-                    <span className="ml-2 text-xs font-bold text-[var(--color-navy)]">
-                      {hoverRating ?? rating} / 5 Stars
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-[var(--color-navy)]/70">
+                      Your Rating
+                    </label>
+                    <span className="text-xs font-bold text-[var(--color-navy)]">
+                      {(hoverRating ?? rating) > 0
+                        ? `${hoverRating ?? rating} / 5 Stars`
+                        : "Tap a star to rate"}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => {
+                      const isFilled = star <= (hoverRating ?? rating);
+                      return (
+                        <button
+                          type="button"
+                          key={star}
+                          onMouseEnter={() => setHoverRating(star)}
+                          onMouseLeave={() => setHoverRating(null)}
+                          onClick={() => setRating(star)}
+                          aria-label={`Rate ${star} out of 5 stars`}
+                          className="p-1 transition-all hover:scale-115 active:scale-95 focus:outline-none"
+                        >
+                          <Star
+                            className={`h-5 w-5 transition-all duration-150 ${
+                              isFilled
+                                ? "fill-amber-400 text-amber-500 drop-shadow-xs"
+                                : "fill-transparent text-[var(--color-sand)] hover:text-amber-400/70"
+                            }`}
+                          />
+                        </button>
+                      );
+                    })}
+                    {rating > 0 && (
+                      <span className="ml-2 text-[11px] font-semibold text-emerald-700">
+                        {rating === 5
+                          ? "Excellent!"
+                          : rating === 4
+                          ? "Very Good"
+                          : rating === 3
+                          ? "Good"
+                          : rating === 2
+                          ? "Fair"
+                          : "Needs improvement"}
+                      </span>
+                    )}
                   </div>
                 </div>
 

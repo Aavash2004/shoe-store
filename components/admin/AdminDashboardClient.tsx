@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Plus, ShoppingBag, Boxes, Tag, Users, DollarSign } from "lucide-react";
@@ -75,7 +75,7 @@ function timeAgo(dateString: string) {
   return `${days} days ago`;
 }
 
-const SUPPORTED_CURRENCIES = ["USD", "NPR", "EUR"] as const;
+const SUPPORTED_CURRENCIES = ["USD", "NPR", "EUR", "GBP"] as const;
 type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
 
 export function AdminDashboardClient({
@@ -89,6 +89,41 @@ export function AdminDashboardClient({
   lowStockItems,
 }: AdminDashboardClientProps) {
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("USD");
+
+  useEffect(() => {
+    const syncCurrency = () => {
+      const saved = localStorage.getItem("admin_selected_currency");
+      if (saved && (SUPPORTED_CURRENCIES as readonly string[]).includes(saved)) {
+        setSelectedCurrency(saved as CurrencyCode);
+      }
+    };
+
+    syncCurrency();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (
+        e.key === "admin_selected_currency" &&
+        e.newValue &&
+        (SUPPORTED_CURRENCIES as readonly string[]).includes(e.newValue)
+      ) {
+        setSelectedCurrency(e.newValue as CurrencyCode);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("admin_currency_change", syncCurrency);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("admin_currency_change", syncCurrency);
+    };
+  }, []);
+
+  const handleCurrencyChange = (code: CurrencyCode) => {
+    setSelectedCurrency(code);
+    try {
+      localStorage.setItem("admin_selected_currency", code);
+      window.dispatchEvent(new Event("admin_currency_change"));
+    } catch {}
+  };
 
   // Sum all orders by converting each order into the selected currency
   const totalRevenue = useMemo(() => {
@@ -126,7 +161,7 @@ export function AdminDashboardClient({
               return (
                 <button
                   key={code}
-                  onClick={() => setSelectedCurrency(code)}
+                  onClick={() => handleCurrencyChange(code)}
                   className={`rounded-lg px-3 py-1 text-xs font-bold transition-all duration-150 ${
                     active
                       ? "bg-[var(--color-navy)] text-white shadow-xs scale-100"
