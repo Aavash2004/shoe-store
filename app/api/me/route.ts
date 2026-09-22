@@ -20,6 +20,7 @@ export async function GET() {
       id: true,
       name: true,
       email: true,
+      phone: true,
       role: true,
       createdAt: true,
       updatedAt: true,
@@ -34,12 +35,12 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const defaultPhone = user.addresses[0]?.phone || "";
+  const phone = user.phone || user.addresses[0]?.phone || "";
 
   return NextResponse.json({
     user: {
       ...user,
-      phone: defaultPhone,
+      phone,
     },
   });
 }
@@ -60,15 +61,19 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const { name } = parsed.data;
+  const { name, phone } = parsed.data;
 
   const updatedUser = await prisma.user.update({
     where: { id: session.user.id },
-    data: { name },
+    data: {
+      name,
+      ...(phone !== undefined ? { phone: phone.trim() || null } : {}),
+    },
     select: {
       id: true,
       name: true,
       email: true,
+      phone: true,
       role: true,
       updatedAt: true,
     },

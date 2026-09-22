@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * Identifies abandoned Stripe checkout sessions, cancels the PaymentIntent,
  * and atomically releases reserved stock back into inventory.
  */
-export async function POST(request: NextRequest) {
+async function handleCleanup(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
 
@@ -149,3 +149,12 @@ export async function POST(request: NextRequest) {
     timestamp: new Date().toISOString(),
   });
 }
+
+export async function GET(request: NextRequest) {
+  return handleCleanup(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleCleanup(request);
+}
+

@@ -19,8 +19,9 @@
 * `GET /api/cart`: Fetch authenticated user cart items.
 * `POST /api/cart`: Add or update variant in user cart.
 * `POST /api/cart/merge`: Synchronize anonymous client cart with authenticated database cart on login.
-* `GET /api/wishlist`: Fetch user wishlist.
-* `POST /api/wishlist`: Toggle variant/product in user wishlist.
+* `GET /api/me/wishlist`: Fetch user wishlist.
+* `POST /api/me/wishlist`: Toggle variant/product in user wishlist.
+* `DELETE /api/me/wishlist/[productId]`: Remove product from user wishlist.
 
 ### Orders & Tracking
 * `GET /api/orders/track`: Public tracking endpoint requiring `orderNumber` and verified `email`.
@@ -38,4 +39,4 @@
 * `refundStripeOrder(orderId, reason)`: Calls Stripe Refunds API, updates order to `REFUNDED` / `CANCELLED`, restores stock, and logs audit record.
 * `updateVariantStock(variantId, newStock)`: Instant inline stock adjustment with admin audit trail.
 * `deleteReview(reviewId)`: Delete customer review from catalog.
-* `GET /api/cron/cleanup-expired-orders`: Cron job releasing uncaptured inventory holds older than 30 minutes.
+* `GET|POST /api/cron/cleanup-expired-orders`: Cron job releasing uncaptured inventory holds older than 30 minutes (supports both GET for automated schedulers and manual POST).

@@ -80,6 +80,8 @@ export default function ProfilePage() {
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [editingAddress, setEditingAddress] = useState<AddressItem | null>(null);
   const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressToDelete, setAddressToDelete] = useState<AddressItem | null>(null);
+  const [isDeletingAddress, setIsDeletingAddress] = useState(false);
 
   // Profile Form
   const {
@@ -168,7 +170,15 @@ export default function ProfilePage() {
       }
 
       const updated = await res.json();
-      setUserData((prev) => (prev ? { ...prev, name: updated.user.name } : null));
+      setUserData((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: updated.user.name,
+              phone: updated.user.phone || "",
+            }
+          : null
+      );
       setProfileSuccess("Personal information updated successfully.");
       setTimeout(() => setProfileSuccess(null), 4000);
     } catch (err) {
@@ -265,17 +275,25 @@ export default function ProfilePage() {
     }
   };
 
-  const onDeleteAddress = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this address?")) return;
+  const openDeleteDialog = (addr: AddressItem) => {
+    setAddressToDelete(addr);
+  };
+
+  const confirmDeleteAddress = async () => {
+    if (!addressToDelete) return;
+    setIsDeletingAddress(true);
     try {
-      const res = await fetch(`/api/me/addresses/${id}`, {
+      const res = await fetch(`/api/me/addresses/${addressToDelete.id}`, {
         method: "DELETE",
       });
       if (res.ok) {
+        setAddressToDelete(null);
         fetchData();
       }
     } catch (err) {
       console.error("Failed to delete address:", err);
+    } finally {
+      setIsDeletingAddress(false);
     }
   };
 
@@ -347,7 +365,7 @@ export default function ProfilePage() {
         )}
 
         <form onSubmit={handleSubmitProfile(onSaveProfile)} className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {/* Full Name */}
             <div className="space-y-1.5">
               <label htmlFor="name" className="block text-xs font-semibold uppercase text-[var(--color-navy)]/70">
@@ -361,6 +379,23 @@ export default function ProfilePage() {
               />
               {profileErrors.name && (
                 <p className="text-xs text-rose-600">{profileErrors.name.message}</p>
+              )}
+            </div>
+
+            {/* Phone Number */}
+            <div className="space-y-1.5">
+              <label htmlFor="phone" className="block text-xs font-semibold uppercase text-[var(--color-navy)]/70">
+                Phone Number
+              </label>
+              <input
+                id="phone"
+                type="tel"
+                placeholder="+977 9800000000"
+                className="w-full px-4 py-3 bg-[var(--color-cream)] border border-[var(--color-sand)] rounded-xl text-sm text-[var(--color-navy)] focus:outline-none focus:ring-2 focus:ring-[var(--color-sky)]"
+                {...registerProfile("phone")}
+              />
+              {profileErrors.phone && (
+                <p className="text-xs text-rose-600">{profileErrors.phone.message}</p>
               )}
             </div>
 
@@ -586,7 +621,7 @@ export default function ProfilePage() {
                     <span>Edit</span>
                   </button>
                   <button
-                    onClick={() => onDeleteAddress(addr.id)}
+                    onClick={() => openDeleteDialog(addr)}
                     className="text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -788,6 +823,74 @@ export default function ProfilePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Address Confirmation Dialog Box */}
+      {addressToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => !isDeletingAddress && setAddressToDelete(null)}
+        >
+          <div
+            className="w-full max-w-md bg-[var(--color-cream)] border border-[var(--color-sand)] rounded-2xl p-6 sm:p-7 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => !isDeletingAddress && setAddressToDelete(null)}
+              disabled={isDeletingAddress}
+              className="absolute top-4 right-4 text-[var(--color-navy)]/50 hover:text-[var(--color-navy)] p-1 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Close dialog"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100 shadow-xs">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-navy)]">
+                Delete Address
+              </h3>
+              <p className="text-xs text-[var(--color-navy)]/65 leading-relaxed">
+                Are you sure you want to delete this shipping address? This action cannot be undone.
+              </p>
+            </div>
+
+            {/* Address Snapshot preview */}
+            <div className="bg-[var(--color-cream-alt)] border border-[var(--color-sand)] rounded-xl p-3.5 text-xs text-[var(--color-navy)]/80 space-y-0.5">
+              <p className="font-bold text-[var(--color-navy)]">
+                {addressToDelete.title || "Home"} &bull; {addressToDelete.fullName}
+              </p>
+              <p className="text-[var(--color-navy)]/70">
+                {addressToDelete.line1}{addressToDelete.line2 ? `, ${addressToDelete.line2}` : ""}, {addressToDelete.city}
+              </p>
+              <p className="text-[var(--color-navy)]/50 font-mono text-[11px]">
+                Ph: {addressToDelete.phone}
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeletingAddress}
+                onClick={() => setAddressToDelete(null)}
+                className="px-4 py-2.5 bg-transparent hover:bg-[var(--color-sand)]/40 text-[var(--color-navy)] text-xs font-semibold rounded-xl transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAddress}
+                onClick={confirmDeleteAddress}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-xs"
+              >
+                {isDeletingAddress && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeletingAddress ? "Deleting..." : "Delete Address"}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
