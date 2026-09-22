@@ -433,3 +433,18 @@ model AdminActivityLog {
   @@index([entity, entityId])
   @@map("admin_activity_logs")
 }
+
+// ============================================================
+// EXCHANGE RATES (Dynamic Forex Cache)
+// ============================================================
+
+model ExchangeRate {
+  id            String   @id @default(cuid())
+  currency      String   @unique
+  rateToBaseUSD Decimal  @db.Decimal(10, 4)
+  source        String   @default("OPEN_ER_API")
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  @@map("exchange_rates")
+}

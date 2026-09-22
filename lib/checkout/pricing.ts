@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { COUNTRIES, getCountryByCode } from "@/lib/constants/countries";
 import { CURRENCIES } from "@/lib/constants/currencies";
 import { calculateShipping, ShippingQuote } from "@/lib/checkout/shipping";
+import { getExchangeRates } from "@/lib/services/exchangeRates";
 
 export interface PricingOrderItem {
   variantId: string;
@@ -52,8 +53,8 @@ export async function calculateOrderPricing(
   }
 
   const currencyCode = country.currency || "NPR";
-  const currencyConfig = CURRENCIES[currencyCode] || CURRENCIES.NPR;
-  const exchangeRate = currencyConfig.rateToBaseUSD || 1.0;
+  const rates = await getExchangeRates(dbClient);
+  const exchangeRate = rates[currencyCode] || CURRENCIES[currencyCode]?.rateToBaseUSD || 1.0;
 
   // Fetch all variants with their parent products
   const variantIds = items.map((i) => i.variantId);

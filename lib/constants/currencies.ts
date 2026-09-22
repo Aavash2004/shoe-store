@@ -58,14 +58,15 @@ const DEFAULT_LOCALES: Record<string, string> = {
 export function convertCurrency(
   amount: number,
   fromCurrency: string = "USD",
-  toCurrency: string = "USD"
+  toCurrency: string = "USD",
+  customRates?: Record<string, number>
 ): number {
   const from = fromCurrency.toUpperCase();
   const to = toCurrency.toUpperCase();
   if (from === to || !amount) return amount;
 
-  const fromRate = CURRENCIES[from]?.rateToBaseUSD ?? 1.0;
-  const toRate = CURRENCIES[to]?.rateToBaseUSD ?? 1.0;
+  const fromRate = customRates?.[from] ?? CURRENCIES[from]?.rateToBaseUSD ?? 1.0;
+  const toRate = customRates?.[to] ?? CURRENCIES[to]?.rateToBaseUSD ?? 1.0;
 
   // Convert from source currency to base USD, then from USD to target currency
   const inUSD = amount / fromRate;

@@ -5,12 +5,18 @@ export interface ShippingQuote {
   amountNeededForFree: number;
   thresholdProgress: number; // 0 - 100%
   carrierName: string;
+  estimatedDeliveryTime: string;
+  minEstimatedDays: number;
+  maxEstimatedDays: number;
 }
 
 interface CountryShippingRule {
   freeThreshold: number;
   flatRate: number;
   carrierName: string;
+  estimatedDeliveryTime: string;
+  minEstimatedDays: number;
+  maxEstimatedDays: number;
 }
 
 const SHIPPING_RULES: Record<string, CountryShippingRule> = {
@@ -18,21 +24,30 @@ const SHIPPING_RULES: Record<string, CountryShippingRule> = {
     freeThreshold: 3000,
     flatRate: 150,
     carrierName: "Domestic Doorstep Express",
+    estimatedDeliveryTime: "2-3 business days",
+    minEstimatedDays: 2,
+    maxEstimatedDays: 3,
   },
   US: {
     freeThreshold: 150,
     flatRate: 15,
     carrierName: "International Priority Express",
+    estimatedDeliveryTime: "5-7 business days",
+    minEstimatedDays: 5,
+    maxEstimatedDays: 7,
   },
   GB: {
     freeThreshold: 120,
     flatRate: 12,
     carrierName: "UK Royal Mail Tracked International",
+    estimatedDeliveryTime: "4-6 business days",
+    minEstimatedDays: 4,
+    maxEstimatedDays: 6,
   },
 };
 
 /**
- * Calculates shipping cost, free threshold progress, and carrier name for a destination country.
+ * Calculates shipping cost, free threshold progress, carrier, and delivery estimate for a destination country.
  */
 export function calculateShipping(
   subtotal: number,
@@ -56,5 +71,32 @@ export function calculateShipping(
     amountNeededForFree,
     thresholdProgress,
     carrierName: rule.carrierName,
+    estimatedDeliveryTime: rule.estimatedDeliveryTime,
+    minEstimatedDays: rule.minEstimatedDays,
+    maxEstimatedDays: rule.maxEstimatedDays,
   };
 }
+
+/**
+ * Generates an external tracking URL for standard carrier services.
+ */
+export function getCarrierTrackingUrl(
+  carrierName: string,
+  trackingNumber?: string
+): string | null {
+  if (!trackingNumber || !trackingNumber.trim()) return null;
+  const num = encodeURIComponent(trackingNumber.trim());
+  const carrier = carrierName.toLowerCase();
+
+  if (carrier.includes("royal mail")) {
+    return `https://www.royalmail.com/track-your-item#/tracking-results/${num}`;
+  }
+  if (carrier.includes("doorstep") || carrier.includes("nepal")) {
+    return `https://nepalcanmove.com/track?id=${num}`;
+  }
+  if (carrier.includes("priority") || carrier.includes("fedex")) {
+    return `https://www.fedex.com/fedextrack/?trknbr=${num}`;
+  }
+  return null;
+}
+
