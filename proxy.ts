@@ -14,7 +14,7 @@ const proxy = auth((req) => {
 
   // Redirect legacy /auth/login to /login
   if (pathname === "/auth/login") {
-    const loginUrl = new URL("/login", req.url);
+    const loginUrl = new URL("/login", req.nextUrl.origin);
     req.nextUrl.searchParams.forEach((val, key) => {
       loginUrl.searchParams.set(key, val);
     });
@@ -25,11 +25,11 @@ const proxy = auth((req) => {
   if (pathname === "/login") {
     if (isLoggedIn) {
       if (userRole === "ADMIN") {
-        return NextResponse.redirect(new URL("/admin", req.url), {
+        return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
           headers: requestHeaders,
         });
       }
-      return NextResponse.redirect(new URL("/account", req.url), {
+      return NextResponse.redirect(new URL("/account", req.nextUrl.origin), {
         headers: requestHeaders,
       });
     }
@@ -43,7 +43,7 @@ const proxy = auth((req) => {
     // Sub-routes (/account/orders, /account/profile, etc.) require CUSTOMER session
     if (pathname !== "/account") {
       if (!isLoggedIn || userRole !== "CUSTOMER") {
-        const loginUrl = new URL("/login", req.url);
+        const loginUrl = new URL("/login", req.nextUrl.origin);
         loginUrl.searchParams.set("callbackUrl", pathname);
         return NextResponse.redirect(loginUrl, { headers: requestHeaders });
       }
@@ -54,7 +54,7 @@ const proxy = auth((req) => {
   if (pathname.startsWith("/admin")) {
     if (pathname === "/admin/login") {
       if (isLoggedIn && userRole === "ADMIN") {
-        return NextResponse.redirect(new URL("/admin", req.url), {
+        return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
           headers: requestHeaders,
         });
       }
@@ -64,7 +64,7 @@ const proxy = auth((req) => {
     }
 
     if (!isLoggedIn || userRole !== "ADMIN") {
-      const loginUrl = new URL("/admin/login", req.url);
+      const loginUrl = new URL("/admin/login", req.nextUrl.origin);
       loginUrl.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(loginUrl, { headers: requestHeaders });
     }
