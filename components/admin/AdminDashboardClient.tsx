@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Plus, ShoppingBag, Boxes, Tag, Users, DollarSign } from "lucide-react";
+import { ArrowRight, Plus, ShoppingBag, Boxes, Tag, Users, DollarSign, RefreshCw } from "lucide-react";
 import { formatCurrency, convertCurrency, CURRENCIES } from "@/lib/constants/currencies";
 
 export type AdminDashboardOrder = {
@@ -43,6 +43,7 @@ interface AdminDashboardClientProps {
   recentOrders: AdminDashboardOrder[];
   recentProducts: AdminDashboardProduct[];
   lowStockItems: AdminDashboardLowStock[];
+  exchangeRates?: Record<string, number>;
 }
 
 function statusDot(status: string) {
@@ -87,8 +88,43 @@ export function AdminDashboardClient({
   recentOrders,
   recentProducts,
   lowStockItems,
+  exchangeRates,
 }: AdminDashboardClientProps) {
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("USD");
+  const [rates, setRates] = useState<Record<string, number>>(
+    exchangeRates || {
+      USD: 1.0,
+      NPR: CURRENCIES.NPR?.rateToBaseUSD ?? 135.0,
+      GBP: CURRENCIES.GBP?.rateToBaseUSD ?? 0.78,
+      EUR: CURRENCIES.EUR?.rateToBaseUSD ?? 0.92,
+    }
+  );
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  const fetchRates = async (force = false) => {
+    try {
+      setIsSyncing(true);
+      const res = await fetch(force ? "/api/currencies?refresh=true" : "/api/currencies");
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.rates) {
+          setRates(data.rates);
+          setLastSyncTime(
+            new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          );
+        }
+      }
+    } catch {
+      // Gracefully maintain current rates on fetch failure
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRates(false);
+  }, []);
 
   useEffect(() => {
     const syncCurrency = () => {
@@ -125,23 +161,23 @@ export function AdminDashboardClient({
     } catch {}
   };
 
-  // Sum all orders by converting each order into the selected currency
+  // Sum all orders by converting each order into the selected currency using live exchange rates
   const totalRevenue = useMemo(() => {
     return revenueOrders.reduce((sum, order) => {
-      const converted = convertCurrency(order.total, order.currency || "USD", selectedCurrency);
+      const converted = convertCurrency(order.total, order.currency || "USD", selectedCurrency, rates);
       return sum + converted;
     }, 0);
-  }, [revenueOrders, selectedCurrency]);
+  }, [revenueOrders, selectedCurrency, rates]);
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 sm:space-y-10">
       {/* Header with Title and Currency Switcher */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/55">
             Overview
           </span>
-          <h1 className="mt-0.5 font-[family-name:var(--font-display)] text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-navy)]">
+          <h1 className="mt-0.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-[var(--color-navy)]">
             Welcome back, {adminName}
           </h1>
           <p className="mt-1 text-xs text-[var(--color-navy)]/60">
@@ -149,12 +185,29 @@ export function AdminDashboardClient({
           </p>
         </div>
 
-        {/* Currency Switcher Control */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-navy)]/60">
-            Currency:
-          </span>
-          <div className="inline-flex items-center rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-1 shadow-2xs">
+        {/* Currency Switcher & Live Forex Controls */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => fetchRates(true)}
+            disabled={isSyncing}
+            title="Force refresh rates directly from ExchangeRate-API"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-navy)]/70 hover:bg-white hover:text-[var(--color-navy)] transition-all disabled:opacity-50 shadow-2xs"
+          >
+            <RefreshCw className={`h-3 w-3 text-emerald-600 ${isSyncing ? "animate-spin" : ""}`} />
+            <span>ExchangeRate-API</span>
+            {lastSyncTime && (
+              <span className="text-[10px] text-[var(--color-navy)]/40 font-mono hidden xs:inline">
+                ({lastSyncTime})
+              </span>
+            )}
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-navy)]/60">
+              Currency:
+            </span>
+            <div className="inline-flex max-w-full items-center overflow-x-auto rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-1 shadow-2xs">
             {SUPPORTED_CURRENCIES.map((code) => {
               const active = selectedCurrency === code;
               const symbol = CURRENCIES[code]?.symbol || code;
@@ -162,7 +215,7 @@ export function AdminDashboardClient({
                 <button
                   key={code}
                   onClick={() => handleCurrencyChange(code)}
-                  className={`rounded-lg px-3 py-1 text-xs font-bold transition-all duration-150 ${
+                  className={`rounded-lg px-2.5 sm:px-3 py-1 text-xs font-bold transition-all duration-150 shrink-0 ${
                     active
                       ? "bg-[var(--color-navy)] text-white shadow-xs scale-100"
                       : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-white/60"
@@ -178,15 +231,16 @@ export function AdminDashboardClient({
           </div>
         </div>
       </div>
+    </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 gap-6 divide-x divide-[var(--color-sand)] border-y border-[var(--color-sand)] py-6 sm:grid-cols-4">
+      {/* Stats row: Responsive modern cards on mobile, clean divider column row on sm+ */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-4 border-y border-[var(--color-sand)] py-5 sm:py-6">
         {/* Orders Card */}
-        <div className="pl-0">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
             Orders
           </p>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-3xl font-extrabold text-[var(--color-navy)]">
+          <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
             {totalOrdersCount}
           </p>
           <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
@@ -195,8 +249,8 @@ export function AdminDashboardClient({
         </div>
 
         {/* Revenue Card (Single Normalized Currency) */}
-        <div className="pl-6">
-          <div className="flex items-center justify-between pr-2">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0 sm:border-l sm:border-[var(--color-sand)] sm:pl-6">
+          <div className="flex items-center justify-between sm:pr-2">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
               Revenue
             </p>
@@ -204,20 +258,20 @@ export function AdminDashboardClient({
               {selectedCurrency}
             </span>
           </div>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)] tracking-tight">
+          <p className="mt-1.5 font-[family-name:var(--font-display)] text-xl sm:text-2xl lg:text-3xl font-extrabold text-[var(--color-navy)] tracking-tight truncate">
             {formatCurrency(totalRevenue, selectedCurrency)}
           </p>
-          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
-            Normalized across all orders
+          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45 truncate">
+            Normalized total
           </p>
         </div>
 
         {/* Products Card */}
-        <div className="pl-6">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0 sm:border-l sm:border-[var(--color-sand)] sm:pl-6">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
             Products
           </p>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-3xl font-extrabold text-[var(--color-navy)]">
+          <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
             {totalProductsCount}
           </p>
           <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
@@ -226,11 +280,11 @@ export function AdminDashboardClient({
         </div>
 
         {/* Low Stock Card */}
-        <div className="pl-6">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0 sm:border-l sm:border-[var(--color-sand)] sm:pl-6">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
             Low Stock
           </p>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-3xl font-extrabold text-[var(--color-navy)]">
+          <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
             {lowStockCount}
           </p>
           <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
@@ -240,9 +294,9 @@ export function AdminDashboardClient({
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-8 sm:gap-10 lg:grid-cols-3">
         {/* Left column: Orders and Products */}
-        <div className="space-y-10 lg:col-span-2">
+        <div className="space-y-8 sm:space-y-10 lg:col-span-2">
           {/* Recent Orders */}
           <div>
             <div className="flex items-center justify-between">
@@ -260,47 +314,45 @@ export function AdminDashboardClient({
             {recentOrders.length === 0 ? (
               <p className="mt-6 text-xs text-[var(--color-navy)]/50">No orders yet.</p>
             ) : (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-sand)] text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/55">
-                      <th className="px-5 py-3 font-bold">Order</th>
-                      <th className="px-5 py-3 font-bold">Customer</th>
-                      <th className="px-5 py-3 text-center font-bold">Items</th>
-                      <th className="px-5 py-3 text-right font-bold">Total ({selectedCurrency})</th>
-                      <th className="px-5 py-3 text-right font-bold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-sand)]/70">
-                    {recentOrders.map((order) => {
-                      const isForeign = (order.currency || "USD") !== selectedCurrency;
-                      const converted = convertCurrency(
-                        order.total,
-                        order.currency || "USD",
-                        selectedCurrency
-                      );
+              <>
+                {/* Mobile View: Order Cards (fits small screens perfectly without horizontal cutoff) */}
+                <div className="mt-4 flex flex-col gap-3 sm:hidden">
+                  {recentOrders.map((order) => {
+                    const isForeign = (order.currency || "USD") !== selectedCurrency;
+                    const converted = convertCurrency(
+                      order.total,
+                      order.currency || "USD",
+                      selectedCurrency,
+                      rates
+                    );
 
-                      return (
-                        <tr
-                          key={order.id}
-                          className="hover:bg-[var(--color-sand)]/20 transition-colors"
-                        >
-                          <td className="px-5 py-3.5">
-                            <Link
-                              href={`/admin/orders/${order.id}`}
-                              className="font-mono font-bold text-[var(--color-navy)] hover:underline"
-                            >
-                              #{order.orderNumber}
-                            </Link>
-                          </td>
-                          <td className="px-5 py-3.5 text-xs font-medium text-[var(--color-navy)]/80">
-                            {order.customerName}
-                          </td>
-                          <td className="px-5 py-3.5 text-center text-xs text-[var(--color-navy)]/70">
-                            {order.itemsCount}
-                          </td>
-                          <td className="px-5 py-3.5 text-right">
-                            <p className="font-bold text-[var(--color-navy)]">
+                    return (
+                      <Link
+                        key={order.id}
+                        href={`/admin/orders/${order.id}`}
+                        className="block rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-4 shadow-2xs hover:border-[var(--color-navy)]/30 hover:shadow-xs transition-all active:scale-[0.99]"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-bold text-[var(--color-navy)]">
+                            #{order.orderNumber}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--color-navy)]/80">
+                            <span className={`h-1.5 w-1.5 rounded-full ${statusDot(order.status)}`} />
+                            {statusLabel(order.status)}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-[var(--color-sand)]/60 pt-2.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-[var(--color-navy)] truncate">
+                              {order.customerName}
+                            </p>
+                            <p className="text-[10px] text-[var(--color-navy)]/50">
+                              {order.itemsCount} {order.itemsCount === 1 ? "item" : "items"}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-[family-name:var(--font-display)] font-bold text-sm text-[var(--color-navy)]">
                               {formatCurrency(order.total, order.currency || "USD")}
                             </p>
                             {isForeign && (
@@ -308,19 +360,77 @@ export function AdminDashboardClient({
                                 ≈ {formatCurrency(converted, selectedCurrency)}
                               </p>
                             )}
-                          </td>
-                          <td className="px-5 py-3.5 text-right">
-                            <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-navy)]/70">
-                              <span className={`h-2 w-2 rounded-full ${statusDot(order.status)}`} />
-                              {statusLabel(order.status)}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                {/* Tablet / Desktop View: Full Table with overflow-x-auto */}
+                <div className="mt-4 hidden sm:block overflow-x-auto rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]">
+                  <table className="w-full min-w-[550px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-sand)] text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/55">
+                        <th className="px-5 py-3 font-bold">Order</th>
+                        <th className="px-5 py-3 font-bold">Customer</th>
+                        <th className="px-5 py-3 text-center font-bold">Items</th>
+                        <th className="px-5 py-3 text-right font-bold">Total ({selectedCurrency})</th>
+                        <th className="px-5 py-3 text-right font-bold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-sand)]/70">
+                      {recentOrders.map((order) => {
+                        const isForeign = (order.currency || "USD") !== selectedCurrency;
+                        const converted = convertCurrency(
+                          order.total,
+                          order.currency || "USD",
+                          selectedCurrency,
+                          rates
+                        );
+
+                        return (
+                          <tr
+                            key={order.id}
+                            className="hover:bg-[var(--color-sand)]/20 transition-colors"
+                          >
+                            <td className="px-5 py-3.5">
+                              <Link
+                                href={`/admin/orders/${order.id}`}
+                                className="font-mono font-bold text-[var(--color-navy)] hover:underline"
+                              >
+                                #{order.orderNumber}
+                              </Link>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs font-medium text-[var(--color-navy)]/80">
+                              {order.customerName}
+                            </td>
+                            <td className="px-5 py-3.5 text-center text-xs text-[var(--color-navy)]/70">
+                              {order.itemsCount}
+                            </td>
+                            <td className="px-5 py-3.5 text-right">
+                              <p className="font-bold text-[var(--color-navy)]">
+                                {formatCurrency(order.total, order.currency || "USD")}
+                              </p>
+                              {isForeign && (
+                                <p className="text-[10px] font-medium text-[var(--color-navy)]/50">
+                                  ≈ {formatCurrency(converted, selectedCurrency)}
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-right">
+                              <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-navy)]/70">
+                                <span className={`h-2 w-2 rounded-full ${statusDot(order.status)}`} />
+                                {statusLabel(order.status)}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
 
@@ -343,27 +453,32 @@ export function AdminDashboardClient({
             ) : (
               <div className="mt-4 flex flex-col divide-y divide-[var(--color-sand)] rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] overflow-hidden">
                 {recentProducts.map((prod) => {
-                  const convertedPrice = convertCurrency(prod.price, "USD", selectedCurrency);
+                  const convertedPrice = convertCurrency(prod.price, "USD", selectedCurrency, rates);
                   return (
                     <div
                       key={prod.id}
-                      className="flex items-center gap-4 px-5 py-3.5 hover:bg-[var(--color-sand)]/20 transition-colors"
+                      className="flex items-center gap-3 sm:gap-4 px-3.5 sm:px-5 py-3 sm:py-3.5 hover:bg-[var(--color-sand)]/20 transition-colors"
                     >
-                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[var(--color-cream)] border border-[var(--color-sand)]">
+                      <div className="relative h-11 w-11 sm:h-12 sm:w-12 shrink-0 overflow-hidden rounded-xl bg-[var(--color-cream)] border border-[var(--color-sand)]">
                         <Image src={prod.imageUrl} alt={prod.name} fill className="object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-[family-name:var(--font-display)] font-semibold text-sm text-[var(--color-navy)] truncate">
+                        <p className="font-[family-name:var(--font-display)] font-semibold text-xs sm:text-sm text-[var(--color-navy)] truncate">
                           {prod.name}
                         </p>
-                        <p className="text-xs text-[var(--color-navy)]/50">{prod.categoryName}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-[var(--color-navy)]">
-                          {formatCurrency(convertedPrice, selectedCurrency)}
+                        <p className="text-[11px] sm:text-xs text-[var(--color-navy)]/50 truncate">
+                          {prod.categoryName}
                         </p>
                       </div>
-                      <p className="w-20 text-right text-xs text-[var(--color-navy)]/50">
+                      <div className="text-right shrink-0">
+                        <p className="text-xs sm:text-sm font-bold text-[var(--color-navy)]">
+                          {formatCurrency(convertedPrice, selectedCurrency)}
+                        </p>
+                        <p className="text-[10px] text-[var(--color-navy)]/50 sm:hidden">
+                          {timeAgo(prod.createdAt)}
+                        </p>
+                      </div>
+                      <p className="hidden sm:block w-20 text-right text-xs text-[var(--color-navy)]/50 shrink-0">
                         {timeAgo(prod.createdAt)}
                       </p>
                     </div>
@@ -375,7 +490,7 @@ export function AdminDashboardClient({
         </div>
 
         {/* Right column */}
-        <div className="space-y-10">
+        <div className="space-y-8 sm:space-y-10">
           {/* Low stock */}
           <div>
             <div className="flex items-center justify-between">
@@ -401,20 +516,20 @@ export function AdminDashboardClient({
                   return (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 p-3 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]"
+                      className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]"
                     >
-                      <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--color-cream)] border border-[var(--color-sand)]">
+                      <div className="relative h-10 w-10 sm:h-11 sm:w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--color-cream)] border border-[var(--color-sand)]">
                         <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-[var(--color-navy)] truncate">
                           {item.name}
                         </p>
-                        <p className="text-[10px] text-[var(--color-navy)]/50">
+                        <p className="text-[10px] text-[var(--color-navy)]/50 truncate">
                           Size {item.size} · {item.color}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <p
                           className={`text-xs font-bold ${
                             urgent ? "text-rose-600" : "text-amber-600"
@@ -435,48 +550,48 @@ export function AdminDashboardClient({
             <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
               Quick Actions
             </h2>
-            <div className="mt-4 flex flex-col gap-2.5">
+            <div className="mt-4 flex flex-col sm:grid sm:grid-cols-2 lg:flex lg:flex-col gap-2.5">
               <Link
                 href="/admin/products/new"
-                className="flex items-center gap-2 rounded-xl bg-[var(--color-navy)] px-4 py-3 text-xs font-semibold text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 transition-colors shadow-2xs"
+                className="flex items-center gap-2 rounded-xl bg-[var(--color-navy)] px-4 py-3 text-xs font-semibold text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 transition-colors shadow-2xs sm:col-span-2 lg:col-span-1"
               >
-                <Plus className="h-4 w-4" /> Add New Product
+                <Plus className="h-4 w-4 shrink-0" /> Add New Product
               </Link>
               <Link
                 href="/admin/orders"
                 className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
               >
                 <span className="flex items-center gap-2">
-                  <ShoppingBag className="h-4 w-4 text-[var(--color-navy)]/50" /> View Orders
+                  <ShoppingBag className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> View Orders
                 </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40" />
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
               </Link>
               <Link
                 href="/admin/inventory"
                 className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
               >
                 <span className="flex items-center gap-2">
-                  <Boxes className="h-4 w-4 text-[var(--color-navy)]/50" /> Manage Inventory
+                  <Boxes className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Inventory
                 </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40" />
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
               </Link>
               <Link
                 href="/admin/categories"
                 className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
               >
                 <span className="flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-[var(--color-navy)]/50" /> Manage Categories
+                  <Tag className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Categories
                 </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40" />
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
               </Link>
               <Link
                 href="/admin/users"
                 className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
               >
                 <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-[var(--color-navy)]/50" /> Manage Users
+                  <Users className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Users
                 </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40" />
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
               </Link>
             </div>
           </div>

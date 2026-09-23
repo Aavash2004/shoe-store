@@ -7,11 +7,14 @@ export type SupportedCurrency = "USD" | "NPR" | "EUR" | "GBP";
 interface CurrencyState {
   currency: SupportedCurrency;
   rates: Record<string, number>;
+  ratesLoaded: boolean;
+  provider?: string;
+  lastUpdated?: string;
   setCurrency: (currency: SupportedCurrency) => void;
   setRates: (rates: Record<string, number>) => void;
-  syncRatesFromServer: () => Promise<void>;
-  convertPrice: (amountInUSD: number) => number;
-  formatPrice: (amountInUSD: number) => string;
+  syncRatesFromServer: (force?: boolean) => Promise<void>;
+  convertPrice: (amountInUSD: number, targetCurrency?: SupportedCurrency) => number;
+  formatPrice: (amountInUSD: number, targetCurrency?: SupportedCurrency) => string;
 }
 
 export const useCurrencyStore = create<CurrencyState>()(
@@ -24,33 +27,45 @@ export const useCurrencyStore = create<CurrencyState>()(
         GBP: CURRENCIES.GBP?.rateToBaseUSD ?? 0.78,
         EUR: CURRENCIES.EUR?.rateToBaseUSD ?? 0.92,
       },
+      ratesLoaded: false,
       setCurrency: (currency) => {
         set({ currency });
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("currency-changed", { detail: currency }));
         }
       },
-      setRates: (rates) => set({ rates }),
-      syncRatesFromServer: async () => {
+      setRates: (rates) => set({ rates, ratesLoaded: true }),
+      syncRatesFromServer: async (force = false) => {
         try {
-          const res = await fetch("/api/currencies");
+          const url = force ? "/api/currencies?refresh=true" : "/api/currencies";
+          const res = await fetch(url);
           if (res.ok) {
             const data = await res.json();
             if (data?.rates) {
-              set({ rates: data.rates });
+              set({
+                rates: data.rates,
+                ratesLoaded: true,
+                provider: data.provider,
+                lastUpdated: data.timestamp,
+              });
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("currency-rates-updated", { detail: data.rates })
+                );
+              }
             }
           }
         } catch {
           // Graceful fallback to currently stored or static rates
         }
       },
-      convertPrice: (amountInUSD) => {
-        const cur = get().currency || "USD";
+      convertPrice: (amountInUSD, targetCurrency) => {
+        const cur = targetCurrency || get().currency || "USD";
         const rates = get().rates;
         return convertCurrency(amountInUSD, "USD", cur, rates);
       },
-      formatPrice: (amountInUSD) => {
-        const cur = get().currency || "USD";
+      formatPrice: (amountInUSD, targetCurrency) => {
+        const cur = targetCurrency || get().currency || "USD";
         const rates = get().rates;
         const converted = convertCurrency(amountInUSD, "USD", cur, rates);
         return formatCurrency(converted, cur);
@@ -61,3 +76,4 @@ export const useCurrencyStore = create<CurrencyState>()(
     }
   )
 );
+

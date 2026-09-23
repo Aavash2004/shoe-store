@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/stores/cart-store";
+import { useCurrencyStore } from "@/stores/currency-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -97,9 +98,16 @@ export default function CheckoutPage() {
   const selectedCountry = getCountryByCode(selectedCountryCode);
   const currentPaymentMethod = watch("paymentMethod") || "COD";
 
+  const rates = useCurrencyStore((state) => state.rates);
+  const syncRates = useCurrencyStore((state) => state.syncRatesFromServer);
+
+  useEffect(() => {
+    syncRates();
+  }, [syncRates]);
+
   const currency = selectedCountry?.currency || "NPR";
   const currencyConfig = CURRENCIES[currency] || CURRENCIES.NPR;
-  const exchangeRate = currencyConfig.rateToBaseUSD || 1.0;
+  const exchangeRate = rates[currency] || currencyConfig.rateToBaseUSD || 1.0;
 
   // Price conversion helper ensuring Display = Charge
   const toLocalPrice = (usdPrice: number) => {

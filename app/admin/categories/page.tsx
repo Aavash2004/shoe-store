@@ -54,8 +54,8 @@ export default async function AdminCategoriesPage() {
           </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]">
+          <table className="w-full min-w-[450px] text-left">
             <thead>
               <tr className="border-b border-[var(--color-sand)] text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/55">
                 <th className="px-6 py-4">Name</th>

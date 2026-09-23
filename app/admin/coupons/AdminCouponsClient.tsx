@@ -108,8 +108,8 @@ export function AdminCouponsClient({ coupons }: { coupons: CouponItem[] }) {
           </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] shadow-2xs">
-          <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] shadow-2xs">
+          <table className="w-full min-w-[550px] text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--color-sand)] text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/55">
                 <th className="px-6 py-4 font-bold">Code</th>

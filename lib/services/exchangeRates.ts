@@ -13,20 +13,28 @@ import { CURRENCIES, CurrencyConfig } from "@/lib/constants/currencies";
 export const SYNCED_CURRENCIES = ["NPR", "GBP", "EUR"] as const;
 export type SyncedCurrency = (typeof SYNCED_CURRENCIES)[number];
 
-export const OpenErApiResponseSchema = z.object({
+export const ExchangeRateApiResponseSchema = z.object({
   result: z.literal("success"),
   base_code: z.literal("USD"),
-  rates: z.record(z.string(), z.number()),
+  rates: z.record(z.string(), z.number()).optional(),
+  conversion_rates: z.record(z.string(), z.number()).optional(),
   time_last_update_utc: z.string().optional(),
+  time_last_update_unix: z.number().optional(),
 });
 
-export type OpenErApiResponse = z.infer<typeof OpenErApiResponseSchema>;
+export type ExchangeRateApiResponse = z.infer<typeof ExchangeRateApiResponseSchema>;
+
+// Backwards-compatible alias for existing tests and callers
+export const OpenErApiResponseSchema = ExchangeRateApiResponseSchema;
+export type OpenErApiResponse = ExchangeRateApiResponse;
 
 export interface LiveRatesResult {
   NPR: number;
   GBP: number;
   EUR: number;
   USD: number;
+  source?: string;
+  provider?: string;
 }
 
 // 36 hours staleness limit in milliseconds
@@ -36,40 +44,47 @@ const MAX_CACHE_AGE_MS = 36 * 60 * 60 * 1000;
 let memoryCache: {
   rates: Record<string, number>;
   timestamp: number;
+  source?: string;
 } | null = null;
 const MEMORY_CACHE_TTL_MS = 10 * 60 * 1000;
 
 /**
- * Fetch live exchange rates from open.er-api.com with strict Zod validation.
- * Aborts cleanly on network failure, timeout, or schema drift.
+ * Helper to fetch and parse exchange rates from a given URL with timeout and Zod validation.
  */
-export async function fetchLiveRates(timeoutMs: number = 5000): Promise<LiveRatesResult> {
+async function fetchFromEndpoint(
+  url: string,
+  timeoutMs: number
+): Promise<{ NPR: number; GBP: number; EUR: number; USD: number }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch("https://open.er-api.com/v6/latest/USD", {
+    const res = await fetch(url, {
       signal: controller.signal,
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
 
     if (!res.ok) {
-      throw new Error(`Open ER API responded with HTTP status ${res.status}`);
+      throw new Error(`ExchangeRate API responded with HTTP status ${res.status}`);
     }
 
     const json = await res.json();
-    const parsed = OpenErApiResponseSchema.safeParse(json);
+    const parsed = ExchangeRateApiResponseSchema.safeParse(json);
 
     if (!parsed.success) {
       throw new Error(
-        `Open ER API schema validation failed: ${parsed.error.issues.map((i) => i.message).join(", ")}`
+        `ExchangeRate API schema validation failed: ${parsed.error.issues.map((i) => i.message).join(", ")}`
       );
     }
 
-    const { rates } = parsed.data;
+    // Support both conversion_rates (v6 with API key) and rates (open endpoint)
+    const rates = parsed.data.conversion_rates || parsed.data.rates;
+    if (!rates) {
+      throw new Error("No rate dictionary (conversion_rates/rates) found in API response");
+    }
 
-    // Validate that each target rate exists and is a positive finite number
+    // Validate that each target currency rate exists and is a positive finite number
     for (const cur of SYNCED_CURRENCIES) {
       const val = rates[cur];
       if (typeof val !== "number" || !Number.isFinite(val) || val <= 0) {
@@ -89,16 +104,54 @@ export async function fetchLiveRates(timeoutMs: number = 5000): Promise<LiveRate
 }
 
 /**
+ * Fetch live exchange rates from ExchangeRate-API (https://app.exchangerate-api.com/dashboard).
+ * Uses EXCHANGERATE_API_KEY if present, with automatic fallback to open.er-api.com.
+ */
+export async function fetchLiveRates(timeoutMs: number = 6000): Promise<LiveRatesResult> {
+  const rawKey = process.env.EXCHANGERATE_API_KEY || process.env.EXCHANGE_RATE_API_KEY;
+  const apiKey = rawKey?.trim();
+
+  // 1. If user has an ExchangeRate-API key configured, query the v6 authenticated endpoint
+  if (apiKey) {
+    try {
+      const live = await fetchFromEndpoint(
+        `https://v6.exchangerate-api.com/v6/${apiKey}/latest/USD`,
+        timeoutMs
+      );
+      return {
+        ...live,
+        source: "EXCHANGERATE_API",
+        provider: "ExchangeRate-API (v6 Pro/Standard)",
+      };
+    } catch (err: any) {
+      console.warn(
+        `[ExchangeRate-API] Authenticated endpoint error (${err?.message}). Falling back to open endpoint.`
+      );
+    }
+  }
+
+  // 2. Open fallback endpoint (ExchangeRate-API public open tier)
+  const fallback = await fetchFromEndpoint("https://open.er-api.com/v6/latest/USD", timeoutMs);
+  return {
+    ...fallback,
+    source: apiKey ? "EXCHANGERATE_API_FALLBACK" : "OPEN_ER_API",
+    provider: apiKey ? "ExchangeRate-API (Open Fallback)" : "ExchangeRate-API (Open Public)",
+  };
+}
+
+/**
  * Scheduled sync worker: Fetches live rates and upserts them into Postgres.
  * Safe under concurrent execution via unique constraint upsert.
  */
 export async function syncExchangeRates(callerId?: string): Promise<{
   success: boolean;
   rates?: LiveRatesResult;
+  source?: string;
   error?: string;
 }> {
   try {
     const liveRates = await fetchLiveRates();
+    const source = liveRates.source || "EXCHANGERATE_API";
 
     // Idempotent upsert by unique currency code
     await prisma.$transaction(
@@ -107,13 +160,13 @@ export async function syncExchangeRates(callerId?: string): Promise<{
           where: { currency },
           update: {
             rateToBaseUSD: liveRates[currency],
-            source: "OPEN_ER_API",
+            source,
             updatedAt: new Date(),
           },
           create: {
             currency,
             rateToBaseUSD: liveRates[currency],
-            source: "OPEN_ER_API",
+            source,
           },
         })
       )
@@ -128,9 +181,10 @@ export async function syncExchangeRates(callerId?: string): Promise<{
         EUR: liveRates.EUR,
       },
       timestamp: Date.now(),
+      source,
     };
 
-    return { success: true, rates: liveRates };
+    return { success: true, rates: liveRates, source };
   } catch (err: any) {
     const errorMessage = err?.message || "Unknown exchange rate sync error";
     console.error("[ExchangeRate Sync Error]:", errorMessage);
@@ -180,6 +234,20 @@ export async function getExchangeRates(
   // 2. Query Postgres exchange_rates cache
   try {
     const rows = await dbClient.exchangeRate.findMany();
+
+    if (!rows || rows.length === 0) {
+      // Auto-initialize from ExchangeRate-API on first access
+      const syncResult = await syncExchangeRates("AUTO_INIT");
+      if (syncResult.success && syncResult.rates) {
+        return {
+          USD: 1.0,
+          NPR: syncResult.rates.NPR,
+          GBP: syncResult.rates.GBP,
+          EUR: syncResult.rates.EUR,
+        };
+      }
+      return getStaticBaselineRates();
+    }
 
     if (rows && rows.length > 0) {
       // Check staleness against the oldest or newest entry

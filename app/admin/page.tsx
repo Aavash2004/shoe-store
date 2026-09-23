@@ -6,6 +6,7 @@ import {
   type AdminDashboardProduct,
   type AdminDashboardLowStock,
 } from "@/components/admin/AdminDashboardClient";
+import { getExchangeRates } from "@/lib/services/exchangeRates";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +145,8 @@ export default async function AdminDashboardPage() {
     serializedLowStock,
   } = await executeAdminDashboardData();
 
+  const exchangeRates = await getExchangeRates();
+
   return (
     <AdminDashboardClient
       adminName={adminName}
@@ -154,6 +157,7 @@ export default async function AdminDashboardPage() {
       recentOrders={serializedRecentOrders}
       recentProducts={serializedRecentProducts}
       lowStockItems={serializedLowStock}
+      exchangeRates={exchangeRates}
     />
   );
 }

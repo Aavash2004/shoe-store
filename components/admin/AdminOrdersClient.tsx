@@ -57,6 +57,7 @@ export type AdminOrderRow = {
 
 interface AdminOrdersClientProps {
   initialOrders: AdminOrderRow[];
+  exchangeRates?: Record<string, number>;
 }
 
 const SUPPORTED_CURRENCIES = ["USD", "NPR", "EUR", "GBP"] as const;
@@ -64,9 +65,26 @@ type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
 
 type FilterTab = "ALL" | "UNFULFILLED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
 
-export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
+export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersClientProps) {
   const router = useRouter();
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("USD");
+  const [rates, setRates] = useState<Record<string, number>>(
+    exchangeRates || {
+      USD: 1.0,
+      NPR: CURRENCIES.NPR?.rateToBaseUSD ?? 135.0,
+      GBP: CURRENCIES.GBP?.rateToBaseUSD ?? 0.78,
+      EUR: CURRENCIES.EUR?.rateToBaseUSD ?? 0.92,
+    }
+  );
+
+  useEffect(() => {
+    fetch("/api/currencies")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.rates) setRates(data.rates);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const syncCurrency = () => {
@@ -144,7 +162,7 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
 
     const completedOrders = orders.filter((o) => o.status !== "CANCELLED");
     const totalRevenue = completedOrders.reduce((sum, o) => {
-      const converted = convertCurrency(Number(o.total || 0), o.currency || "USD", selectedCurrency);
+      const converted = convertCurrency(Number(o.total || 0), o.currency || "USD", selectedCurrency, rates);
       return sum + converted;
     }, 0);
     const avgOrderValue = completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0;
@@ -759,7 +777,8 @@ export function AdminOrdersClient({ initialOrders }: AdminOrdersClientProps) {
                           const converted = convertCurrency(
                             Number(order.total || 0),
                             order.currency || "USD",
-                            selectedCurrency
+                            selectedCurrency,
+                            rates
                           );
                           return (
                             <div>

@@ -127,8 +127,8 @@ export function AdminReviewsClient({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-sand)] bg-white shadow-xs">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--color-sand)] bg-white shadow-xs">
+          <table className="w-full min-w-[550px] text-left">
             <thead>
               <tr className="border-b border-[var(--color-sand)] bg-stone-50/80 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/60">
                 <th className="px-6 py-3.5">Product</th>

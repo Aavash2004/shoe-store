@@ -21,11 +21,14 @@ export function CurrencySwitcher({ variant = "dropdown", className = "" }: Curre
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { currency, setCurrency } = useCurrencyStore();
+  const { currency, setCurrency, syncRatesFromServer, ratesLoaded } = useCurrencyStore();
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (!ratesLoaded) {
+      syncRatesFromServer();
+    }
+  }, [ratesLoaded, syncRatesFromServer]);
 
   // Handle click outside to close dropdown
   useEffect(() => {

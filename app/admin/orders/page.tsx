@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { AdminOrdersClient, type AdminOrderRow } from "@/components/admin/AdminOrdersClient";
+import { getExchangeRates } from "@/lib/services/exchangeRates";
 
 export const dynamic = "force-dynamic";
 
@@ -63,5 +64,7 @@ export default async function AdminOrdersPage() {
     };
   });
 
-  return <AdminOrdersClient initialOrders={serializedOrders} />;
+  const exchangeRates = await getExchangeRates();
+
+  return <AdminOrdersClient initialOrders={serializedOrders} exchangeRates={exchangeRates} />;
 }

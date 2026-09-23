@@ -31,6 +31,19 @@ async function runExchangeRateTests() {
   const parseSuccess = OpenErApiResponseSchema.safeParse(validPayload);
   assert.strictEqual(parseSuccess.success, true, "Valid Open ER API payload passes schema");
 
+  const validV6Payload = {
+    result: "success",
+    base_code: "USD",
+    conversion_rates: {
+      USD: 1.0,
+      NPR: 136.25,
+      GBP: 0.775,
+      EUR: 0.915,
+    },
+  };
+  const parseV6Success = OpenErApiResponseSchema.safeParse(validV6Payload);
+  assert.strictEqual(parseV6Success.success, true, "Valid ExchangeRate-API v6 payload passes schema");
+
   const invalidPayloads = [
     { result: "error", base_code: "USD", rates: {} },
     { result: "success", base_code: "EUR", rates: { USD: 1 } },
