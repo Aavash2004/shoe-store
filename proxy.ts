@@ -4,7 +4,7 @@ import { authConfig } from "@/lib/auth/auth.config";
 
 const { auth } = NextAuth(authConfig);
 
-export const proxy = auth((req) => {
+const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-pathname", pathname);
