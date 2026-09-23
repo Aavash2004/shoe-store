@@ -233,10 +233,10 @@ export function AdminDashboardClient({
       </div>
     </div>
 
-      {/* Stats row: Responsive modern cards on mobile, clean divider column row on sm+ */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-4 border-y border-[var(--color-sand)] py-5 sm:py-6">
+      {/* Stats row: 2 columns on mobile/tablet (<1024px), 4 columns on desktop (>=1024px) */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-6 border-y border-[var(--color-sand)] py-5 sm:py-6">
         {/* Orders Card */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
             Orders
           </p>
@@ -249,8 +249,8 @@ export function AdminDashboardClient({
         </div>
 
         {/* Revenue Card (Single Normalized Currency) */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0 sm:border-l sm:border-[var(--color-sand)] sm:pl-6">
-          <div className="flex items-center justify-between sm:pr-2">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:border-l lg:border-[var(--color-sand)] lg:pl-6">
+          <div className="flex items-center justify-between lg:pr-2">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
               Revenue
             </p>
@@ -258,16 +258,16 @@ export function AdminDashboardClient({
               {selectedCurrency}
             </span>
           </div>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-xl sm:text-2xl lg:text-3xl font-extrabold text-[var(--color-navy)] tracking-tight truncate">
+          <p className="mt-1.5 font-[family-name:var(--font-display)] text-xl sm:text-2xl xl:text-3xl font-extrabold text-[var(--color-navy)] tracking-tight">
             {formatCurrency(totalRevenue, selectedCurrency)}
           </p>
-          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45 truncate">
+          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
             Normalized total
           </p>
         </div>
 
         {/* Products Card */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0 sm:border-l sm:border-[var(--color-sand)] sm:pl-6">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:border-l lg:border-[var(--color-sand)] lg:pl-6">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
             Products
           </p>
@@ -280,7 +280,7 @@ export function AdminDashboardClient({
         </div>
 
         {/* Low Stock Card */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 sm:border-0 sm:bg-transparent sm:p-0 sm:border-l sm:border-[var(--color-sand)] sm:pl-6">
+        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:border-l lg:border-[var(--color-sand)] lg:pl-6">
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
             Low Stock
           </p>
