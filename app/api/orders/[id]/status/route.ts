@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { stripe } from "@/lib/services/stripe";
 
 export async function GET(
   request: NextRequest,
@@ -23,6 +24,8 @@ export async function GET(
         status: true,
         paymentStatus: true,
         paymentMethod: true,
+        stripePaymentIntentId: true,
+        couponCode: true,
         subtotal: true,
         shipping: true,
         tax: true,
@@ -76,6 +79,50 @@ export async function GET(
       );
     }
 
+    // Real-time Stripe payment status reconciliation (ensures local dev & fast webhooks succeed)
+    let currentPaymentStatus = order.paymentStatus;
+    let currentStatus = order.status;
+
+    if (
+      order.paymentMethod === "STRIPE" &&
+      order.paymentStatus === "PENDING" &&
+      order.stripePaymentIntentId
+    ) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+        if (paymentIntent.status === "succeeded") {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: {
+              paymentStatus: "PAID",
+              status: "PROCESSING",
+            },
+          });
+          currentPaymentStatus = "PAID";
+          currentStatus = "PROCESSING";
+
+          if (order.couponCode) {
+            await prisma.coupon.updateMany({
+              where: { code: order.couponCode },
+              data: { usedCount: { increment: 1 } },
+            });
+          }
+
+          await prisma.orderStatusHistory.create({
+            data: {
+              orderId: order.id,
+              status: "PAID",
+              note: `Payment confirmed via Stripe (Amount: ${paymentIntent.currency.toUpperCase()} ${(
+                paymentIntent.amount / 100
+              ).toFixed(2)}, PI: ${paymentIntent.id})`,
+            },
+          }).catch(() => {});
+        }
+      } catch (stripeErr) {
+        console.warn("[Order Status] Stripe status reconciliation error:", stripeErr);
+      }
+    }
+
     // Mask phone number to prevent PII exposure (e.g. ***-***-1234)
     const maskedPhone = order.address?.phone
       ? order.address.phone.length > 4
@@ -85,6 +132,8 @@ export async function GET(
 
     const formattedOrder = {
       ...order,
+      status: currentStatus,
+      paymentStatus: currentPaymentStatus,
       address: order.address
         ? {
             ...order.address,

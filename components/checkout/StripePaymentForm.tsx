@@ -32,6 +32,7 @@ export function StripePaymentForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
 
     if (!stripe || !elements) {
       return;
@@ -40,31 +41,38 @@ export function StripePaymentForm({
     setIsProcessing(true);
     setErrorMessage(null);
 
-    const returnUrl = `${window.location.origin}/order-confirmation/${orderId}`;
+    const returnUrl = `${window.location.origin}/checkout/success?orderId=${orderId}`;
 
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: returnUrl,
-      },
-      redirect: "if_required",
-    });
+    try {
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: returnUrl,
+        },
+        redirect: "if_required",
+      });
 
-    if (error) {
+      if (error) {
+        setIsProcessing(false);
+        setErrorMessage(
+          error.message || "An unexpected error occurred during payment."
+        );
+      } else if (
+        paymentIntent &&
+        (paymentIntent.status === "succeeded" || paymentIntent.status === "processing")
+      ) {
+        if (onPaymentSuccess) {
+          onPaymentSuccess();
+        }
+        window.location.replace(returnUrl);
+      } else {
+        window.location.replace(returnUrl);
+      }
+    } catch (err: any) {
       setIsProcessing(false);
       setErrorMessage(
-        error.message || "An unexpected error occurred during payment."
+        err?.message || "An unexpected error occurred while confirming payment."
       );
-    } else if (
-      paymentIntent &&
-      (paymentIntent.status === "succeeded" || paymentIntent.status === "processing")
-    ) {
-      if (onPaymentSuccess) {
-        onPaymentSuccess();
-      }
-      window.location.href = returnUrl;
-    } else {
-      window.location.href = returnUrl;
     }
   };
 

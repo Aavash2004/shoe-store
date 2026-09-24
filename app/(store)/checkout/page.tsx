@@ -343,8 +343,61 @@ export default function CheckoutPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_420px] lg:gap-14">
-          {/* Main Form Area */}
-          <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-8">
+          {/* Main Checkout Area */}
+          <div className="space-y-8">
+            {stripeData && currentPaymentMethod === "STRIPE" ? (
+              <section className="rounded-2xl border-2 border-[var(--color-navy)] bg-white p-6 md:p-8 shadow-lg transition-all animate-in fade-in-50">
+                <div className="mb-5 flex items-center justify-between border-b border-[var(--color-sand)] pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <CreditCard className="h-5 w-5 text-[var(--color-navy)]" />
+                    <h3 className="text-base font-bold text-[var(--color-navy)]">
+                      Enter Payment Details
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStripeData(null)}
+                    className="text-xs font-semibold text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] underline cursor-pointer"
+                  >
+                    Edit Shipping Information
+                  </button>
+                </div>
+
+                <div className="mb-6 rounded-xl bg-[var(--color-sand)]/20 p-4 text-xs text-[var(--color-navy)]/80 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-[var(--color-navy)]">Order #{stripeData.orderNumber}</span>
+                    <p className="mt-0.5">Shipping to {watch("city") || "Destination"}, {selectedCountry?.name || watch("country")}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-extrabold text-[var(--color-navy)] text-sm">
+                      {formatCurrency(stripeData.amount, stripeData.currency)}
+                    </span>
+                  </div>
+                </div>
+
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: stripeData.clientSecret,
+                    appearance: {
+                      theme: "stripe",
+                      variables: {
+                        colorPrimary: "#1b2a4a",
+                        borderRadius: "12px",
+                      },
+                    },
+                  }}
+                >
+                  <StripePaymentForm
+                    orderId={stripeData.orderId}
+                    orderNumber={stripeData.orderNumber}
+                    amount={stripeData.amount}
+                    currency={stripeData.currency}
+                  />
+                </Elements>
+              </section>
+            ) : (
+              <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-8">
             {/* Step 1: Contact Information (Guest Only) */}
             {!isLoggedIn && (
               <section className="rounded-2xl border border-[var(--color-sand)] bg-white/80 p-6 md:p-8 shadow-sm backdrop-blur-xs transition-all hover:shadow-md">
@@ -695,96 +748,52 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Payment Execution Section */}
-            {stripeData && currentPaymentMethod === "STRIPE" ? (
-              <section className="rounded-2xl border-2 border-[var(--color-navy)] bg-white p-6 md:p-8 shadow-lg transition-all animate-in fade-in-50">
-                <div className="mb-5 flex items-center justify-between border-b border-[var(--color-sand)] pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <CreditCard className="h-5 w-5 text-[var(--color-navy)]" />
-                    <h3 className="text-base font-bold text-[var(--color-navy)]">
-                      Enter Payment Details
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setStripeData(null)}
-                    className="text-xs font-semibold text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] underline cursor-pointer"
-                  >
-                    Edit Shipping Information
-                  </button>
-                </div>
+            {/* Submit Button Action */}
+            <div className="space-y-3 pt-2">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="h-14 w-full rounded-2xl bg-[var(--color-navy)] text-base font-bold tracking-wide text-[var(--color-cream)] shadow-lg shadow-[var(--color-navy)]/20 transition-all hover:bg-[var(--color-navy)]/90 hover:shadow-xl active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-cream)] border-t-transparent" />
+                    <span>Processing...</span>
+                  </>
+                ) : currentPaymentMethod === "STRIPE" ? (
+                  <>
+                    <CreditCard className="h-5 w-5" />
+                    <span>
+                      Continue to Card Payment · {formatCurrency(total, currency)}
+                    </span>
+                  </>
+                ) : currentPaymentMethod === "KHALTI" ? (
+                  <>
+                    <span className="flex h-5 w-5 items-center justify-center rounded bg-[#5C2D91] text-[10px] font-black text-white">
+                      K
+                    </span>
+                    <span>
+                      Pay with Khalti · {formatCurrency(total, currency)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="h-5 w-5" />
+                    <span>
+                      Complete Order (COD) · {formatCurrency(total, currency)}
+                    </span>
+                  </>
+                )}
+              </Button>
 
-                <Elements
-                  stripe={stripePromise}
-                  options={{
-                    clientSecret: stripeData.clientSecret,
-                    appearance: {
-                      theme: "stripe",
-                      variables: {
-                        colorPrimary: "#1b2a4a",
-                        borderRadius: "12px",
-                      },
-                    },
-                  }}
-                >
-                  <StripePaymentForm
-                    orderId={stripeData.orderId}
-                    orderNumber={stripeData.orderNumber}
-                    amount={stripeData.amount}
-                    currency={stripeData.currency}
-                    onPaymentSuccess={() => {
-                      clearLocalCart();
-                      setDbItems([]);
-                      window.dispatchEvent(new Event("cart-updated"));
-                    }}
-                  />
-                </Elements>
-              </section>
-            ) : (
-              <div className="space-y-3 pt-2">
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="h-14 w-full rounded-2xl bg-[var(--color-navy)] text-base font-bold tracking-wide text-[var(--color-cream)] shadow-lg shadow-[var(--color-navy)]/20 transition-all hover:bg-[var(--color-navy)]/90 hover:shadow-xl active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {loading ? (
-                    <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-cream)] border-t-transparent" />
-                      <span>Processing...</span>
-                    </>
-                  ) : currentPaymentMethod === "STRIPE" ? (
-                    <>
-                      <CreditCard className="h-5 w-5" />
-                      <span>
-                        Continue to Card Payment · {formatCurrency(total, currency)}
-                      </span>
-                    </>
-                  ) : currentPaymentMethod === "KHALTI" ? (
-                    <>
-                      <span className="flex h-5 w-5 items-center justify-center rounded bg-[#5C2D91] text-[10px] font-black text-white">
-                        K
-                      </span>
-                      <span>
-                        Pay with Khalti · {formatCurrency(total, currency)}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="h-5 w-5" />
-                      <span>
-                        Complete Order (COD) · {formatCurrency(total, currency)}
-                      </span>
-                    </>
-                  )}
-                </Button>
-
-                <p className="flex items-center justify-center gap-2 text-center text-xs font-medium text-[var(--color-navy)]/60">
-                  <Lock className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>Guaranteed Safe & Secure Checkout</span>
-                </p>
-              </div>
-            )}
+              <p className="flex items-center justify-center gap-2 text-center text-xs font-medium text-[var(--color-navy)]/60">
+                <Lock className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Guaranteed Safe & Secure Checkout</span>
+              </p>
+            </div>
           </form>
+        )}
+      </div>
 
           {/* Sticky Order Summary Panel */}
           <div className="lg:sticky lg:top-24 lg:self-start">
