@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, SlidersHorizontal, RotateCcw, Footprints, Sparkles } from "lucide-react";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ShopFilters } from "@/components/product/ShopFilters";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
@@ -13,44 +13,77 @@ const PAGE_SIZE = 12;
 
 type SearchParams = {
   category?: string;
+  brand?: string;
   size?: string;
   color?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  inStock?: string;
+  gender?: string;
   sort?: string;
   q?: string;
   page?: string;
 };
 
-async function executeShopQueries(whereClause: any, skip: number, take: number) {
+async function executeShopQueries(whereClause: any, orderBy: any, skip: number, take: number) {
   const queryAll = async () => {
-    const [products, totalCount, dbCategories, dbSizes, dbColors] = await Promise.all([
-      prisma.product.findMany({
-        where: whereClause,
-        include: {
-          category: true,
-          images: { orderBy: { position: "asc" } },
-          variants: { where: { isActive: true } },
-        },
-        skip,
-        take,
-      }),
-      prisma.product.count({ where: whereClause }),
-      prisma.category.findMany({
-        select: { name: true },
-      }),
-      prisma.productVariant.groupBy({
-        by: ["size"],
-        where: { isActive: true, product: { isActive: true, deletedAt: null } },
-      }),
-      prisma.productVariant.groupBy({
-        by: ["color"],
-        where: { isActive: true, product: { isActive: true, deletedAt: null } },
-      }),
-    ]);
+    const [products, totalCount, dbCategories, dbBrands, dbSizes, dbColors, priceAgg] =
+      await Promise.all([
+        prisma.product.findMany({
+          where: whereClause,
+          orderBy,
+          include: {
+            category: true,
+            images: {
+              take: 1,
+              orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
+            },
+            variants: {
+              where: { isActive: true, deletedAt: null },
+            },
+          },
+          skip,
+          take,
+        }),
+        prisma.product.count({ where: whereClause }),
+        prisma.category.findMany({
+          select: { name: true },
+        }),
+        prisma.product.findMany({
+          where: { isActive: true, deletedAt: null, brand: { not: null } },
+          select: { brand: true },
+          distinct: ["brand"],
+        }),
+        prisma.productVariant.groupBy({
+          by: ["size"],
+          where: { isActive: true, product: { isActive: true, deletedAt: null } },
+        }),
+        prisma.productVariant.groupBy({
+          by: ["color"],
+          where: { isActive: true, product: { isActive: true, deletedAt: null } },
+        }),
+        prisma.productVariant.aggregate({
+          _min: { price: true },
+          _max: { price: true },
+          where: { isActive: true, product: { isActive: true, deletedAt: null } },
+        }),
+      ]);
 
-    const sizes = dbSizes.map((s) => s.size);
-    const colors = dbColors.map((c) => c.color);
+    const categories = Array.from(new Set(dbCategories.map((c) => c.name))).sort();
+    const brands = Array.from(
+      new Set(dbBrands.map((b) => b.brand).filter(Boolean) as string[])
+    ).sort();
+    const sizes = Array.from(new Set(dbSizes.map((s) => s.size))).sort((a, b) => {
+      const numA = parseFloat(a);
+      const numB = parseFloat(b);
+      return !isNaN(numA) && !isNaN(numB) ? numA - numB : a.localeCompare(b);
+    });
+    const colors = Array.from(new Set(dbColors.map((c) => c.color))).sort();
 
-    return [products, totalCount, dbCategories, sizes, colors] as const;
+    const catalogMinPrice = priceAgg._min.price ? Math.floor(Number(priceAgg._min.price)) : 0;
+    const catalogMaxPrice = priceAgg._max.price ? Math.ceil(Number(priceAgg._max.price)) : 500;
+
+    return [products, totalCount, categories, brands, sizes, colors, catalogMinPrice, catalogMaxPrice] as const;
   };
 
   try {
@@ -61,7 +94,16 @@ async function executeShopQueries(whereClause: any, skip: number, take: number) 
       return await queryAll();
     } catch (retryErr) {
       console.error("[ShopPage DB] Retry query failed:", retryErr);
-      return [[], 0, [], [], []] as const;
+      return [
+        [] as any[],
+        0,
+        [] as string[],
+        [] as string[],
+        [] as string[],
+        [] as string[],
+        0,
+        500,
+      ] as const;
     }
   }
 }
@@ -71,12 +113,25 @@ export default async function ShopPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { category, size, color, sort, q, page } = await searchParams;
+  const {
+    category,
+    brand,
+    size,
+    color,
+    minPrice,
+    maxPrice,
+    inStock,
+    gender,
+    sort,
+    q,
+    page,
+  } = await searchParams;
 
   const currentPage = Math.max(1, parseInt(page || "1") || 1);
   const skip = (currentPage - 1) * PAGE_SIZE;
 
-  const whereClause = {
+  // Build high-performance composite WHERE query
+  const whereClause: any = {
     isActive: true,
     deletedAt: null,
     ...(q && {
@@ -89,53 +144,96 @@ export default async function ShopPage({
     ...(category && {
       category: { slug: category.toLowerCase() },
     }),
-    ...(size || color
-      ? {
-          variants: {
-            some: {
-              isActive: true,
-              ...(size && { size }),
-              ...(color && { color }),
-            },
-          },
-        }
-      : {}),
+    ...(brand && {
+      brand: { equals: brand, mode: "insensitive" },
+    }),
+    ...(gender && {
+      gender: { equals: gender.toUpperCase() },
+    }),
   };
 
-  const [products, totalCount, dbCategories, dbSizes, dbColors] = await executeShopQueries(
-    whereClause,
-    skip,
-    PAGE_SIZE
-  );
+  // Nested variant condition combining size, color, price range, and stock
+  const variantConditions: any = {
+    isActive: true,
+    deletedAt: null,
+    ...(size && { size }),
+    ...(color && { color: { equals: color, mode: "insensitive" } }),
+    ...(minPrice && { price: { gte: parseFloat(minPrice) } }),
+    ...(maxPrice && { price: { lte: parseFloat(maxPrice) } }),
+    ...(inStock === "true" && { stock: { gt: 0 } }),
+  };
+
+  if (size || color || minPrice || maxPrice || inStock === "true") {
+    whereClause.variants = {
+      some: variantConditions,
+    };
+  }
+
+  // Database-level sorting
+  let orderBy: any = { createdAt: "desc" };
+  if (sort === "newest") {
+    orderBy = { createdAt: "desc" };
+  }
+
+  const [
+    products,
+    totalCount,
+    categories,
+    brands,
+    sizes,
+    colors,
+    catalogMinPrice,
+    catalogMaxPrice,
+  ] = await executeShopQueries(whereClause, orderBy, skip, PAGE_SIZE);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const withPrice = products.map((product) => ({
     ...product,
     minPrice: product.variants.length
-      ? Math.min(...product.variants.map((v) => Number(v.price)))
+      ? Math.min(...product.variants.map((v: any) => Number(v.price)))
       : 0,
   }));
 
+  // In-memory sort fallback for price ordering
   if (sort === "price-asc") {
     withPrice.sort((a, b) => a.minPrice - b.minPrice);
-  }
-  if (sort === "price-desc") {
+  } else if (sort === "price-desc") {
     withPrice.sort((a, b) => b.minPrice - a.minPrice);
   }
 
-  const categories = Array.from(new Set(dbCategories.map((c) => c.name)));
-  const sizes = Array.from(new Set(dbSizes)).sort();
-  const colors = Array.from(new Set(dbColors));
+  const activeFilterCount = [
+    category,
+    brand,
+    gender,
+    size,
+    color,
+    minPrice || maxPrice ? "price" : undefined,
+    inStock === "true" ? "inStock" : undefined,
+    q,
+  ].filter(Boolean).length;
 
-  const activeFilterCount = [category, size, color, q].filter(Boolean).length;
-
-  function buildHref(remove?: "category" | "size" | "color" | "q") {
+  function buildHref(
+    remove?:
+      | "category"
+      | "brand"
+      | "gender"
+      | "size"
+      | "color"
+      | "price"
+      | "inStock"
+      | "q"
+  ) {
     const params = new URLSearchParams();
     if (q && remove !== "q") params.set("q", q);
     if (category && remove !== "category") params.set("category", category);
+    if (brand && remove !== "brand") params.set("brand", brand);
+    if (gender && remove !== "gender") params.set("gender", gender);
     if (size && remove !== "size") params.set("size", size);
     if (color && remove !== "color") params.set("color", color);
+    if (minPrice && remove !== "price") params.set("minPrice", minPrice);
+    if (maxPrice && remove !== "price") params.set("maxPrice", maxPrice);
+    if (inStock && remove !== "inStock") params.set("inStock", inStock);
     if (sort) params.set("sort", sort);
     const qs = params.toString();
     return qs ? `/shop?${qs}` : "/shop";
@@ -145,8 +243,13 @@ export default async function ShopPage({
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (category) params.set("category", category);
+    if (brand) params.set("brand", brand);
+    if (gender) params.set("gender", gender);
     if (size) params.set("size", size);
     if (color) params.set("color", color);
+    if (minPrice) params.set("minPrice", minPrice);
+    if (maxPrice) params.set("maxPrice", maxPrice);
+    if (inStock) params.set("inStock", inStock);
     if (sort) params.set("sort", sort);
     if (targetPage > 1) params.set("page", targetPage.toString());
     const qs = params.toString();
@@ -157,7 +260,7 @@ export default async function ShopPage({
     <main className="min-h-screen bg-[var(--color-cream)] text-[var(--color-navy)]">
       {/* 1. Collection Banner */}
       <section className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 pt-4">
-        <div className="relative h-[240px] sm:h-[280px] lg:h-[320px] overflow-hidden rounded-2xl">
+        <div className="relative h-[220px] sm:h-[260px] lg:h-[300px] overflow-hidden rounded-2xl">
           <Image
             src="/images/hero/h3.avif"
             alt="Editorial Footwear Collection"
@@ -166,7 +269,7 @@ export default async function ShopPage({
             className="object-cover object-center"
             sizes="(max-width: 1440px) 100vw, 1440px"
           />
-          <div className="absolute inset-0 bg-[#1E2A38]/35" />
+          <div className="absolute inset-0 bg-[#1E2A38]/40" />
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
             <h1 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#F5F2EB]">
               Shop Collection
@@ -176,43 +279,51 @@ export default async function ShopPage({
       </section>
 
       {/* 2. Main Content Container */}
-      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 mt-10 sm:mt-12 pb-20">
+      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 mt-8 sm:mt-10 pb-20">
         {/* Shop Introduction */}
         <div className="max-w-xl space-y-1">
           <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1E2A38]/50 block">
             COLLECTION
           </span>
-          <h2 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl font-bold text-[#1E2A38]">
-            {q ? `Search Results: "${q}"` : "Shop"}
+          <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-bold text-[#1E2A38]">
+            {q ? `Search: "${q}"` : "All Footwear"}
           </h2>
-          <p className="text-xs sm:text-sm text-[#1E2A38]/70 pt-1 leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#1E2A38]/70 pt-0.5 leading-relaxed">
             {q
-              ? `Showing results matching "${q}" across our collection.`
-              : "Explore the latest footwear designed for everyday movement, comfort, and style."}
+              ? `Showing results matching "${q}" across our footwear catalog.`
+              : "Explore the latest footwear designed for everyday movement, sport, and lifestyle."}
           </p>
         </div>
 
         {/* 3. Filter & Sort Toolbar */}
-        <div className="mt-7">
+        <div className="mt-6">
           <Suspense fallback={<div className="h-12 w-full animate-pulse bg-[var(--color-cream-alt)] rounded-lg" />}>
             <ShopFilters
               categories={categories}
+              brands={brands}
               sizes={sizes}
               colors={colors}
               activeCategory={category}
+              activeBrand={brand}
               activeSize={size}
               activeColor={color}
+              activeMinPrice={minPrice}
+              activeMaxPrice={maxPrice}
+              activeInStock={inStock}
+              activeGender={gender}
               activeSort={sort}
               totalProducts={totalCount}
+              catalogMinPrice={catalogMinPrice}
+              catalogMaxPrice={catalogMaxPrice}
             />
           </Suspense>
         </div>
 
-        {/* 4. Active Filters Chips (Only rendered when filters exist) */}
+        {/* 4. Active Filters Chips */}
         {activeFilterCount > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/50 mr-1">
-              Active Filters
+              Active:
             </span>
 
             {q && (
@@ -221,6 +332,26 @@ export default async function ShopPage({
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
                 <span>Query: &ldquo;{q}&rdquo;</span>
+                <span className="text-[#1E2A38]/50 text-xs">×</span>
+              </Link>
+            )}
+
+            {brand && (
+              <Link
+                href={buildHref("brand") as any}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+              >
+                <span>Brand: {brand}</span>
+                <span className="text-[#1E2A38]/50 text-xs">×</span>
+              </Link>
+            )}
+
+            {gender && (
+              <Link
+                href={buildHref("gender") as any}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+              >
+                <span>Gender: {gender}</span>
                 <span className="text-[#1E2A38]/50 text-xs">×</span>
               </Link>
             )}
@@ -255,6 +386,28 @@ export default async function ShopPage({
               </Link>
             )}
 
+            {(minPrice || maxPrice) && (
+              <Link
+                href={buildHref("price") as any}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
+              >
+                <span>
+                  Price: {minPrice ? `$${minPrice}` : "$0"} – {maxPrice ? `$${maxPrice}` : "Any"}
+                </span>
+                <span className="text-[#1E2A38]/50 text-xs">×</span>
+              </Link>
+            )}
+
+            {inStock === "true" && (
+              <Link
+                href={buildHref("inStock") as any}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium hover:border-emerald-300 transition-colors"
+              >
+                <span>In-Stock Only</span>
+                <span className="text-emerald-700/60 text-xs">×</span>
+              </Link>
+            )}
+
             <Link
               href="/shop"
               className="ml-2 text-xs font-semibold text-[#1E2A38]/60 hover:text-[#1E2A38] underline transition-colors"
@@ -264,7 +417,7 @@ export default async function ShopPage({
           </div>
         )}
 
-        {/* 5. Product Grid or Empty State */}
+        {/* 5. Product Grid or Rich Empty State */}
         <section className="mt-8">
           {withPrice.length > 0 ? (
             <>
@@ -335,23 +488,32 @@ export default async function ShopPage({
               )}
             </>
           ) : (
-            <div className="py-20 text-center space-y-3">
-              <p className="text-xs font-bold uppercase tracking-widest text-[#1E2A38]/40">
-                {q ? `NO RESULTS FOUND FOR "${q.toUpperCase()}"` : "NO SHOES FOUND"}
-              </p>
-              <p className="text-sm text-[#1E2A38]/60 max-w-sm mx-auto">
-                {q
-                  ? `We couldn't find any shoes matching "${q}". Try checking your spelling or search for another model.`
-                  : "Try adjusting your filters or clear them to view the full collection."}
-              </p>
-              <div>
-                <Link
-                  href="/shop"
-                  className="inline-block mt-3 px-5 py-2.5 bg-[#1E2A38] text-[#F5F2EB] text-xs font-semibold uppercase tracking-wider rounded-xl hover:bg-[#1E2A38]/90 transition-colors shadow-xs"
-                >
-                  {q ? "Clear Search" : "Clear Filters"}
-                </Link>
+            <div className="py-16 px-6 max-w-lg mx-auto text-center rounded-3xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60 shadow-xs space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-[var(--color-sand)]/60 text-[var(--color-navy)]/70 flex items-center justify-center mx-auto">
+                <Footprints className="w-8 h-8" />
               </div>
+              <div className="space-y-1.5">
+                <h3 className="font-[family-name:var(--font-display)] text-xl font-bold text-[var(--color-navy)]">
+                  {q ? `No footwear found for "${q}"` : "No shoes match these filters"}
+                </h3>
+                <p className="text-xs text-[var(--color-navy)]/70 leading-relaxed max-w-sm mx-auto">
+                  {activeFilterCount > 0
+                    ? "Your combination of filters was too specific. Try expanding your price bracket or clearing selected attributes."
+                    : "No footwear items are currently available in this category."}
+                </p>
+              </div>
+
+              {activeFilterCount > 0 && (
+                <div className="pt-2">
+                  <Link
+                    href="/shop"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-navy)] text-[var(--color-cream)] text-xs font-semibold uppercase tracking-wider rounded-xl hover:bg-[var(--color-navy)]/90 transition-colors shadow-xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset All Filters</span>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </section>
