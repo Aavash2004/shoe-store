@@ -176,6 +176,71 @@ export function ProductGallery({ images }: { images: string[] }) {
     lightboxImgRef.current.style.transformOrigin = `${x}% ${y}%`;
   };
 
+  // ── Mobile Touch Swipe Handling ──
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const hasSwipedRef = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+    hasSwipedRef.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.touches.length !== 1) return;
+    const diffX = e.touches[0].clientX - touchStartRef.current.x;
+    const diffY = e.touches[0].clientY - touchStartRef.current.y;
+    // Mark as swipe if horizontal movement is dominant and > 25px
+    if (Math.abs(diffX) > 25 && Math.abs(diffX) > Math.abs(diffY)) {
+      hasSwipedRef.current = true;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const diffX = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const diffY = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY)) {
+      if (diffX < 0) {
+        // Swiped left -> next image
+        selectImage((activeIndex + 1) % safeImages.length);
+      } else {
+        // Swiped right -> prev image
+        selectImage((activeIndex - 1 + safeImages.length) % safeImages.length);
+      }
+    }
+  };
+
+  // Lightbox touch swipe
+  const lightboxTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handleLightboxTouchStart = (e: React.TouchEvent) => {
+    if (lightboxZoomed || e.touches.length !== 1) return;
+    lightboxTouchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const handleLightboxTouchEnd = (e: React.TouchEvent) => {
+    if (lightboxZoomed || !lightboxTouchStartRef.current) return;
+    const diffX = e.changedTouches[0].clientX - lightboxTouchStartRef.current.x;
+    const diffY = e.changedTouches[0].clientY - lightboxTouchStartRef.current.y;
+    lightboxTouchStartRef.current = null;
+
+    if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY)) {
+      if (diffX < 0) {
+        setActiveIndex((prev) => (prev + 1) % safeImages.length);
+      } else {
+        setActiveIndex((prev) => (prev - 1 + safeImages.length) % safeImages.length);
+      }
+    }
+  };
+
   const currentImgUrl = safeImages[activeIndex];
 
   return (
@@ -194,7 +259,14 @@ export function ProductGallery({ images }: { images: string[] }) {
             setIsHovering(false);
           }}
           onMouseMove={updateLoupe}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           onClick={() => {
+            if (hasSwipedRef.current) {
+              hasSwipedRef.current = false;
+              return;
+            }
             setLightboxZoomed(false);
             setShowLightbox(true);
           }}
@@ -262,9 +334,28 @@ export function ProductGallery({ images }: { images: string[] }) {
           </div>
         </div>
 
-        {/* Thumbnails Strip */}
+        {/* Mobile Pagination Indicator Dots */}
         {safeImages.length > 1 && (
-          <div ref={thumbnailsRef} className="flex gap-2.5">
+          <div className="flex md:hidden items-center justify-center gap-1.5 py-0.5">
+            {safeImages.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => selectImage(i)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i === activeIndex
+                    ? "w-6 bg-[var(--color-navy)]"
+                    : "w-1.5 bg-[var(--color-sand)] hover:bg-[var(--color-navy)]/40"
+                }`}
+                aria-label={`Go to photo ${i + 1}`}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Thumbnails Strip (Desktop / Tablet) */}
+        {safeImages.length > 1 && (
+          <div ref={thumbnailsRef} className="hidden md:flex gap-2.5">
             {safeImages.map((img, index) => (
               <button
                 key={img + index}
@@ -343,6 +434,8 @@ export function ProductGallery({ images }: { images: string[] }) {
           <div
             className="relative flex-1 flex items-center justify-center p-4 overflow-hidden"
             onMouseMove={handleLightboxMouseMove}
+            onTouchStart={handleLightboxTouchStart}
+            onTouchEnd={handleLightboxTouchEnd}
             onClick={() => setLightboxZoomed((z) => !z)}
           >
             {/* Prev Image Arrow */}
