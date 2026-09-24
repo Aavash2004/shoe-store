@@ -337,37 +337,83 @@ export function ProductForm({
         })),
     };
 
-    startTransition(async () => {
-      const result = isEditMode
-        ? await updateProduct({ ...payload, id: product!.id })
-        : await createProduct(payload);
+    // Check for duplicate SKUs in the variants list before submission
+    const seen = new Set<string>();
+    const dupes: string[] = [];
+    for (const v of variants) {
+      const s = v.sku.trim().toLowerCase();
+      if (!s) continue;
+      if (seen.has(s)) {
+        dupes.push(v.sku.trim());
+      } else {
+        seen.add(s);
+      }
+    }
 
-      if (result && !result.success) {
-        setErrors(result.error);
+    if (dupes.length > 0) {
+      setErrors({
+        variants: [
+          `Duplicate SKU "${dupes[0]}" detected in variants. Each variant must have a unique SKU across the store.`,
+        ],
+      });
+      window.dispatchEvent(
+        new CustomEvent("show-toast", {
+          detail: {
+            message: `Duplicate SKU "${dupes[0]}" detected in variants. Each variant must be unique.`,
+            type: "error",
+          },
+        })
+      );
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = isEditMode
+          ? await updateProduct({ ...payload, id: product!.id })
+          : await createProduct(payload);
+
+        if (result && !result.success) {
+          setErrors(result.error);
+          const firstErrorMsg =
+            Object.values(result.error || {}).flat()[0] ||
+            "Please fix the form errors before saving.";
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: {
+                message: firstErrorMsg,
+                type: "error",
+              },
+            })
+          );
+        } else {
+          setSavedSuccess(true);
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: {
+                message: isEditMode
+                  ? "Product changes saved successfully!"
+                  : "New product created successfully!",
+                type: "success",
+              },
+            })
+          );
+          setTimeout(() => setSavedSuccess(false), 3000);
+          if (!isEditMode && result && "productId" in result && result.productId) {
+            router.push(`/admin/products/${result.productId}`);
+          }
+        }
+      } catch (err: any) {
+        console.error("[ProductForm Submit Error]:", err);
         window.dispatchEvent(
           new CustomEvent("show-toast", {
             detail: {
-              message: "Please fix the form errors before saving.",
+              message:
+                err?.message || "An unexpected error occurred while saving the product.",
               type: "error",
             },
           })
         );
-      } else {
-        setSavedSuccess(true);
-        window.dispatchEvent(
-          new CustomEvent("show-toast", {
-            detail: {
-              message: isEditMode
-                ? "Product changes saved successfully!"
-                : "New product created successfully!",
-              type: "success",
-            },
-          })
-        );
-        setTimeout(() => setSavedSuccess(false), 3000);
-        if (!isEditMode && result && "productId" in result && result.productId) {
-          router.push(`/admin/products/${result.productId}`);
-        }
       }
     });
   }

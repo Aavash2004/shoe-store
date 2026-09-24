@@ -36,9 +36,37 @@ export async function createProduct(data: CreateProductInput) {
     return { success: false as const, error: { slug: ["A product with this slug already exists"] } };
   }
 
-  const skus = variants.map((v) => v.sku.trim());
+  // 1. Check for duplicate SKUs within the submitted variants list
+  const trimmedSkus = variants.map((v) => v.sku.trim());
+  const seenSkus = new Set<string>();
+  const duplicateSkisInForm: string[] = [];
+  for (const s of trimmedSkus) {
+    const lower = s.toLowerCase();
+    if (seenSkus.has(lower)) {
+      duplicateSkisInForm.push(s);
+    } else {
+      seenSkus.add(lower);
+    }
+  }
+
+  if (duplicateSkisInForm.length > 0) {
+    return {
+      success: false as const,
+      error: {
+        variants: [
+          `Duplicate SKU "${duplicateSkisInForm[0]}" detected in variants. Each variant must have a unique SKU.`,
+        ],
+      },
+    };
+  }
+
+  // 2. Case-insensitive database check against existing SKUs
   const existingSkus = await prisma.productVariant.findMany({
-    where: { sku: { in: skus } },
+    where: {
+      OR: trimmedSkus.map((s) => ({
+        sku: { equals: s, mode: "insensitive" },
+      })),
+    },
     select: { sku: true },
   });
 
@@ -49,34 +77,71 @@ export async function createProduct(data: CreateProductInput) {
     };
   }
 
-  const product = await prisma.product.create({
-    data: {
-      ...productData,
-      images: {
-        create: images.map((img) => ({
-          url: img.url,
-          altText: img.altText || null,
-          isPrimary: img.isPrimary,
-          position: img.position,
-        })),
+  // 3. Create product and variants wrapped in try/catch to gracefully handle DB constraints
+  try {
+    const product = await prisma.product.create({
+      data: {
+        ...productData,
+        images: {
+          create: images.map((img) => ({
+            url: img.url,
+            altText: img.altText || null,
+            isPrimary: img.isPrimary,
+            position: img.position,
+          })),
+        },
+        variants: {
+          create: variants.map((v) => ({
+            size: v.size.trim(),
+            color: v.color.trim(),
+            sku: v.sku.trim(),
+            price: v.price,
+            stock: v.stock,
+          })),
+        },
       },
-      variants: {
-        create: variants.map((v) => ({
-          size: v.size,
-          color: v.color,
-          sku: v.sku,
-          price: v.price,
-          stock: v.stock,
-        })),
-      },
-    },
-  });
+    });
 
-  revalidatePath("/admin/products");
-  revalidatePath("/");
-  revalidatePath("/shop");
-  if (product.slug) {
-    revalidatePath(`/products/${product.slug}`);
+    revalidatePath("/admin/products");
+    revalidatePath("/");
+    revalidatePath("/shop");
+    if (product.slug) {
+      revalidatePath(`/products/${product.slug}`);
+    }
+    return { success: true as const, productId: product.id };
+  } catch (err: any) {
+    console.error("[createProduct DB error]:", err);
+    if (err?.code === "P2002") {
+      const target = Array.isArray(err?.meta?.target)
+        ? err.meta.target.join(", ")
+        : String(err?.meta?.target || "");
+
+      if (target.includes("sku")) {
+        return {
+          success: false as const,
+          error: {
+            variants: [
+              "One or more variant SKUs already exist in the database. Please provide unique SKUs.",
+            ],
+          },
+        };
+      }
+      if (target.includes("slug")) {
+        return {
+          success: false as const,
+          error: {
+            slug: ["A product with this slug already exists."],
+          },
+        };
+      }
+    }
+
+    return {
+      success: false as const,
+      error: {
+        name: [err?.message || "Failed to create product due to a database constraint."],
+      },
+    };
   }
-  return { success: true as const, productId: product.id };
 }
+

@@ -98,87 +98,132 @@ export async function updateProduct(data: UpdateProductInput) {
   // --------------------------------------------------
 
   if (variants) {
+    // 0. Check for duplicate SKUs within the submitted variants list
+    const trimmedSkus = variants.map((v) => v.sku.trim());
+    const seenSkus = new Set<string>();
+    const duplicateSkisInForm: string[] = [];
+    for (const s of trimmedSkus) {
+      const lower = s.toLowerCase();
+      if (seenSkus.has(lower)) {
+        duplicateSkisInForm.push(s);
+      } else {
+        seenSkus.add(lower);
+      }
+    }
+
+    if (duplicateSkisInForm.length > 0) {
+      return {
+        success: false as const,
+        error: {
+          variants: [
+            `Duplicate SKU "${duplicateSkisInForm[0]}" detected in variants. Each variant must have a unique SKU.`,
+          ],
+        },
+      };
+    }
+
     const submittedVariantIds = variants
       .map((variant) => variant.id)
       .filter((id): id is string => Boolean(id));
 
-    // 1. Soft-delete variants removed from form
-    const removedVariants = existing.variants.filter(
-      (existingVariant) =>
-        !submittedVariantIds.includes(existingVariant.id)
-    );
+    try {
+      // 1. Soft-delete variants removed from form
+      const removedVariants = existing.variants.filter(
+        (existingVariant) =>
+          !submittedVariantIds.includes(existingVariant.id)
+      );
 
-    for (const variant of removedVariants) {
-      await prisma.productVariant.update({
-        where: {
-          id: variant.id,
-        },
-        data: {
-          isActive: false,
-          deletedAt: new Date(),
-        },
-      });
-    }
-
-    // 2. Update existing variants / create new ones
-    for (const variant of variants) {
-      if (variant.id) {
+      for (const variant of removedVariants) {
         await prisma.productVariant.update({
           where: {
             id: variant.id,
           },
           data: {
-            size: variant.size,
-            color: variant.color,
-            sku: variant.sku,
-            price: variant.price,
-            stock: variant.stock,
-            isActive: true,
-            deletedAt: null,
+            isActive: false,
+            deletedAt: new Date(),
           },
         });
-      } else {
-        const existingSku = await prisma.productVariant.findUnique({
-          where: { sku: variant.sku },
-        });
+      }
 
-        if (existingSku) {
-          if (existingSku.productId === id) {
-            await prisma.productVariant.update({
-              where: { id: existingSku.id },
-              data: {
-                size: variant.size,
-                color: variant.color,
-                price: variant.price,
-                stock: variant.stock,
-                isActive: true,
-                deletedAt: null,
-              },
-            });
-          } else {
-            return {
-              success: false as const,
-              error: {
-                variants: [`SKU "${variant.sku}" is already in use by another product.`],
-              },
-            };
-          }
-        } else {
-          await prisma.productVariant.create({
+      // 2. Update existing variants / create new ones
+      for (const variant of variants) {
+        if (variant.id) {
+          await prisma.productVariant.update({
+            where: {
+              id: variant.id,
+            },
             data: {
-              productId: id,
-              size: variant.size,
-              color: variant.color,
-              sku: variant.sku,
+              size: variant.size.trim(),
+              color: variant.color.trim(),
+              sku: variant.sku.trim(),
               price: variant.price,
               stock: variant.stock,
               isActive: true,
+              deletedAt: null,
             },
           });
+        } else {
+          const existingSku = await prisma.productVariant.findFirst({
+            where: {
+              sku: { equals: variant.sku.trim(), mode: "insensitive" },
+            },
+          });
+
+          if (existingSku) {
+            if (existingSku.productId === id) {
+              await prisma.productVariant.update({
+                where: { id: existingSku.id },
+                data: {
+                  size: variant.size.trim(),
+                  color: variant.color.trim(),
+                  price: variant.price,
+                  stock: variant.stock,
+                  isActive: true,
+                  deletedAt: null,
+                },
+              });
+            } else {
+              return {
+                success: false as const,
+                error: {
+                  variants: [`SKU "${variant.sku}" is already in use by another product.`],
+                },
+              };
+            }
+          } else {
+            await prisma.productVariant.create({
+              data: {
+                productId: id,
+                size: variant.size.trim(),
+                color: variant.color.trim(),
+                sku: variant.sku.trim(),
+                price: variant.price,
+                stock: variant.stock,
+                isActive: true,
+              },
+            });
+          }
         }
       }
+    } catch (err: any) {
+      console.error("[updateProduct variants error]:", err);
+      if (err?.code === "P2002") {
+        return {
+          success: false as const,
+          error: {
+            variants: ["One or more variant SKUs already exist in the database. Please provide unique SKUs."],
+          },
+        };
+      }
+      return {
+        success: false as const,
+        error: {
+          variants: [err?.message || "Failed to update variants due to database constraint."],
+        },
+      };
     }
   }
+
 
   // --------------------------------------------------
   // CACHE REVALIDATION
