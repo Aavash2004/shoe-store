@@ -1,36 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
-
-// In-memory sliding window rate limiter: max 10 lookups per 60s per client IP
-const trackingRateLimit = new Map<string, { count: number; resetTime: number }>();
-
-function isRateLimited(ip: string, maxAttempts = 10, windowMs = 60_000): boolean {
-  // Allow test environments or missing IP bypass
-  if (process.env.NODE_ENV === "test" || ip === "test-client") return false;
-
-  const now = Date.now();
-
-  // Periodic pruning of expired entries
-  if (trackingRateLimit.size > 5_000) {
-    for (const [key, val] of trackingRateLimit.entries()) {
-      if (val.resetTime < now) trackingRateLimit.delete(key);
-    }
-  }
-
-  const record = trackingRateLimit.get(ip);
-  if (!record || record.resetTime < now) {
-    trackingRateLimit.set(ip, { count: 1, resetTime: now + windowMs });
-    return false;
-  }
-
-  if (record.count >= maxAttempts) {
-    return true;
-  }
-
-  record.count += 1;
-  return false;
-}
+import { checkRateLimit } from "@/lib/security/rateLimit";
 
 export async function GET(request: NextRequest) {
   // 1. IP Rate Limiting to prevent brute-force order number enumeration
@@ -39,10 +10,22 @@ export async function GET(request: NextRequest) {
     request.headers.get("x-real-ip") ||
     "127.0.0.1";
 
-  if (isRateLimited(clientIp)) {
+  const rateLimitResult = await checkRateLimit(clientIp);
+  if (!rateLimitResult.success) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+    );
     return NextResponse.json(
       { error: "Too many tracking attempts. Please wait a minute before trying again." },
-      { status: 429, headers: { "Retry-After": "60" } }
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(retryAfterSeconds),
+          "X-RateLimit-Limit": String(rateLimitResult.limit),
+          "X-RateLimit-Remaining": String(rateLimitResult.remaining),
+        },
+      }
     );
   }
 

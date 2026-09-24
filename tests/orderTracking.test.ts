@@ -183,7 +183,7 @@ async function runTests() {
       const floodRes = await trackOrderRoute(floodReq);
       if (floodRes.status === 429) {
         hitRateLimit = true;
-        assert(floodRes.headers.get("Retry-After") === "60", "Rate limit response includes Retry-After header");
+        assert(Boolean(floodRes.headers.get("Retry-After")), "Rate limit response includes Retry-After header");
         break;
       }
     }
