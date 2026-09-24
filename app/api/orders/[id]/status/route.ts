@@ -23,9 +23,45 @@ export async function GET(
         status: true,
         paymentStatus: true,
         paymentMethod: true,
+        subtotal: true,
+        shipping: true,
+        tax: true,
+        discount: true,
         total: true,
         currency: true,
         createdAt: true,
+        address: {
+          select: {
+            fullName: true,
+            line1: true,
+            line2: true,
+            city: true,
+            state: true,
+            postalCode: true,
+            country: true,
+            phone: true,
+          },
+        },
+        items: {
+          select: {
+            id: true,
+            productName: true,
+            size: true,
+            color: true,
+            quantity: true,
+            price: true,
+            product: {
+              select: {
+                slug: true,
+                images: {
+                  take: 1,
+                  orderBy: { position: "asc" },
+                  select: { url: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
 

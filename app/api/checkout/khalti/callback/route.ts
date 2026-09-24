@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     // If already paid (idempotent return)
     if (order.paymentStatus === "PAID") {
         return NextResponse.redirect(
-            `${baseUrl}/checkout/success?orderId=${order.id}&orderNumber=${order.orderNumber}&method=KHALTI`
+            `${baseUrl}/order-confirmation/${order.id}`
         );
     }
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
             }
 
             return NextResponse.redirect(
-                `${baseUrl}/checkout/success?orderId=${order.id}&orderNumber=${order.orderNumber}&method=KHALTI`
+                `${baseUrl}/order-confirmation/${order.id}`
             );
         } else {
             // Payment canceled or expired: Release stock
