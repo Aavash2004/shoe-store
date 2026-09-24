@@ -74,6 +74,70 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+async function compressImage(file: File, maxWidth = 1600, quality = 0.85): Promise<File> {
+  if (
+    typeof window === "undefined" ||
+    !file.type.startsWith("image/") ||
+    file.type === "image/svg+xml" ||
+    file.type === "image/gif"
+  ) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const img = new window.Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const cleanName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+            const optimizedFile = new File([blob], cleanName, {
+              type: "image/webp",
+              lastModified: Date.now(),
+            });
+            resolve(optimizedFile);
+          },
+          "image/webp",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = readerEvent.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ProductForm({
   categories,
   product,
@@ -171,10 +235,16 @@ export function ProductForm({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset input so picking the same file again triggers onChange
+    e.target.value = "";
+
     setUploadingIndex(index);
     try {
+      // Pre-compress image client-side to prevent network timeouts with large raw photos
+      const fileToUpload = await compressImage(file);
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", fileToUpload);
 
       const res = await fetch("/api/upload", {
         method: "POST",

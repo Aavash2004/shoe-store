@@ -22,23 +22,12 @@ export function ProductGallery({ images }: { images: string[] }) {
   const [showLightbox, setShowLightbox] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
-
-  // Loupe tracking state
-  const [lensState, setLensState] = useState({
-    x: 0,
-    y: 0,
-    percentX: 50,
-    percentY: 50,
-    width: 600,
-    height: 600,
-  });
-
-  // Lightbox deep zoom state
   const [lightboxZoomed, setLightboxZoomed] = useState(false);
-  const [lightboxPan, setLightboxPan] = useState({ x: 50, y: 50 });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const mainImageRef = useRef<HTMLDivElement>(null);
+  const loupeRef = useRef<HTMLDivElement>(null);
+  const lightboxImgRef = useRef<HTMLDivElement>(null);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
 
   // Detect touch-enabled device on mount
@@ -136,22 +125,22 @@ export function ProductGallery({ images }: { images: string[] }) {
     });
   }
 
-  // Mouse move handler for the Magnifying Glass Loupe
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  // High-performance direct DOM manipulation for the Magnifying Glass (0 React re-renders)
+  const updateLoupe = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!loupeRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const percentX = Math.max(0, Math.min(100, (x / rect.width) * 100));
     const percentY = Math.max(0, Math.min(100, (y / rect.height) * 100));
 
-    setLensState({
-      x,
-      y,
-      percentX,
-      percentY,
-      width: rect.width,
-      height: rect.height,
-    });
+    loupeRef.current.style.transform = `translate3d(${x - LENS_SIZE / 2}px, ${
+      y - LENS_SIZE / 2
+    }px, 0)`;
+    loupeRef.current.style.backgroundPosition = `${percentX}% ${percentY}%`;
+    loupeRef.current.style.backgroundSize = `${rect.width * ZOOM_FACTOR}px ${
+      rect.height * ZOOM_FACTOR
+    }px`;
   }, []);
 
   // Lightbox keyboard navigation & body scroll lock
@@ -178,13 +167,13 @@ export function ProductGallery({ images }: { images: string[] }) {
     };
   }, [showLightbox, safeImages.length]);
 
-  // Handle lightbox zoom pan
+  // Handle lightbox zoom pan via direct DOM manipulation (0 React re-renders)
   const handleLightboxMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!lightboxZoomed) return;
+    if (!lightboxZoomed || !lightboxImgRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    setLightboxPan({ x, y });
+    lightboxImgRef.current.style.transformOrigin = `${x}% ${y}%`;
   };
 
   const currentImgUrl = safeImages[activeIndex];
@@ -197,20 +186,20 @@ export function ProductGallery({ images }: { images: string[] }) {
           ref={mainImageRef}
           onMouseEnter={(e) => {
             if (!isTouchDevice) {
-              handleMouseMove(e);
+              updateLoupe(e);
               setIsHovering(true);
             }
           }}
           onMouseLeave={() => {
             setIsHovering(false);
           }}
-          onMouseMove={handleMouseMove}
+          onMouseMove={updateLoupe}
           onClick={() => {
             setLightboxZoomed(false);
             setShowLightbox(true);
           }}
           className={`group relative aspect-square w-full select-none overflow-hidden rounded-sm bg-[var(--color-sand)] border border-[var(--color-sand)]/70 ${
-            isTouchDevice ? "cursor-pointer" : "cursor-none"
+            isTouchDevice ? "cursor-pointer" : isHovering ? "cursor-none" : "cursor-crosshair"
           }`}
           aria-label="Product image with magnifying glass loupe. Click to inspect in full screen"
         >
@@ -224,20 +213,17 @@ export function ProductGallery({ images }: { images: string[] }) {
             sizes="(max-width: 768px) 100vw, 50vw"
           />
 
-          {/* ── Magnifying Glass Circular Loupe ── */}
-          {!isTouchDevice && isHovering && (
+          {/* ── Magnifying Glass Circular Loupe (Hardware accelerated direct DOM) ── */}
+          {!isTouchDevice && (
             <div
-              className="pointer-events-none absolute z-20 rounded-full border-[3px] border-white shadow-[0_14px_36px_rgba(0,0,0,0.38),0_0_0_1px_rgba(30,42,56,0.18)] overflow-hidden will-change-transform animate-in fade-in zoom-in-95 duration-100"
+              ref={loupeRef}
+              className={`pointer-events-none absolute top-0 left-0 z-20 rounded-full border-[3px] border-white shadow-[0_14px_36px_rgba(0,0,0,0.38),0_0_0_1px_rgba(30,42,56,0.18)] overflow-hidden will-change-transform transition-opacity duration-150 ${
+                isHovering ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+              }`}
               style={{
                 width: `${LENS_SIZE}px`,
                 height: `${LENS_SIZE}px`,
-                left: `${lensState.x - LENS_SIZE / 2}px`,
-                top: `${lensState.y - LENS_SIZE / 2}px`,
                 backgroundImage: `url(${currentImgUrl})`,
-                backgroundPosition: `${lensState.percentX}% ${lensState.percentY}%`,
-                backgroundSize: `${lensState.width * ZOOM_FACTOR}px ${
-                  lensState.height * ZOOM_FACTOR
-                }px`,
                 backgroundRepeat: "no-repeat",
               }}
             >
@@ -396,15 +382,16 @@ export function ProductGallery({ images }: { images: string[] }) {
               }`}
             >
               <div
+                ref={lightboxImgRef}
                 className="relative w-full h-full will-change-transform"
                 style={{
-                  transformOrigin: `${lightboxPan.x}% ${lightboxPan.y}%`,
+                  transformOrigin: "50% 50%",
                   transform: lightboxZoomed ? "scale(2.5)" : "scale(1)",
                   transition: lightboxZoomed ? "transform 0.08s ease-out" : "transform 0.25s ease-out",
                 }}
               >
                 <Image
-                  src={safeImages[activeIndex]}
+                  src={currentImgUrl}
                   alt="High resolution product view"
                   fill
                   className="object-contain pointer-events-none"

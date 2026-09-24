@@ -43,3 +43,6 @@ next-env.d.ts
 /app/generated/prisma
 /lib/generated
 /app/generated
+
+# User uploads
+/public/uploads/
