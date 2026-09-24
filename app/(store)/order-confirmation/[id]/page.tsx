@@ -56,6 +56,7 @@ interface OrderStatusData {
   total: number;
   currency: string;
   createdAt: string;
+  email?: string | null;
   address?: OrderAddressData | null;
   items?: OrderItemData[];
 }
@@ -409,7 +410,11 @@ export default function OrderConfirmationPage({
                   Print Invoice
                 </Button>
 
-                <Link href={`/track-order?orderNumber=${encodeURIComponent(order.orderNumber)}`}>
+                <Link
+                  href={`/track-order?orderNumber=${encodeURIComponent(order.orderNumber)}${
+                    order.email ? `&email=${encodeURIComponent(order.email)}` : ""
+                  }`}
+                >
                   <Button
                     variant="outline"
                     className="h-11 w-full sm:w-auto rounded-lg border-[var(--color-sand)] text-[var(--color-navy)] font-semibold flex items-center justify-center gap-2 hover:bg-[var(--color-sand)]/40"

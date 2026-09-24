@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:checkout": "tsx --env-file=.env tests/checkout.test.ts",
-    "test:stripe": "tsx --env-file=.env tests/stripe.test.ts"
+    "test:stripe": "tsx --env-file=.env tests/stripe.test.ts",
+    "test:tracking": "tsx --env-file=.env tests/orderTracking.test.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

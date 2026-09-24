@@ -41,7 +41,10 @@ export default async function OrderDetailPage({
             include: {
               product: {
                 include: {
-                  images: { where: { isPrimary: true }, take: 1 },
+                  images: {
+                    take: 1,
+                    orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
+                  },
                 },
               },
             },
@@ -101,7 +104,9 @@ export default async function OrderDetailPage({
           <div className="flex flex-wrap items-center gap-3">
             <OrderCustomerActions orderId={order.id} status={order.status} />
             <Link
-              href={`/track-order?orderNumber=${order.orderNumber}`}
+              href={`/track-order?orderNumber=${order.orderNumber}${
+                session.user.email ? `&email=${encodeURIComponent(session.user.email)}` : ""
+              }`}
               className="px-4 py-2 bg-[var(--color-sky)]/20 hover:bg-[var(--color-sky)]/30 text-[var(--color-navy)] font-semibold text-xs rounded-xl border border-[var(--color-sky)]/40 transition-colors"
             >
               Track Order

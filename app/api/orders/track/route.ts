@@ -1,20 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { auth } from "@/lib/auth/auth";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const rawOrderNumber = searchParams.get("orderNumber")?.trim();
   const rawEmail = searchParams.get("email")?.trim();
 
-  if (!rawOrderNumber || !rawEmail) {
+  let session = null;
+  try {
+    session = await auth();
+  } catch {
+    // Outside request store context (e.g. test harness)
+  }
+
+  if (!rawOrderNumber) {
     return NextResponse.json(
-      { error: "Order number and email required" },
+      { error: "Order number is required" },
+      { status: 400 }
+    );
+  }
+
+  // If user is not logged in, email is strictly required
+  if (!rawEmail && !session?.user?.id) {
+    return NextResponse.json(
+      { error: "Order number and email address are required" },
       { status: 400 }
     );
   }
 
   const orderNumber = rawOrderNumber.toUpperCase();
-  const email = rawEmail.toLowerCase();
+  const email = (rawEmail || session?.user?.email || "").toLowerCase();
 
   try {
     const order = await prisma.order.findFirst({
@@ -22,14 +38,17 @@ export async function GET(request: NextRequest) {
         orderNumber: orderNumber,
       },
       include: {
-        user: { select: { email: true, name: true } },
+        user: { select: { id: true, email: true, name: true } },
         items: {
           include: {
             variant: {
               include: {
                 product: {
                   include: {
-                    images: { take: 1, orderBy: { position: "asc" } },
+                    images: {
+                      take: 1,
+                      orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
+                    },
                   },
                 },
               },
@@ -51,14 +70,29 @@ export async function GET(request: NextRequest) {
     }
 
     const orderEmail = (order.guestEmail || order.user?.email || "").toLowerCase().trim();
-    if (orderEmail !== email) {
+    const isOwner = Boolean(session?.user?.id && order.userId === session.user.id);
+
+    if (!isOwner && orderEmail !== email) {
       return NextResponse.json(
         { error: "Order not found. Email address does not match this order." },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ order });
+    const formattedOrder = {
+      ...order,
+      subtotal: Number(order.subtotal),
+      shipping: Number(order.shipping),
+      tax: Number(order.tax),
+      discount: Number(order.discount),
+      total: Number(order.total),
+      items: order.items.map((item) => ({
+        ...item,
+        price: Number(item.price),
+      })),
+    };
+
+    return NextResponse.json({ order: formattedOrder });
   } catch (err: any) {
     const errorMessage =
       err?.message ||

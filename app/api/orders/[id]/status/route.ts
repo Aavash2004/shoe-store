@@ -30,6 +30,12 @@ export async function GET(
         total: true,
         currency: true,
         createdAt: true,
+        guestEmail: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
         address: {
           select: {
             fullName: true,
@@ -78,6 +84,7 @@ export async function GET(
 
     const formattedOrder = {
       ...order,
+      email: order.guestEmail || order.user?.email || null,
       subtotal: Number(order.subtotal),
       shipping: Number(order.shipping),
       tax: Number(order.tax),

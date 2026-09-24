@@ -122,7 +122,10 @@ export default async function AccountPage() {
               include: {
                 product: {
                   include: {
-                    images: { where: { isPrimary: true }, take: 1 },
+                    images: {
+                      take: 1,
+                      orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
+                    },
                   },
                 },
               },

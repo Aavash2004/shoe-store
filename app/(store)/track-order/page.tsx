@@ -170,17 +170,20 @@ function TrackOrderInner() {
     }
   }, []);
 
-  // Auto-fetch if both orderNumber & email are provided in URL query parameters
+  // Auto-fetch if orderNumber is provided (with URL email or session email)
   useEffect(() => {
-    if (initialOrderNumber && initialEmail) {
-      fetchOrder(initialOrderNumber, initialEmail);
+    const effectiveEmail = initialEmail || session?.user?.email || "";
+    if (initialOrderNumber && (effectiveEmail || session?.user?.id)) {
+      fetchOrder(initialOrderNumber, effectiveEmail);
     }
-  }, [initialOrderNumber, initialEmail, fetchOrder]);
+  }, [initialOrderNumber, initialEmail, session, fetchOrder]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!orderNumber.trim() || !email.trim()) return;
-    fetchOrder(orderNumber, email);
+    if (!orderNumber.trim()) return;
+    const effectiveEmail = email.trim() || session?.user?.email || "";
+    if (!effectiveEmail && !session?.user?.id) return;
+    fetchOrder(orderNumber, effectiveEmail);
   }
 
   function handleCopyOrderNumber() {
@@ -280,19 +283,21 @@ function TrackOrderInner() {
                 )}
               </Button>
 
-              <div className="pt-2 border-t border-[var(--color-sand)]/50 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOrderNumber("SH-MU54B9OV-6601");
-                    setEmail("proto@gmail.com");
-                    fetchOrder("SH-MU54B9OV-6601", "proto@gmail.com");
-                  }}
-                  className="text-xs font-semibold text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] underline transition-colors"
-                >
-                  Quick Test: Load Sample Order (SH-MU54B9OV-6601)
-                </button>
-              </div>
+              {process.env.NODE_ENV !== "production" && (
+                <div className="pt-2 border-t border-[var(--color-sand)]/50 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderNumber("SH-MU54B9OV-6601");
+                      setEmail("proto@gmail.com");
+                      fetchOrder("SH-MU54B9OV-6601", "proto@gmail.com");
+                    }}
+                    className="text-xs font-semibold text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] underline transition-colors"
+                  >
+                    Quick Test: Load Sample Order (SH-MU54B9OV-6601)
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         )}

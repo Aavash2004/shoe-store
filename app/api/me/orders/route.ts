@@ -44,8 +44,8 @@ export async function GET(request: NextRequest) {
               product: {
                 include: {
                   images: {
-                    where: { isPrimary: true },
                     take: 1,
+                    orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
                   },
                 },
               },
@@ -60,5 +60,18 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ orders });
+  const formattedOrders = orders.map((order) => ({
+    ...order,
+    subtotal: Number(order.subtotal),
+    shipping: Number(order.shipping),
+    tax: Number(order.tax),
+    discount: Number(order.discount),
+    total: Number(order.total),
+    items: order.items.map((item) => ({
+      ...item,
+      price: Number(item.price),
+    })),
+  }));
+
+  return NextResponse.json({ orders: formattedOrders });
 }
