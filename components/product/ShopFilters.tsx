@@ -89,7 +89,7 @@ function ShopFiltersInner({
         <div className="flex items-center gap-3">
           <button
             onClick={handleOpenDrawer}
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all border ${
               activeFilterCount > 0
                 ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
                 : "bg-[var(--color-cream-alt)] text-[var(--color-navy)] border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
@@ -98,7 +98,7 @@ function ShopFiltersInner({
             <SlidersHorizontal className="w-3.5 h-3.5" />
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-[var(--color-sky)] text-[var(--color-navy)] text-[10px] font-bold">
+              <span className="ml-0.5 px-1.5 py-0.2 rounded-xs bg-[var(--color-sky)] text-[var(--color-navy)] text-[10px] font-bold">
                 {activeFilterCount}
               </span>
             )}
@@ -170,7 +170,7 @@ function ShopFiltersInner({
                   <button
                     key={cat}
                     onClick={() => setDraftCategory(isSelected ? undefined : cat)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all border ${
                       isSelected
                         ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)]"
                         : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
@@ -195,7 +195,7 @@ function ShopFiltersInner({
                   <button
                     key={size}
                     onClick={() => setDraftSize(isSelected ? undefined : size)}
-                    className={`h-10 rounded-lg text-xs font-semibold flex items-center justify-center transition-all border ${
+                    className={`h-10 rounded-md text-xs font-semibold flex items-center justify-center transition-all border ${
                       isSelected
                         ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)]"
                         : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
@@ -220,7 +220,7 @@ function ShopFiltersInner({
                   <button
                     key={color}
                     onClick={() => setDraftColor(isSelected ? undefined : color)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition-all border ${
                       isSelected
                         ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)]"
                         : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
@@ -238,13 +238,13 @@ function ShopFiltersInner({
         <div className="p-5 border-t border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60 flex items-center gap-3">
           <button
             onClick={handleClearAllInDrawer}
-            className="w-1/2 py-3 px-4 rounded-xl border border-[var(--color-sand)] text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors uppercase tracking-wider text-center"
+            className="w-1/2 py-3 px-4 rounded-md border border-[var(--color-sand)] text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors uppercase tracking-wider text-center"
           >
             Clear All
           </button>
           <button
             onClick={handleApplyFilters}
-            className="w-1/2 py-3 px-4 rounded-xl bg-[var(--color-navy)] text-[var(--color-cream)] text-xs font-semibold hover:bg-[var(--color-navy)]/90 transition-colors uppercase tracking-wider text-center flex items-center justify-center gap-1.5 shadow-sm"
+            className="w-1/2 py-3 px-4 rounded-md bg-[var(--color-navy)] text-[var(--color-cream)] text-xs font-semibold hover:bg-[var(--color-navy)]/90 transition-colors uppercase tracking-wider text-center flex items-center justify-center gap-1.5 shadow-sm"
           >
             <span>Apply Filters</span>
             <Check className="w-3.5 h-3.5" />

@@ -150,7 +150,17 @@ export async function DELETE(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const variantId = searchParams.get("variantId");
+  let variantId = searchParams.get("variantId");
+
+  if (!variantId) {
+    try {
+      const body = await request.json();
+      variantId = body?.variantId;
+    } catch {
+      // Body may be empty if called without json payload
+    }
+  }
+
   if (!variantId) {
     return NextResponse.json({ error: "variantId required" }, { status: 400 });
   }

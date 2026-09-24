@@ -21,6 +21,10 @@ type CartState = {
   updateQuantity: (variantId: string, quantity: number) => void;
   syncItemStock: (variantId: string, stock: number) => void;
   clearCart: () => void;
+  isDrawerOpen: boolean;
+  openDrawer: () => void;
+  closeDrawer: () => void;
+  toggleDrawer: () => void;
 };
 
 const notifyCartUpdated = () => {
@@ -143,7 +147,15 @@ export const useCartStore = create<CartState>()(
         set({ items: [] });
         notifyCartUpdated();
       },
+
+      isDrawerOpen: false,
+      openDrawer: () => set({ isDrawerOpen: true }),
+      closeDrawer: () => set({ isDrawerOpen: false }),
+      toggleDrawer: () => set((state) => ({ isDrawerOpen: !state.isDrawerOpen })),
     }),
-    { name: "shoe-store-cart" }
+    {
+      name: "shoe-store-cart",
+      partialize: (state) => ({ items: state.items }),
+    }
   )
 );

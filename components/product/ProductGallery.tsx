@@ -103,7 +103,7 @@ export function ProductGallery({ images }: { images: string[] }) {
         <div
           ref={mainImageRef}
           onClick={() => setShowLightbox(true)}
-          className="group relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-2xl bg-[var(--color-sand)]"
+          className="group relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-sm bg-[var(--color-sand)]"
         >
           <Image
             src={safeImages[activeIndex]}
@@ -112,21 +112,21 @@ export function ProductGallery({ images }: { images: string[] }) {
             className="object-cover transition-transform duration-500 group-hover:scale-105"
             priority
           />
-          <div className="absolute top-3 right-3 p-2 bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs">
+          <div className="absolute top-3 right-3 p-2 bg-black/40 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs">
             <ZoomIn className="w-4 h-4" />
           </div>
         </div>
 
         {/* Thumbnails Strip */}
         {safeImages.length > 1 && (
-          <div ref={thumbnailsRef} className="flex gap-3">
+          <div ref={thumbnailsRef} className="flex gap-2.5">
             {safeImages.map((img, index) => (
               <button
                 key={img + index}
                 onClick={() => selectImage(index)}
-                className={`relative h-20 w-20 overflow-hidden rounded-xl border-2 transition-all ${
+                className={`relative h-20 w-20 overflow-hidden rounded-xs border transition-all ${
                   index === activeIndex
-                    ? "border-[var(--color-navy)] ring-2 ring-[var(--color-navy)]/20"
+                    ? "border-[var(--color-navy)] ring-1 ring-[var(--color-navy)]"
                     : "border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
                 }`}
               >
@@ -151,14 +151,14 @@ export function ProductGallery({ images }: { images: string[] }) {
           <button
             onClick={() => setShowLightbox(false)}
             aria-label="Close Lightbox"
-            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/30 text-white rounded-md transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
 
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-4xl aspect-square max-h-[85vh] overflow-hidden rounded-2xl shadow-2xl"
+            className="relative w-full max-w-4xl aspect-square max-h-[85vh] overflow-hidden rounded-md shadow-2xl"
           >
             <Image
               src={safeImages[activeIndex]}

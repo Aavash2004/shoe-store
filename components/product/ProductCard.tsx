@@ -18,7 +18,7 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
     <Link
       href={`/products/${product.slug}`}
       data-product-card
-      className="group block overflow-hidden rounded-xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)]/60 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-[var(--color-navy)]/30 hover:shadow-md"
+      className="group block overflow-hidden rounded-sm border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)]/60 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-[var(--color-navy)]/30 hover:shadow-md"
     >
       {/* Image Container */}
       <div className="relative aspect-square overflow-hidden bg-stone-200/60">

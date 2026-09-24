@@ -143,6 +143,7 @@ function HeaderInner() {
   const localCount = useCartStore((state) =>
     state.items.reduce((sum, item) => sum + item.quantity, 0)
   );
+  const openDrawer = useCartStore((state) => state.openDrawer);
 
   const [dbCount, setDbCount] = useState(0);
   const wishlistCount = useWishlistStore((state) => state.wishlistIds.length);
@@ -392,20 +393,16 @@ function HeaderInner() {
           <Button
             variant="ghost"
             size="icon"
-            asChild
+            onClick={openDrawer}
             className="relative rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1"
+            aria-label={`Open Cart Drawer${cartCount ? `, ${cartCount} items` : ""}`}
           >
-            <Link
-              href="/cart"
-              aria-label={`Cart${cartCount ? `, ${cartCount} items` : ""}`}
-            >
-              <ShoppingBag className="h-5 w-5" strokeWidth={1.5} />
-              {cartCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs">
-                  {cartCount > 99 ? "99+" : cartCount}
-                </span>
-              )}
-            </Link>
+            <ShoppingBag className="h-5 w-5" strokeWidth={1.5} />
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs">
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
           </Button>
 
           {/* Mobile menu toggle */}

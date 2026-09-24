@@ -205,7 +205,7 @@ export default function CartPage() {
             key={item.variantId}
             className="flex items-center gap-4 border-b border-[var(--color-sand)] pb-4"
           >
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[var(--color-cream-alt)] border border-[var(--color-sand)]">
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-[var(--color-cream-alt)] border border-[var(--color-sand)]">
               {item.image && (
                 <Image src={item.image} alt={item.productName} fill className="object-cover" />
               )}
@@ -227,7 +227,7 @@ export default function CartPage() {
                 onClick={() =>
                   handleQuantityChange(item.variantId, item.quantity - 1, item.stock)
                 }
-                className="h-7 w-7 rounded-lg border border-[var(--color-sand)] text-xs text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30 transition-colors"
+                className="h-7 w-7 rounded-md border border-[var(--color-sand)] text-xs text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30 transition-colors"
                 aria-label="Decrease quantity"
               >
                 −

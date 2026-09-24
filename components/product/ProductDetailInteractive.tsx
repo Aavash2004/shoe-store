@@ -53,6 +53,7 @@ export function ProductDetailInteractive({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const addItem = useCartStore((state) => state.addItem);
+  const openDrawer = useCartStore((state) => state.openDrawer);
   const { status } = useSession();
   const isLoggedIn = status === "authenticated";
   const canAddToCart = selectedSize && selectedColor;
@@ -148,10 +149,7 @@ export function ProductDetailInteractive({
       }
 
       window.dispatchEvent(new Event("cart-updated"));
-      window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
-
-      setAdded(true);
-      setTimeout(() => setAdded(false), 1500);
+      openDrawer();
     } finally {
       setIsSubmitting(false);
     }
@@ -199,9 +197,9 @@ export function ProductDetailInteractive({
               <button
                 key={color}
                 onClick={() => setSelectedColor(color)}
-                className={`rounded-full border px-4 py-2 text-sm transition-all ${isSelected
-                  ? "border-[var(--color-accent)] bg-[var(--color-cream-alt)] text-[var(--color-navy)]"
-                  : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40"
+                className={`rounded-md border px-3.5 py-1.5 text-sm transition-all ${isSelected
+                  ? "border-[var(--color-navy)] bg-[var(--color-cream-alt)] text-[var(--color-navy)] shadow-xs"
+                  : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40 hover:bg-white/60"
                   }`}
               >
                 {color}
@@ -216,7 +214,7 @@ export function ProductDetailInteractive({
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-[var(--color-navy)]">Select Size</span>
             {/* Region system selector */}
-            <div className="inline-flex items-center rounded-lg border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-0.5 text-[11px] font-bold">
+            <div className="inline-flex items-center rounded-md border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-0.5 text-[11px] font-bold">
               {(
                 [
                   { id: "US_MEN", label: "US" },
@@ -229,7 +227,7 @@ export function ProductDetailInteractive({
                   key={sys.id}
                   type="button"
                   onClick={() => setSizeSystem(sys.id)}
-                  className={`rounded-md px-2 py-0.5 transition-all ${
+                  className={`rounded-xs px-2 py-0.5 transition-all ${
                     sizeSystem === sys.id
                       ? "bg-[var(--color-navy)] text-[var(--color-cream)] shadow-2xs"
                       : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
@@ -263,7 +261,7 @@ export function ProductDetailInteractive({
                 key={size}
                 type="button"
                 onClick={() => setSelectedSize(size)}
-                className={`relative flex flex-col items-center justify-center rounded-xl border py-2.5 px-2 text-center transition-all ${
+                className={`relative flex flex-col items-center justify-center rounded-md border py-2.5 px-2 text-center transition-all ${
                   isSelected
                     ? "border-[var(--color-navy)] bg-[var(--color-cream-alt)] shadow-xs ring-1 ring-[var(--color-navy)]"
                     : "border-[var(--color-sand)] bg-white/70 hover:border-[var(--color-navy)]/40 hover:bg-white"
@@ -291,7 +289,7 @@ export function ProductDetailInteractive({
 
         {/* Active Size Cross-System Breakdown Strip */}
         {selectedSize && (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60 px-3.5 py-2 text-xs text-[var(--color-navy)]/75">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 rounded-md border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60 px-3.5 py-2 text-xs text-[var(--color-navy)]/75">
             <span className="font-bold text-[var(--color-navy)]">
               All Equivalents:
             </span>
@@ -352,13 +350,13 @@ export function ProductDetailInteractive({
             <WishlistButton
               productId={product.id}
               iconSize={20}
-              className="h-12 w-12 rounded-xl border border-[var(--color-sand)] hover:border-[var(--color-navy)]/40 bg-white shadow-2xs"
+              className="h-12 w-12 rounded-md border border-[var(--color-sand)] hover:border-[var(--color-navy)]/40 bg-white shadow-2xs"
             />
           </div>
         </div>
 
         <p className="text-center text-xs text-[var(--color-navy)]/50">
-          Free shipping on orders over $150
+          Free shipping on orders over $100
         </p>
       </div>
 
