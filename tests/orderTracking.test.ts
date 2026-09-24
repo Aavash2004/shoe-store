@@ -86,9 +86,9 @@ async function runTests() {
     createdOrderId = order.id;
 
     // ----------------------------------------------------
-    // Test 1: Order Status API includes email & items
+    // Test 1: Order Status API Gates Email & Masks Phone
     // ----------------------------------------------------
-    console.log("--- 1. Order Status API Query ---");
+    console.log("--- 1. Order Status API Query & PII Protection ---");
     const statusReq = new NextRequest(`http://localhost:3000/api/orders/${order.id}/status`);
     const statusRes = await orderStatusRoute(statusReq, {
       params: Promise.resolve({ id: order.id }),
@@ -97,7 +97,7 @@ async function runTests() {
     assert(statusRes.status === 200, "Order status API returns 200 OK");
     const statusData = await statusRes.json();
     assert(statusData.order.orderNumber === testOrderNumber, "Order status returns correct orderNumber");
-    assert(statusData.order.email === testGuestEmail, "Order status returns customer email for tracking pre-fill");
+    assert(statusData.order.email === undefined, "Order status API does NOT leak customer email (PII protected)");
     assert(typeof statusData.order.total === "number", "Order status total is serialized as number");
     assert(statusData.order.items.length === 1, "Order status returns itemized shoe line items");
 
@@ -130,16 +130,27 @@ async function runTests() {
     assert(caseData.order.orderNumber === testOrderNumber, "Normalized query returns exact order");
 
     // ----------------------------------------------------
-    // Test 4: Privacy Protection on Mismatched Email
+    // Test 4: Anti-Oracle Privacy Protection (Identical 404s)
     // ----------------------------------------------------
-    console.log("\n--- 4. Privacy & Email Mismatch Protection ---");
+    console.log("\n--- 4. Anti-Oracle Enumeration Protection ---");
     const mismatchReq = new NextRequest(
       `http://localhost:3000/api/orders/track?orderNumber=${testOrderNumber}&email=imposter@wrong.test`
     );
     const mismatchRes = await trackOrderRoute(mismatchReq);
     assert(mismatchRes.status === 404, "Returns 404 when email does not match order record");
     const mismatchData = await mismatchRes.json();
-    assert(mismatchData.error.includes("Email address does not match"), "Returns descriptive mismatch message");
+
+    const nonExistentReq = new NextRequest(
+      `http://localhost:3000/api/orders/track?orderNumber=NON-EXISTENT-ORDER-999&email=${testGuestEmail}`
+    );
+    const nonExistentRes = await trackOrderRoute(nonExistentReq);
+    assert(nonExistentRes.status === 404, "Returns 404 when order number does not exist");
+    const nonExistentData = await nonExistentRes.json();
+
+    assert(
+      mismatchData.error === nonExistentData.error,
+      "Mismatched email and non-existent order return identical error message (eliminates enumeration oracle)"
+    );
 
     // ----------------------------------------------------
     // Test 5: Missing Required Query Parameters
@@ -158,9 +169,30 @@ async function runTests() {
     assert(noNumRes.status === 400, "Returns 400 when orderNumber is omitted");
 
     // ----------------------------------------------------
-    // Test 6: Fulfillment Status Progression
+    // Test 6: Rate Limiting Enforcement
     // ----------------------------------------------------
-    console.log("\n--- 6. Status History Progression ---");
+    console.log("\n--- 6. IP Rate Limiting Enforcement ---");
+    const spamIp = "192.0.2.145";
+    let hitRateLimit = false;
+
+    for (let i = 0; i < 12; i++) {
+      const floodReq = new NextRequest(
+        `http://localhost:3000/api/orders/track?orderNumber=${testOrderNumber}&email=probe-${i}@test.com`,
+        { headers: { "x-forwarded-for": spamIp } }
+      );
+      const floodRes = await trackOrderRoute(floodReq);
+      if (floodRes.status === 429) {
+        hitRateLimit = true;
+        assert(floodRes.headers.get("Retry-After") === "60", "Rate limit response includes Retry-After header");
+        break;
+      }
+    }
+    assert(hitRateLimit, "Exceeding 10 tracking requests from single IP triggers 429 Too Many Requests");
+
+    // ----------------------------------------------------
+    // Test 7: Fulfillment Status Progression
+    // ----------------------------------------------------
+    console.log("\n--- 7. Status History Progression ---");
     await prisma.order.update({
       where: { id: order.id },
       data: {

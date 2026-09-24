@@ -30,12 +30,6 @@ export async function GET(
         total: true,
         currency: true,
         createdAt: true,
-        guestEmail: true,
-        user: {
-          select: {
-            email: true,
-          },
-        },
         address: {
           select: {
             fullName: true,
@@ -82,9 +76,21 @@ export async function GET(
       );
     }
 
+    // Mask phone number to prevent PII exposure (e.g. ***-***-1234)
+    const maskedPhone = order.address?.phone
+      ? order.address.phone.length > 4
+        ? `***-***-${order.address.phone.slice(-4)}`
+        : order.address.phone
+      : null;
+
     const formattedOrder = {
       ...order,
-      email: order.guestEmail || order.user?.email || null,
+      address: order.address
+        ? {
+            ...order.address,
+            phone: maskedPhone,
+          }
+        : null,
       subtotal: Number(order.subtotal),
       shipping: Number(order.shipping),
       tax: Number(order.tax),
