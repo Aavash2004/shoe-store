@@ -121,9 +121,12 @@ export async function GET(
           // Send transactional confirmation email
           try {
             const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
-            await sendOrderConfirmationEmail(order.id);
+            const emailResult = await sendOrderConfirmationEmail(order.id);
+            if (!emailResult?.success) {
+              console.error(`[Order Status] Confirmation email dispatch failed for order ${order.id}:`, emailResult?.error);
+            }
           } catch (emailErr) {
-            console.warn("[Order Status] Failed to dispatch order confirmation email:", emailErr);
+            console.error("[Order Status] Failed to dispatch order confirmation email:", emailErr);
           }
         }
       } catch (stripeErr) {

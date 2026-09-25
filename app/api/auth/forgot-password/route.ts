@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
 
     // Dispatch transactional email via Resend service
     const { sendPasswordResetEmail } = await import("@/lib/services/email");
-    await sendPasswordResetEmail(email, resetUrl);
+    const emailResult = await sendPasswordResetEmail(email, resetUrl);
+    if (!emailResult?.success) {
+      console.error(`[Forgot Password] Failed to dispatch password reset email to ${email}:`, emailResult?.error);
+    }
 
     return NextResponse.json({
       message: "If an account with that email exists, we have generated password reset instructions.",

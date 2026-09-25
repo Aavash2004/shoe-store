@@ -150,12 +150,72 @@ export function resolveEmailDispatchParams({
 }
 
 /**
- * Core transactional email sender with automated Resend sandbox reroute protection.
+ * Validates the email service configuration for production readiness.
+ * Catches the critical seam where NODE_ENV=production but EMAIL_FROM is still
+ * using Resend's sandbox domain (onboarding@resend.dev).
+ */
+export function validateEmailConfiguration({
+  nodeEnv = process.env.NODE_ENV || "development",
+  from = fromEmail,
+  apiKey = resendApiKey,
+}: {
+  nodeEnv?: string;
+  from?: string;
+  apiKey?: string;
+} = {}): { valid: boolean; error: string | null } {
+  const isProd = nodeEnv === "production";
+  const isSandbox = from.toLowerCase().includes("@resend.dev");
+
+  if (isProd && isSandbox) {
+    return {
+      valid: false,
+      error: `[CRITICAL EMAIL DEPLOY GATE] Application is configured with NODE_ENV="production" but EMAIL_FROM is using Resend sandbox ("${from}"). Resend will reject all customer emails with HTTP 403 Forbidden. Verify a custom domain at https://resend.com/domains and set EMAIL_FROM="Your Brand <orders@yourdomain.com>".`,
+    };
+  }
+
+  if (isProd && !apiKey) {
+    return {
+      valid: false,
+      error: `[CRITICAL EMAIL DEPLOY GATE] Application is configured with NODE_ENV="production" but RESEND_API_KEY is not set. All customer emails will fail.`,
+    };
+  }
+
+  return { valid: true, error: null };
+}
+
+/**
+ * Startup assertion / deploy gate. Fails fast by throwing an Error if production
+ * is misconfigured with sandbox credentials.
+ */
+export function assertEmailProductionReadiness(
+  options?: Parameters<typeof validateEmailConfiguration>[0]
+): boolean {
+  const validation = validateEmailConfiguration(options);
+  if (!validation.valid) {
+    throw new Error(validation.error!);
+  }
+  return true;
+}
+
+/**
+ * Core transactional email sender with automated Resend sandbox reroute protection,
+ * deploy gate assertions, and loud 403 error alerting.
  */
 async function sendTransactionalEmail({ to, subject, html }: SendEmailOptions) {
   if (!resend) {
     console.log(`[EMAIL SIMULATED] To: ${to} | Subject: ${subject}`);
     return { success: true, simulated: true };
+  }
+
+  // Deploy Gate Check: Prevent silent 403 production black hole
+  const configValidation = validateEmailConfiguration();
+  if (!configValidation.valid) {
+    console.error(`🚨 ${configValidation.error}`);
+    return {
+      success: false,
+      error: configValidation.error,
+      code: "RESEND_SANDBOX_PROD_BLOCKED",
+    };
   }
 
   const resolved = resolveEmailDispatchParams({ to, subject, html });
@@ -175,15 +235,36 @@ async function sendTransactionalEmail({ to, subject, html }: SendEmailOptions) {
     });
 
     if (error) {
-      console.error(`[Email Service] Resend error delivering to ${resolved.to}:`, error);
-      return { success: false, error: error.message };
+      const is403 =
+        (error as any).statusCode === 403 ||
+        error.name === "validation_error" ||
+        error.message?.toLowerCase().includes("only send testing emails");
+
+      if (is403) {
+        console.error(
+          `🚨 [CRITICAL ALERT - RESEND 403 FORBIDDEN] Transactional email to <${resolved.to}> was blocked by Resend domain policy!\n` +
+          `  - Original recipient: <${to}>\n` +
+          `  - From: <${fromEmail}>\n` +
+          `  - Resend Error: ${error.message}\n` +
+          `  - Action: Verify your custom domain at https://resend.com/domains or update RESEND_DEV_AUTHORIZED_EMAIL in development.`
+        );
+      } else {
+        console.error(`[Email Service] Resend error delivering to ${resolved.to}:`, error);
+      }
+
+      return {
+        success: false,
+        error: error.message,
+        code: is403 ? "RESEND_403_FORBIDDEN" : "RESEND_DELIVERY_ERROR",
+        statusCode: (error as any).statusCode || (is403 ? 403 : 500),
+      };
     }
 
     console.log(`[Email Service] Delivered email (ID: ${data?.id}) to ${resolved.to} (Target: ${to})`);
     return { success: true, data };
   } catch (err: any) {
     console.error(`[Email Service] Exception delivering email to ${resolved.to}:`, err);
-    return { success: false, error: err.message };
+    return { success: false, error: err.message, code: "RESEND_EXCEPTION" };
   }
 }
 

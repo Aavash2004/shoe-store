@@ -220,9 +220,12 @@ export async function POST(request: NextRequest) {
     // Dispatch transactional order confirmation email
     try {
       const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
-      await sendOrderConfirmationEmail(order.id);
+      const emailResult = await sendOrderConfirmationEmail(order.id);
+      if (!emailResult?.success) {
+        console.error(`[Checkout] Order confirmation email dispatch failed for order ${order.id}:`, emailResult?.error);
+      }
     } catch (emailErr) {
-      console.warn("[Checkout] Failed to dispatch order confirmation email:", emailErr);
+      console.error("[Checkout] Failed to dispatch order confirmation email:", emailErr);
     }
 
     return NextResponse.json({ order }, { status: 201 });

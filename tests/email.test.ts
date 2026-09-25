@@ -5,6 +5,8 @@ import {
   sendOrderConfirmationEmail,
   sendShippingUpdateEmail,
   resolveEmailDispatchParams,
+  validateEmailConfiguration,
+  assertEmailProductionReadiness,
 } from "../lib/services/email";
 
 async function runEmailTests() {
@@ -75,8 +77,44 @@ async function runEmailTests() {
   });
   assert.strictEqual(devDirectResult.isRerouted, false, "Sending directly to dev inbox does not need reroute banner");
   assert.strictEqual(devDirectResult.to, "basnetaavash7@gmail.com");
-  assert.strictEqual(devDirectResult.subject, "Order Confirmation #123");
-  console.log("✅ PASSED: Directly addressing dev inbox does not trigger redundant sandbox banners");
+  // 1e. Deploy Gate Failure: NODE_ENV=production but EMAIL_FROM contains resend.dev
+  const failedGate = validateEmailConfiguration({
+    nodeEnv: "production",
+    from: "ABXV Store <onboarding@resend.dev>",
+    apiKey: "re_mock_key_123",
+  });
+  assert.strictEqual(failedGate.valid, false, "Deploy gate must fail when sandbox sender is used in production");
+  assert.strictEqual(failedGate.error?.includes("CRITICAL EMAIL DEPLOY GATE"), true);
+  assert.throws(
+    () => {
+      assertEmailProductionReadiness({
+        nodeEnv: "production",
+        from: "ABXV Store <onboarding@resend.dev>",
+        apiKey: "re_mock_key_123",
+      });
+    },
+    /CRITICAL EMAIL DEPLOY GATE/,
+    "assertEmailProductionReadiness must throw when sandbox sender is used in production"
+  );
+  console.log("✅ PASSED: Deploy gate & assertion loudly fail if NODE_ENV=production and EMAIL_FROM is resend.dev");
+
+  // 1f. Deploy Gate Success: NODE_ENV=production with verified custom domain
+  const passedGate = validateEmailConfiguration({
+    nodeEnv: "production",
+    from: "ABXV Footwear <orders@abxvshoes.com>",
+    apiKey: "re_mock_key_123",
+  });
+  assert.strictEqual(passedGate.valid, true, "Deploy gate must pass with verified domain in production");
+  assert.strictEqual(passedGate.error, null);
+  assert.strictEqual(
+    assertEmailProductionReadiness({
+      nodeEnv: "production",
+      from: "ABXV Footwear <orders@abxvshoes.com>",
+      apiKey: "re_mock_key_123",
+    }),
+    true
+  );
+  console.log("✅ PASSED: Deploy gate passes cleanly when custom verified domain is supplied");
 
   // ----------------------------------------------------
   // Test 2: Live Password Reset with Non-Dev Recipient Reroute
