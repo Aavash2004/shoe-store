@@ -13,6 +13,7 @@ import { useDebouncedValue } from "@/hooks/use-debounce";
 import { debounce } from "@/lib/utils/debounce";
 import { CurrencySwitcher } from "@/components/layout/CurrencySwitcher";
 import { Price } from "@/components/ui/Price";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 import type { Route } from "next";
 
@@ -373,6 +374,9 @@ function HeaderInner() {
               )}
             </Link>
           </Button>
+
+          {/* Real-time Order & Activity Notifications */}
+          <NotificationBell />
 
           {/* Account / Login */}
           <Button

@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/constants/currencies";
 import { useCartStore } from "@/stores/cart-store";
+import { useNotificationStore } from "@/stores/notification-store";
 
 interface OrderItemData {
   id: string;
@@ -79,6 +80,14 @@ export default function OrderConfirmationPage({
       useCartStore.getState().clearCart();
     }
   }, [order?.paymentStatus, order?.paymentMethod]);
+
+  // Register confirmed order with real-time notification store
+  useEffect(() => {
+    if (orderId) {
+      useNotificationStore.getState().addGuestOrderId(orderId);
+      window.dispatchEvent(new Event("order-placed"));
+    }
+  }, [orderId]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;

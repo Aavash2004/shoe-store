@@ -13,7 +13,8 @@
     "test:tracking": "tsx --env-file=.env tests/orderTracking.test.ts",
     "test:filters": "tsx --env-file=.env tests/shopFilters.test.ts",
     "test:stripe:e2e": "tsx --env-file=.env tests/e2e-stripe.ts",
-    "test:email": "tsx --env-file=.env tests/email.test.ts"
+    "test:email": "tsx --env-file=.env tests/email.test.ts",
+    "test:notifications": "tsx --env-file=.env tests/notifications.test.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
