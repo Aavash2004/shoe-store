@@ -69,42 +69,63 @@ function wrapEmailHtml(title: string, content: string): string {
 const RESEND_DEV_AUTHORIZED_EMAIL =
   process.env.RESEND_DEV_AUTHORIZED_EMAIL || "basnetaavash7@gmail.com";
 
-interface SendEmailOptions {
+export interface SendEmailOptions {
   to: string;
   subject: string;
   html: string;
 }
 
+export interface ResolvedEmailParams {
+  to: string;
+  subject: string;
+  html: string;
+  isRerouted: boolean;
+  originalRecipient: string;
+}
+
 /**
- * Core transactional email sender with automated Resend sandbox reroute protection.
- * In Resend's free tier (onboarding@resend.dev), Resend strictly rejects any recipient
- * other than the registered account owner (403 validation_error).
- * In development / sandbox mode, this automatically redirects outbound emails to the
- * authorized account email with an injected notice banner so developers can inspect
- * real emails in their inbox without getting blocked.
+ * Pure helper function to resolve email dispatch parameters.
+ * Reroute is ONLY active if ALL of the following conditions are met:
+ * 1. NODE_ENV is NOT "production" (strict production circuit breaker)
+ * 2. fromEmail uses Resend's sandbox domain (@resend.dev)
+ * 3. The target recipient is NOT already the authorized dev inbox
+ *
+ * If ANY of these conditions fail (e.g. in production, or when a custom verified domain
+ * like orders@brand.com is set), the original recipient, subject, and HTML are returned 100% untouched.
  */
-async function sendTransactionalEmail({ to, subject, html }: SendEmailOptions) {
-  if (!resend) {
-    console.log(`[EMAIL SIMULATED] To: ${to} | Subject: ${subject}`);
-    return { success: true, simulated: true };
+export function resolveEmailDispatchParams({
+  to,
+  subject,
+  html,
+  from = fromEmail,
+  nodeEnv = process.env.NODE_ENV || "development",
+  devInbox = RESEND_DEV_AUTHORIZED_EMAIL,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+  from?: string;
+  nodeEnv?: string;
+  devInbox?: string;
+}): ResolvedEmailParams {
+  const isProduction = nodeEnv === "production";
+  const isResendSandbox = from.toLowerCase().includes("@resend.dev");
+  const isAuthorizedDevRecipient =
+    to.trim().toLowerCase() === devInbox.trim().toLowerCase();
+
+  const shouldReroute = !isProduction && isResendSandbox && !isAuthorizedDevRecipient;
+
+  if (!shouldReroute) {
+    return {
+      to,
+      subject,
+      html,
+      isRerouted: false,
+      originalRecipient: to,
+    };
   }
 
-  const isResendSandbox = fromEmail.includes("@resend.dev");
-  const isAuthorizedRecipient =
-    to.trim().toLowerCase() === RESEND_DEV_AUTHORIZED_EMAIL.trim().toLowerCase();
-
-  let targetRecipient = to;
-  let finalSubject = subject;
-  let finalHtml = html;
-
-  if (isResendSandbox && !isAuthorizedRecipient) {
-    console.warn(
-      `[Email Service] Sandbox Mode: Rerouting email intended for "${to}" to authorized dev inbox "${RESEND_DEV_AUTHORIZED_EMAIL}"`
-    );
-    targetRecipient = RESEND_DEV_AUTHORIZED_EMAIL;
-    finalSubject = `[Dev Test for: ${to}] ${subject}`;
-
-    const sandboxNotice = `
+  const sandboxNotice = `
       <div style="background-color: #1a2233; border: 1px solid #38bdf8; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-family: -apple-system, sans-serif;">
         <p style="margin: 0; font-size: 13px; font-weight: 700; color: #38bdf8;">
           🛠️ Resend Sandbox Test Notification
@@ -116,29 +137,52 @@ async function sendTransactionalEmail({ to, subject, html }: SendEmailOptions) {
       </div>
     `;
 
-    finalHtml = finalHtml.replace(
-      '<!-- Body Content -->',
+  return {
+    to: devInbox,
+    subject: `[Dev Test for: ${to}] ${subject}`,
+    html: html.replace(
+      "<!-- Body Content -->",
       `<!-- Body Content -->\n              ${sandboxNotice}`
+    ),
+    isRerouted: true,
+    originalRecipient: to,
+  };
+}
+
+/**
+ * Core transactional email sender with automated Resend sandbox reroute protection.
+ */
+async function sendTransactionalEmail({ to, subject, html }: SendEmailOptions) {
+  if (!resend) {
+    console.log(`[EMAIL SIMULATED] To: ${to} | Subject: ${subject}`);
+    return { success: true, simulated: true };
+  }
+
+  const resolved = resolveEmailDispatchParams({ to, subject, html });
+
+  if (resolved.isRerouted) {
+    console.warn(
+      `[Email Service] Sandbox Mode: Rerouting email intended for "${to}" to authorized dev inbox "${resolved.to}"`
     );
   }
 
   try {
     const { data, error } = await resend.emails.send({
       from: fromEmail,
-      to: targetRecipient,
-      subject: finalSubject,
-      html: finalHtml,
+      to: resolved.to,
+      subject: resolved.subject,
+      html: resolved.html,
     });
 
     if (error) {
-      console.error(`[Email Service] Resend error delivering to ${targetRecipient}:`, error);
+      console.error(`[Email Service] Resend error delivering to ${resolved.to}:`, error);
       return { success: false, error: error.message };
     }
 
-    console.log(`[Email Service] Delivered email (ID: ${data?.id}) to ${targetRecipient} (Target: ${to})`);
+    console.log(`[Email Service] Delivered email (ID: ${data?.id}) to ${resolved.to} (Target: ${to})`);
     return { success: true, data };
   } catch (err: any) {
-    console.error(`[Email Service] Exception delivering email to ${targetRecipient}:`, err);
+    console.error(`[Email Service] Exception delivering email to ${resolved.to}:`, err);
     return { success: false, error: err.message };
   }
 }
