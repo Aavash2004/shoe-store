@@ -66,6 +66,83 @@ function wrapEmailHtml(title: string, content: string): string {
 </html>`;
 }
 
+const RESEND_DEV_AUTHORIZED_EMAIL =
+  process.env.RESEND_DEV_AUTHORIZED_EMAIL || "basnetaavash7@gmail.com";
+
+interface SendEmailOptions {
+  to: string;
+  subject: string;
+  html: string;
+}
+
+/**
+ * Core transactional email sender with automated Resend sandbox reroute protection.
+ * In Resend's free tier (onboarding@resend.dev), Resend strictly rejects any recipient
+ * other than the registered account owner (403 validation_error).
+ * In development / sandbox mode, this automatically redirects outbound emails to the
+ * authorized account email with an injected notice banner so developers can inspect
+ * real emails in their inbox without getting blocked.
+ */
+async function sendTransactionalEmail({ to, subject, html }: SendEmailOptions) {
+  if (!resend) {
+    console.log(`[EMAIL SIMULATED] To: ${to} | Subject: ${subject}`);
+    return { success: true, simulated: true };
+  }
+
+  const isResendSandbox = fromEmail.includes("@resend.dev");
+  const isAuthorizedRecipient =
+    to.trim().toLowerCase() === RESEND_DEV_AUTHORIZED_EMAIL.trim().toLowerCase();
+
+  let targetRecipient = to;
+  let finalSubject = subject;
+  let finalHtml = html;
+
+  if (isResendSandbox && !isAuthorizedRecipient) {
+    console.warn(
+      `[Email Service] Sandbox Mode: Rerouting email intended for "${to}" to authorized dev inbox "${RESEND_DEV_AUTHORIZED_EMAIL}"`
+    );
+    targetRecipient = RESEND_DEV_AUTHORIZED_EMAIL;
+    finalSubject = `[Dev Test for: ${to}] ${subject}`;
+
+    const sandboxNotice = `
+      <div style="background-color: #1a2233; border: 1px solid #38bdf8; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px; font-family: -apple-system, sans-serif;">
+        <p style="margin: 0; font-size: 13px; font-weight: 700; color: #38bdf8;">
+          🛠️ Resend Sandbox Test Notification
+        </p>
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8; line-height: 1.4;">
+          This message was originally addressed to customer: <strong style="color: #ffffff;">${to}</strong>.<br/>
+          Rerouted to this inbox because <code>onboarding@resend.dev</code> only permits sending to the account owner.
+        </p>
+      </div>
+    `;
+
+    finalHtml = finalHtml.replace(
+      '<!-- Body Content -->',
+      `<!-- Body Content -->\n              ${sandboxNotice}`
+    );
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: fromEmail,
+      to: targetRecipient,
+      subject: finalSubject,
+      html: finalHtml,
+    });
+
+    if (error) {
+      console.error(`[Email Service] Resend error delivering to ${targetRecipient}:`, error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`[Email Service] Delivered email (ID: ${data?.id}) to ${targetRecipient} (Target: ${to})`);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error(`[Email Service] Exception delivering email to ${targetRecipient}:`, err);
+    return { success: false, error: err.message };
+  }
+}
+
 /**
  * Send Password Reset instructions email
  */
@@ -93,30 +170,7 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
     `
   );
 
-  if (!resend) {
-    console.log(`[EMAIL SIMULATED] Password reset email to ${email}:`);
-    console.log(`[EMAIL SIMULATED] Reset URL: ${resetUrl}`);
-    return { success: true, simulated: true };
-  }
-
-  try {
-    const { data, error } = await resend.emails.send({
-      from: fromEmail,
-      to: email,
-      subject,
-      html,
-    });
-
-    if (error) {
-      console.error("[Email Service] Resend error for password reset:", error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data };
-  } catch (err: any) {
-    console.error("[Email Service] Failed to send password reset email:", err);
-    return { success: false, error: err.message };
-  }
+  return sendTransactionalEmail({ to: email, subject, html });
 }
 
 /**
@@ -244,24 +298,11 @@ export async function sendOrderConfirmationEmail(orderId: string) {
       `
     );
 
-    if (!resend) {
-      console.log(`[EMAIL SIMULATED] Order confirmation to ${recipientEmail} for Order #${order.orderNumber}`);
-      return { success: true, simulated: true };
-    }
-
-    const { data, error } = await resend.emails.send({
-      from: fromEmail,
+    return sendTransactionalEmail({
       to: recipientEmail,
       subject: `Order Confirmed: #${order.orderNumber} - ABXV Footwear`,
       html,
     });
-
-    if (error) {
-      console.error("[Email Service] Resend error for order confirmation:", error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data };
   } catch (err: any) {
     console.error("[Email Service] Failed to send order confirmation:", err);
     return { success: false, error: err.message };
@@ -313,24 +354,11 @@ export async function sendShippingUpdateEmail(orderId: string, statusNote?: stri
       `
     );
 
-    if (!resend) {
-      console.log(`[EMAIL SIMULATED] Status update to ${recipientEmail} for Order #${order.orderNumber} (${order.status})`);
-      return { success: true, simulated: true };
-    }
-
-    const { data, error } = await resend.emails.send({
-      from: fromEmail,
+    return sendTransactionalEmail({
       to: recipientEmail,
       subject: `Order #${order.orderNumber} Status: ${order.status} - ABXV Footwear`,
       html,
     });
-
-    if (error) {
-      console.error("[Email Service] Resend error for shipping update:", error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data };
   } catch (err: any) {
     console.error("[Email Service] Failed to send shipping update email:", err);
     return { success: false, error: err.message };

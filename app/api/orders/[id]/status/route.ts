@@ -117,6 +117,14 @@ export async function GET(
               ).toFixed(2)}, PI: ${paymentIntent.id})`,
             },
           }).catch(() => {});
+
+          // Send transactional confirmation email
+          try {
+            const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
+            await sendOrderConfirmationEmail(order.id);
+          } catch (emailErr) {
+            console.warn("[Order Status] Failed to dispatch order confirmation email:", emailErr);
+          }
         }
       } catch (stripeErr) {
         console.warn("[Order Status] Stripe status reconciliation error:", stripeErr);
