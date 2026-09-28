@@ -1,10 +1,23 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Plus, ShoppingBag, Boxes, Tag, Users, DollarSign, RefreshCw } from "lucide-react";
-import { formatCurrency, convertCurrency, CURRENCIES } from "@/lib/constants/currencies";
+import {
+  ArrowRight,
+  Plus,
+  ShoppingBag,
+  Boxes,
+  Tag,
+  Users,
+  RefreshCw,
+  ChevronDown,
+  Check,
+  AlertTriangle,
+} from "lucide-react";
+import { formatCurrency, convertCurrency } from "@/lib/constants/currencies";
+import { FlagIcon } from "@/components/ui/FlagIcon";
+import { restockVariantQuantity } from "@/app/admin/inventory/actions";
 
 export type AdminDashboardOrder = {
   id: string;
@@ -30,6 +43,7 @@ export type AdminDashboardLowStock = {
   name: string;
   size: string;
   color: string;
+  sku?: string;
   stock: number;
   imageUrl: string;
 };
@@ -79,6 +93,15 @@ function timeAgo(dateString: string) {
 const SUPPORTED_CURRENCIES = ["USD", "NPR", "EUR", "GBP"] as const;
 type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
 
+const CURRENCY_DETAILS: Record<CurrencyCode, { name: string; symbol: string }> = {
+  USD: { name: "US Dollar", symbol: "$" },
+  NPR: { name: "Nepalese Rupee", symbol: "Rs." },
+  EUR: { name: "Euro", symbol: "€" },
+  GBP: { name: "British Pound", symbol: "£" },
+};
+
+type LowStockFilterTier = "ALL" | "OUT" | "CRITICAL" | "LOW";
+
 export function AdminDashboardClient({
   adminName,
   totalOrdersCount,
@@ -91,16 +114,47 @@ export function AdminDashboardClient({
   exchangeRates,
 }: AdminDashboardClientProps) {
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("USD");
+  const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
+  const currencyMenuRef = useRef<HTMLDivElement>(null);
+
   const [rates, setRates] = useState<Record<string, number>>(
     exchangeRates || {
       USD: 1.0,
-      NPR: CURRENCIES.NPR?.rateToBaseUSD ?? 135.0,
-      GBP: CURRENCIES.GBP?.rateToBaseUSD ?? 0.78,
-      EUR: CURRENCIES.EUR?.rateToBaseUSD ?? 0.92,
+      NPR: 134.5,
+      EUR: 0.92,
+      GBP: 0.78,
     }
   );
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  // Dynamic Low Stock state
+  const [stockItems, setStockItems] = useState<AdminDashboardLowStock[]>(lowStockItems);
+  const [activeTier, setActiveTier] = useState<LowStockFilterTier>("ALL");
+  const [restockingId, setRestockingId] = useState<string | null>(null);
+  const [, startRestockTransition] = useTransition();
+
+  // Sync prop changes for stockItems during render
+  const [prevLowStock, setPrevLowStock] = useState(lowStockItems);
+  if (lowStockItems !== prevLowStock) {
+    setPrevLowStock(lowStockItems);
+    setStockItems(lowStockItems);
+  }
+
+  // Close currency dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (currencyMenuRef.current && !currencyMenuRef.current.contains(e.target as Node)) {
+        setCurrencyDropdownOpen(false);
+      }
+    }
+    if (currencyDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [currencyDropdownOpen]);
 
   const fetchRates = async (force = false) => {
     try {
@@ -123,7 +177,21 @@ export function AdminDashboardClient({
   };
 
   useEffect(() => {
-    fetchRates(false);
+    let active = true;
+    fetch("/api/currencies")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data?.rates) {
+          setRates(data.rates);
+          setLastSyncTime(
+            new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -155,11 +223,52 @@ export function AdminDashboardClient({
 
   const handleCurrencyChange = (code: CurrencyCode) => {
     setSelectedCurrency(code);
+    setCurrencyDropdownOpen(false);
     try {
       localStorage.setItem("admin_selected_currency", code);
       window.dispatchEvent(new Event("admin_currency_change"));
     } catch {}
   };
+
+  // Inline Restock Handler (Atomic increment)
+  function handleInlineRestock(variantId: string, amount: number) {
+    setRestockingId(variantId);
+    startRestockTransition(async () => {
+      // Optimistic state increment
+      setStockItems((prev) =>
+        prev.map((item) =>
+          item.id === variantId ? { ...item, stock: item.stock + amount } : item
+        )
+      );
+
+      const res = await restockVariantQuantity(variantId, amount);
+      setRestockingId(null);
+
+      if (!res.success) {
+        // Revert on failure
+        setStockItems((prev) =>
+          prev.map((item) =>
+            item.id === variantId ? { ...item, stock: Math.max(0, item.stock - amount) } : item
+          )
+        );
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: res.error || "Failed to restock item",
+            })
+          );
+        }
+      } else {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: `Restocked variant (+${amount} units)`,
+            })
+          );
+        }
+      }
+    });
+  }
 
   // Sum all orders by converting each order into the selected currency using live exchange rates
   const totalRevenue = useMemo(() => {
@@ -169,9 +278,23 @@ export function AdminDashboardClient({
     }, 0);
   }, [revenueOrders, selectedCurrency, rates]);
 
+  // Filtered Low Stock items by non-overlapping tiers
+  const filteredLowStock = useMemo(() => {
+    if (activeTier === "OUT") {
+      return stockItems.filter((i) => i.stock === 0);
+    }
+    if (activeTier === "CRITICAL") {
+      return stockItems.filter((i) => i.stock >= 1 && i.stock <= 2);
+    }
+    if (activeTier === "LOW") {
+      return stockItems.filter((i) => i.stock >= 3 && i.stock <= 5);
+    }
+    return stockItems;
+  }, [stockItems, activeTier]);
+
   return (
     <div className="space-y-8 sm:space-y-10">
-      {/* Header with Title and Currency Switcher */}
+      {/* Header with Title and Flag-based Currency Switcher */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/55">
@@ -185,17 +308,17 @@ export function AdminDashboardClient({
           </p>
         </div>
 
-        {/* Currency Switcher & Live Forex Controls */}
+        {/* Currency Switcher Dropdown & Live Forex Sync */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={() => fetchRates(true)}
             disabled={isSyncing}
             title="Force refresh rates directly from ExchangeRate-API"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-navy)]/70 hover:bg-white hover:text-[var(--color-navy)] transition-all disabled:opacity-50 shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-navy)]/70 hover:bg-white hover:text-[var(--color-navy)] transition-all disabled:opacity-50 shadow-2xs"
           >
             <RefreshCw className={`h-3 w-3 text-emerald-600 ${isSyncing ? "animate-spin" : ""}`} />
-            <span>ExchangeRate-API</span>
+            <span>Forex API</span>
             {lastSyncTime && (
               <span className="text-[10px] text-[var(--color-navy)]/40 font-mono hidden xs:inline">
                 ({lastSyncTime})
@@ -203,99 +326,337 @@ export function AdminDashboardClient({
             )}
           </button>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-navy)]/60">
-              Currency:
-            </span>
-            <div className="inline-flex max-w-full items-center overflow-x-auto rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-1 shadow-2xs">
-            {SUPPORTED_CURRENCIES.map((code) => {
-              const active = selectedCurrency === code;
-              const symbol = CURRENCIES[code]?.symbol || code;
-              return (
-                <button
-                  key={code}
-                  onClick={() => handleCurrencyChange(code)}
-                  className={`rounded-lg px-2.5 sm:px-3 py-1 text-xs font-bold transition-all duration-150 shrink-0 ${
-                    active
-                      ? "bg-[var(--color-navy)] text-white shadow-xs scale-100"
-                      : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-white/60"
-                  }`}
-                >
-                  <span>{code}</span>{" "}
-                  <span className={active ? "text-white/80" : "text-[var(--color-navy)]/45"}>
-                    ({symbol})
-                  </span>
-                </button>
-              );
-            })}
+          {/* Compact Currency Dropdown with Flags */}
+          <div ref={currencyMenuRef} className="relative inline-block text-left">
+            <button
+              type="button"
+              onClick={() => setCurrencyDropdownOpen((prev) => !prev)}
+              aria-haspopup="listbox"
+              aria-expanded={currencyDropdownOpen}
+              className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-3 py-1.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-white hover:border-[var(--color-navy)]/30 transition-all shadow-2xs"
+            >
+              <FlagIcon currency={selectedCurrency} className="h-3.5 w-5 rounded-[2px] shadow-2xs object-cover" />
+              <span className="font-bold">{selectedCurrency}</span>
+              <span className="text-[11px] text-[var(--color-navy)]/50 font-medium">
+                ({CURRENCY_DETAILS[selectedCurrency].symbol})
+              </span>
+              <ChevronDown
+                className={`h-3.5 w-3.5 text-[var(--color-navy)]/50 transition-transform duration-200 ${
+                  currencyDropdownOpen ? "rotate-180 text-[var(--color-navy)]" : ""
+                }`}
+              />
+            </button>
+
+            {currencyDropdownOpen && (
+              <div
+                role="listbox"
+                className="absolute right-0 top-full mt-2 w-52 origin-top-right rounded-2xl border border-[var(--color-sand)] bg-white p-1.5 shadow-xl ring-1 ring-black/5 z-50 animate-in fade-in zoom-in-95"
+              >
+                <div className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest text-[var(--color-navy)]/40 border-b border-[var(--color-sand)]/60 mb-1">
+                  Select Currency
+                </div>
+                <div className="space-y-0.5">
+                  {SUPPORTED_CURRENCIES.map((code) => {
+                    const active = selectedCurrency === code;
+                    const detail = CURRENCY_DETAILS[code];
+                    return (
+                      <button
+                        key={code}
+                        role="option"
+                        aria-selected={active}
+                        type="button"
+                        onClick={() => handleCurrencyChange(code)}
+                        className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs transition-colors ${
+                          active
+                            ? "bg-[var(--color-navy)] text-white font-bold"
+                            : "text-[var(--color-navy)]/75 hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] font-medium"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <FlagIcon currency={code} className="h-3.5 w-5 rounded-[2px] shadow-2xs object-cover" />
+                          <span className="font-bold">{code}</span>
+                          <span className={active ? "text-white/70" : "text-[var(--color-navy)]/45"}>
+                            · {detail.symbol}
+                          </span>
+                        </div>
+                        {active && <Check className="h-3.5 w-3.5 text-white stroke-[2.5]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
 
-      {/* Stats row: 2 columns on mobile/tablet (<1024px), 4 columns on desktop (>=1024px) */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-6 border-y border-[var(--color-sand)] py-5 sm:py-6">
-        {/* Orders Card */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
-            Orders
-          </p>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
-            {totalOrdersCount}
-          </p>
-          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
-            All time orders
-          </p>
-        </div>
-
-        {/* Revenue Card (Single Normalized Currency) */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:border-l lg:border-[var(--color-sand)] lg:pl-6">
-          <div className="flex items-center justify-between lg:pr-2">
+      {/* Stats Row: Enclosed in a clear, full border container with clean card dividers */}
+      <div className="rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-4 sm:p-6 shadow-2xs">
+        <div className="grid grid-cols-2 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--color-sand)]/70 lg:grid-cols-4">
+          {/* Orders Card */}
+          <div className="p-2 sm:p-0">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
-              Revenue
+              Orders
             </p>
-            <span className="rounded bg-[var(--color-navy)]/8 px-1.5 py-0.5 text-[9px] font-extrabold text-[var(--color-navy)]/70">
-              {selectedCurrency}
-            </span>
+            <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
+              {totalOrdersCount}
+            </p>
+            <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
+              All time orders
+            </p>
           </div>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-xl sm:text-2xl xl:text-3xl font-extrabold text-[var(--color-navy)] tracking-tight">
-            {formatCurrency(totalRevenue, selectedCurrency)}
-          </p>
-          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
-            Normalized total
-          </p>
-        </div>
 
-        {/* Products Card */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:border-l lg:border-[var(--color-sand)] lg:pl-6">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
-            Products
-          </p>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
-            {totalProductsCount}
-          </p>
-          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
-            Active products
-          </p>
-        </div>
+          {/* Revenue Card (Single Normalized Currency) */}
+          <div className="p-2 sm:p-0 sm:pl-6 pt-4 sm:pt-0">
+            <div className="flex items-center justify-between pr-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
+                Revenue
+              </p>
+              <span className="rounded bg-[var(--color-navy)]/8 px-1.5 py-0.5 text-[9px] font-extrabold text-[var(--color-navy)]/70">
+                {selectedCurrency}
+              </span>
+            </div>
+            <p className="mt-1.5 font-[family-name:var(--font-display)] text-xl sm:text-2xl xl:text-3xl font-extrabold text-[var(--color-navy)] tracking-tight">
+              {formatCurrency(totalRevenue, selectedCurrency)}
+            </p>
+            <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
+              Normalized total
+            </p>
+          </div>
 
-        {/* Low Stock Card */}
-        <div className="rounded-2xl border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)] p-4 lg:border-0 lg:bg-transparent lg:p-0 lg:border-l lg:border-[var(--color-sand)] lg:pl-6">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
-            Low Stock
-          </p>
-          <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
-            {lowStockCount}
-          </p>
-          <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
-            Variants to restock
-          </p>
+          {/* Products Card */}
+          <div className="p-2 sm:p-0 sm:pl-6 pt-4 sm:pt-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
+              Products
+            </p>
+            <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
+              {totalProductsCount}
+            </p>
+            <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
+              Active catalog items
+            </p>
+          </div>
+
+          {/* Low Stock Card */}
+          <div className="p-2 sm:p-0 sm:pl-6 pt-4 sm:pt-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/50">
+              Low Stock
+            </p>
+            <p className="mt-1.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold text-[var(--color-navy)]">
+              {lowStockCount}
+            </p>
+            <p className="mt-0.5 text-[10px] font-medium text-[var(--color-navy)]/45">
+              Variants to restock
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Content Grid: Low Stock & Quick Actions on LEFT (col-span-1), Orders & Products on RIGHT (col-span-2) */}
       <div className="grid grid-cols-1 gap-8 sm:gap-10 lg:grid-cols-3">
-        {/* Left column: Orders and Products */}
+        {/* ========================================================
+            LEFT COLUMN: Low Stock Alerts + Quick Actions
+        ======================================================== */}
+        <div className="space-y-8 sm:space-y-10 lg:col-span-1">
+          {/* Dynamic Low Stock Card */}
+          <div className="rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--color-sand)]/60">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
+                  Low Stock Alerts
+                </h2>
+              </div>
+              <Link
+                href="/admin/inventory"
+                className="flex items-center gap-1 text-[11px] font-semibold text-[var(--color-navy)] hover:text-[var(--color-sky)] transition-colors"
+              >
+                Inventory <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+
+            {/* Filter Tabs: Non-overlapping tiers */}
+            <div className="flex items-center gap-1 mt-3 p-1 rounded-xl bg-white border border-[var(--color-sand)]/70 text-[10px] font-bold overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setActiveTier("ALL")}
+                className={`rounded-lg px-2 py-1 transition-all shrink-0 ${
+                  activeTier === "ALL"
+                    ? "bg-[var(--color-navy)] text-white shadow-2xs"
+                    : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
+                }`}
+              >
+                All ({stockItems.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTier("OUT")}
+                className={`rounded-lg px-2 py-1 transition-all shrink-0 ${
+                  activeTier === "OUT"
+                    ? "bg-rose-600 text-white shadow-2xs"
+                    : "text-rose-600/80 hover:text-rose-700"
+                }`}
+              >
+                Out (0)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTier("CRITICAL")}
+                className={`rounded-lg px-2 py-1 transition-all shrink-0 ${
+                  activeTier === "CRITICAL"
+                    ? "bg-rose-500 text-white shadow-2xs"
+                    : "text-rose-500/80 hover:text-rose-600"
+                }`}
+              >
+                Crit (1-2)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTier("LOW")}
+                className={`rounded-lg px-2 py-1 transition-all shrink-0 ${
+                  activeTier === "LOW"
+                    ? "bg-amber-500 text-white shadow-2xs"
+                    : "text-amber-600/80 hover:text-amber-700"
+                }`}
+              >
+                Low (3-5)
+              </button>
+            </div>
+
+            {/* Items List with Inline Restock */}
+            {filteredLowStock.length === 0 ? (
+              <p className="py-8 text-center text-xs text-[var(--color-navy)]/50">
+                No items match this stock tier.
+              </p>
+            ) : (
+              <div className="mt-3 flex flex-col gap-2.5">
+                {filteredLowStock.map((item) => {
+                  const isOut = item.stock === 0;
+                  const isCritical = item.stock >= 1 && item.stock <= 2;
+                  const isRestocking = restockingId === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-2 p-2.5 rounded-xl border border-[var(--color-sand)] bg-white shadow-2xs hover:border-[var(--color-navy)]/20 transition-all"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[var(--color-cream-alt)] border border-[var(--color-sand)]">
+                          <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--color-navy)] truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-[10px] text-[var(--color-navy)]/50 truncate">
+                            Size {item.size} · {item.color} {item.sku ? `(${item.sku})` : ""}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            isOut
+                              ? "bg-rose-100 text-rose-700"
+                              : isCritical
+                              ? "bg-rose-50 text-rose-600 border border-rose-200"
+                              : "bg-amber-50 text-amber-700 border border-amber-200"
+                          }`}
+                        >
+                          {item.stock} left
+                        </span>
+                      </div>
+
+                      {/* Inline Quick Restock Bar */}
+                      <div className="flex items-center justify-between pt-1.5 border-t border-[var(--color-sand)]/40 text-[10px]">
+                        <span className="text-[var(--color-navy)]/45 font-medium">Quick restock:</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={isRestocking}
+                            onClick={() => handleInlineRestock(item.id, 1)}
+                            className="rounded-md border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-2 py-0.5 font-bold text-[var(--color-navy)] hover:bg-[var(--color-navy)] hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            +1
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isRestocking}
+                            onClick={() => handleInlineRestock(item.id, 5)}
+                            className="rounded-md border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-2 py-0.5 font-bold text-[var(--color-navy)] hover:bg-[var(--color-navy)] hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            +5
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isRestocking}
+                            onClick={() => handleInlineRestock(item.id, 10)}
+                            className="rounded-md border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-2 py-0.5 font-bold text-[var(--color-navy)] hover:bg-[var(--color-navy)] hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            +10
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Actions Card */}
+          <div className="rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-4 sm:p-5 shadow-2xs">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)] pb-3 border-b border-[var(--color-sand)]/60">
+              Quick Actions
+            </h2>
+            <div className="mt-3 flex flex-col gap-2">
+              <Link
+                href="/admin/products/new"
+                className="flex items-center gap-2 rounded-xl bg-[var(--color-navy)] px-3.5 py-2.5 text-xs font-semibold text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 transition-colors shadow-2xs"
+              >
+                <Plus className="h-4 w-4 shrink-0" /> Add New Product
+              </Link>
+              <Link
+                href="/admin/orders"
+                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors shadow-2xs"
+              >
+                <span className="flex items-center gap-2">
+                  <ShoppingBag className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> View Orders
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
+              </Link>
+              <Link
+                href="/admin/inventory"
+                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors shadow-2xs"
+              >
+                <span className="flex items-center gap-2">
+                  <Boxes className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Inventory
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
+              </Link>
+              <Link
+                href="/admin/categories"
+                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors shadow-2xs"
+              >
+                <span className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Categories
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
+              </Link>
+              <Link
+                href="/admin/users"
+                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors shadow-2xs"
+              >
+                <span className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Users
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================
+            RIGHT COLUMN: Recent Orders + Recently Added Products
+        ======================================================== */}
         <div className="space-y-8 sm:space-y-10 lg:col-span-2">
           {/* Recent Orders */}
           <div>
@@ -307,15 +668,15 @@ export function AdminDashboardClient({
                 href="/admin/orders"
                 className="flex items-center gap-1 text-xs font-semibold text-[var(--color-navy)] hover:text-[var(--color-sky)] transition-colors"
               >
-                View all orders <ArrowRight className="h-3.5 w-3.5" />
+                All orders <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
 
             {recentOrders.length === 0 ? (
-              <p className="mt-6 text-xs text-[var(--color-navy)]/50">No orders yet.</p>
+              <p className="mt-6 text-xs text-[var(--color-navy)]/50">No orders placed yet.</p>
             ) : (
               <>
-                {/* Mobile View: Order Cards (fits small screens perfectly without horizontal cutoff) */}
+                {/* Mobile View: Cards */}
                 <div className="mt-4 flex flex-col gap-3 sm:hidden">
                   {recentOrders.map((order) => {
                     const isForeign = (order.currency || "USD") !== selectedCurrency;
@@ -367,7 +728,7 @@ export function AdminDashboardClient({
                   })}
                 </div>
 
-                {/* Tablet / Desktop View: Full Table with overflow-x-auto */}
+                {/* Tablet / Desktop View: Full Table */}
                 <div className="mt-4 hidden sm:block overflow-x-auto rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]">
                   <table className="w-full min-w-[550px] text-left text-sm">
                     <thead>
@@ -434,7 +795,7 @@ export function AdminDashboardClient({
             )}
           </div>
 
-          {/* Recently added products */}
+          {/* Recently Added Products */}
           <div>
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
@@ -486,114 +847,6 @@ export function AdminDashboardClient({
                 })}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Right column */}
-        <div className="space-y-8 sm:space-y-10">
-          {/* Low stock */}
-          <div>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
-                Low Stock Alerts
-              </h2>
-              <Link
-                href="/admin/inventory"
-                className="flex items-center gap-1 text-xs font-semibold text-[var(--color-navy)] hover:text-[var(--color-sky)] transition-colors"
-              >
-                View inventory <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-
-            {lowStockItems.length === 0 ? (
-              <p className="mt-6 text-xs text-[var(--color-navy)]/50">
-                All inventory levels healthy.
-              </p>
-            ) : (
-              <div className="mt-4 flex flex-col gap-2.5">
-                {lowStockItems.map((item) => {
-                  const urgent = item.stock <= 2;
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]"
-                    >
-                      <div className="relative h-10 w-10 sm:h-11 sm:w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--color-cream)] border border-[var(--color-sand)]">
-                        <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-[var(--color-navy)] truncate">
-                          {item.name}
-                        </p>
-                        <p className="text-[10px] text-[var(--color-navy)]/50 truncate">
-                          Size {item.size} · {item.color}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p
-                          className={`text-xs font-bold ${
-                            urgent ? "text-rose-600" : "text-amber-600"
-                          }`}
-                        >
-                          {item.stock} left
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Quick actions */}
-          <div>
-            <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
-              Quick Actions
-            </h2>
-            <div className="mt-4 flex flex-col sm:grid sm:grid-cols-2 lg:flex lg:flex-col gap-2.5">
-              <Link
-                href="/admin/products/new"
-                className="flex items-center gap-2 rounded-xl bg-[var(--color-navy)] px-4 py-3 text-xs font-semibold text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 transition-colors shadow-2xs sm:col-span-2 lg:col-span-1"
-              >
-                <Plus className="h-4 w-4 shrink-0" /> Add New Product
-              </Link>
-              <Link
-                href="/admin/orders"
-                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <ShoppingBag className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> View Orders
-                </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
-              </Link>
-              <Link
-                href="/admin/inventory"
-                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Boxes className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Inventory
-                </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
-              </Link>
-              <Link
-                href="/admin/categories"
-                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Categories
-                </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
-              </Link>
-              <Link
-                href="/admin/users"
-                className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] px-4 py-2.5 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Users
-                </span>
-                <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
-              </Link>
-            </div>
           </div>
         </div>
       </div>

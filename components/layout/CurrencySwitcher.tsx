@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Check, Globe } from "lucide-react";
+import { useState, useRef, useEffect, useSyncExternalStore } from "react";
+import { ChevronDown, Check } from "lucide-react";
 import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 import { CURRENCIES } from "@/lib/constants/currencies";
+import { FlagIcon } from "@/components/ui/FlagIcon";
+
+const emptySubscribe = () => () => {};
 
 const CURRENCY_OPTIONS: { code: SupportedCurrency; name: string; symbol: string }[] = [
   { code: "USD", name: "US Dollar", symbol: "$" },
@@ -18,13 +21,12 @@ interface CurrencySwitcherProps {
 }
 
 export function CurrencySwitcher({ variant = "dropdown", className = "" }: CurrencySwitcherProps) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { currency, setCurrency, syncRatesFromServer, ratesLoaded } = useCurrencyStore();
 
   useEffect(() => {
-    setMounted(true);
     if (!ratesLoaded) {
       syncRatesFromServer();
     }
@@ -62,12 +64,13 @@ export function CurrencySwitcher({ variant = "dropdown", className = "" }: Curre
               key={opt.code}
               type="button"
               onClick={() => setCurrency(opt.code)}
-              className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200 ${
                 isActive
                   ? "bg-[var(--color-navy)] text-white shadow-xs"
                   : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
               }`}
             >
+              <FlagIcon code={opt.code} className="h-3 w-3.5 rounded-xs" />
               <span>{opt.code}</span>
               <span className={isActive ? "text-white/80" : "text-[var(--color-navy)]/40"}>
                 ({opt.symbol})
@@ -90,6 +93,7 @@ export function CurrencySwitcher({ variant = "dropdown", className = "" }: Curre
         className="group flex items-center gap-1.5 rounded-full border border-[var(--color-sand)]/90 bg-[var(--color-cream)] px-2.5 py-1 text-xs font-semibold text-[var(--color-navy)]/80 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:bg-[var(--color-cream-alt)] hover:text-[var(--color-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-sky)] shadow-2xs"
         title="Change currency"
       >
+        <FlagIcon code={activeCode} className="h-3 w-4 rounded-xs shadow-2xs" />
         <span className="font-bold text-[11px] tracking-tight text-[var(--color-navy)]">
           {activeCode}
         </span>
@@ -105,7 +109,7 @@ export function CurrencySwitcher({ variant = "dropdown", className = "" }: Curre
 
       {/* Floating Dropdown Menu */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-44 origin-top-right rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream)] p-1.5 shadow-xl ring-1 ring-black/5 z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-full mt-2 w-48 origin-top-right rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream)] p-1.5 shadow-xl ring-1 ring-black/5 z-50 animate-in fade-in zoom-in-95 duration-150">
           <div className="px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-widest text-[var(--color-navy)]/40 border-b border-[var(--color-sand)]/60 mb-1">
             Select Currency
           </div>
@@ -129,6 +133,7 @@ export function CurrencySwitcher({ variant = "dropdown", className = "" }: Curre
                   }`}
                 >
                   <div className="flex items-center gap-2">
+                    <FlagIcon code={opt.code} className="h-3.5 w-4 rounded-xs shadow-2xs" />
                     <span className="font-bold">{opt.code}</span>
                     <span className={isActive ? "text-white/70" : "text-[var(--color-navy)]/40"}>
                       · {opt.name}

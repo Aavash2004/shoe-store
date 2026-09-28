@@ -356,11 +356,14 @@ model OrderItem {
 }
 
 model OrderStatusHistory {
-  id        String   @id @default(cuid())
-  orderId   String
-  status    String
-  note      String?
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  orderId    String
+  status     String
+  fromStatus String?
+  toStatus   String?
+  changedBy  String?
+  note       String?
+  createdAt  DateTime @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 

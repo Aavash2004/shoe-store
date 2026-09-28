@@ -252,15 +252,10 @@ export default async function AdminOrderDetailPage({
 
                             {order.stripePaymentIntentId && (
                                 <div className="pt-2 border-t border-sand/60">
-                                    <span className="text-xs text-navy/50 block">Stripe Payment Intent:</span>
-                                    <a
-                                        href={`https://dashboard.stripe.com/test/payments/${order.stripePaymentIntentId}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-xs font-mono text-sky-700 hover:underline break-all block mt-0.5"
-                                    >
-                                        {order.stripePaymentIntentId} ↗
-                                    </a>
+                                    <span className="text-xs text-navy/50 block">Payment Reference:</span>
+                                    <span className="text-xs font-mono text-navy/70 break-all block mt-0.5">
+                                        {order.stripePaymentIntentId}
+                                    </span>
                                 </div>
                             )}
 

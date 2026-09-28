@@ -5,6 +5,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 
+import {
+  canTransition,
+  isTerminalStatus,
+  ORDER_STATUS_LABELS,
+  type OrderStatus,
+} from "@/lib/order-status";
+
 const UpdateOrderStatusSchema = z.object({
   orderId: z.string().min(1, "Order ID is required."),
   status: z.enum([
@@ -34,43 +41,80 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
     });
 
     if (!order) {
-        return { success: false as const, error: "Order not found" };
+        return { success: false as const, error: "Order not found." };
     }
 
-    // Handle stock updates if status is changing to or from CANCELLED
-    if (order.status !== "CANCELLED" && validStatus === "CANCELLED") {
+    const currentStatus = order.status as OrderStatus;
+
+    if (currentStatus === validStatus) {
+        return { success: true as const };
+    }
+
+    if (isTerminalStatus(currentStatus)) {
+        return {
+            success: false as const,
+            error: `Order is in terminal state "${ORDER_STATUS_LABELS[currentStatus] || currentStatus}" and cannot be transitioned.`,
+        };
+    }
+
+    if (!canTransition(currentStatus, validStatus)) {
+        return {
+            success: false as const,
+            error: `Illegal transition: Cannot change order from "${ORDER_STATUS_LABELS[currentStatus] || currentStatus}" to "${ORDER_STATUS_LABELS[validStatus] || validStatus}".`,
+        };
+    }
+
+    // Race-safe atomic update
+    const updateResult = await prisma.order.updateMany({
+        where: {
+            id: validOrderId,
+            status: currentStatus,
+        },
+        data: {
+            status: validStatus,
+        },
+    });
+
+    if (updateResult.count === 0) {
+        return {
+            success: false as const,
+            error: `Order status was concurrently modified by another user or is no longer in "${currentStatus}". Please refresh.`,
+        };
+    }
+
+    // Restock inventory on transition to CANCELLED
+    if (validStatus === "CANCELLED") {
         for (const item of order.items) {
             await prisma.productVariant.update({
                 where: { id: item.variantId },
                 data: { stock: { increment: item.quantity } },
             });
         }
-    } else if (order.status === "CANCELLED" && validStatus !== "CANCELLED") {
-        for (const item of order.items) {
-            await prisma.productVariant.update({
-                where: { id: item.variantId },
-                data: { stock: { decrement: item.quantity } },
-            });
-        }
     }
 
-    await prisma.order.update({
-        where: { id: validOrderId },
-        data: { status: validStatus },
-    });
+    const adminEmail = session.user?.email?.toLowerCase();
+    const adminName = session.user?.name;
+    const changedBy = adminEmail || adminName || "Admin";
 
+    // Write audit status history record
     await prisma.orderStatusHistory.create({
-        data: { orderId: validOrderId, status: validStatus, note: validNote || null },
+        data: {
+            orderId: validOrderId,
+            status: validStatus,
+            fromStatus: currentStatus,
+            toStatus: validStatus,
+            changedBy,
+            note: validNote || null,
+        },
     });
 
-    // Safely resolve admin user to guarantee foreign key integrity
-    const sessionUserId = (session.user as any)?.id;
-    const sessionEmail = session.user?.email?.toLowerCase();
+    // Safely resolve admin user for AdminActivityLog
+    const sessionUserId = session.user?.id;
     const adminUser = await prisma.user.findFirst({
         where: {
             OR: [
                 ...(sessionUserId ? [{ id: sessionUserId }] : []),
-                ...(sessionEmail ? [{ email: sessionEmail }] : []),
+                ...(adminEmail ? [{ email: adminEmail }] : []),
             ],
         },
         select: { id: true },
@@ -83,7 +127,7 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
                 action: "CHANGED_ORDER_STATUS",
                 entity: "Order",
                 entityId: validOrderId,
-                metadata: { newStatus: validStatus },
+                metadata: { fromStatus: currentStatus, newStatus: validStatus },
             },
         });
     }
@@ -98,6 +142,8 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
 
     revalidatePath(`/admin/orders/${validOrderId}`);
     revalidatePath("/admin/orders");
+    revalidatePath(`/account/orders/${validOrderId}`);
+    revalidatePath("/account/orders");
 
     return { success: true as const };
 }
@@ -172,7 +218,7 @@ export async function refundOrder(orderId: string, reason?: string) {
         });
 
         // Admin activity log
-        const sessionUserId = (session.user as any)?.id;
+        const sessionUserId = session.user?.id;
         const sessionEmail = session.user?.email?.toLowerCase();
         const adminUser = await prisma.user.findFirst({
             where: {
@@ -206,9 +252,10 @@ export async function refundOrder(orderId: string, reason?: string) {
         revalidatePath("/admin/orders");
 
         return { success: true as const, refundId: refundIdentifier };
-    } catch (err: any) {
+    } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Failed to process refund.";
         console.error("[Refund Error]:", err);
-        return { success: false as const, error: err.message || "Failed to process refund." };
+        return { success: false as const, error: errorMsg };
     }
 }
 

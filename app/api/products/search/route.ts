@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { publicProductWhere } from "@/lib/visibility";
 
 function getRelevanceScore(
   product: {
@@ -78,13 +79,12 @@ export async function GET(request: NextRequest) {
     // Optimized fast query (focused on name, slug, brand, category - excluding description text scan)
     const rawProducts = await prisma.product.findMany({
       where: {
-        isActive: true,
-        deletedAt: null,
+        ...publicProductWhere(),
         OR: [
           { name: { contains: q, mode: "insensitive" } },
           { slug: { contains: q, mode: "insensitive" } },
           { brand: { contains: q, mode: "insensitive" } },
-          { category: { name: { contains: q, mode: "insensitive" } } },
+          { category: { name: { contains: q, mode: "insensitive" }, isActive: true } },
         ],
       },
       take: 10,

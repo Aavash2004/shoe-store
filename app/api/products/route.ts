@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { productQuerySchema } from "@/lib/validations/product";
+import { publicProductWhere } from "@/lib/visibility";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -21,13 +22,12 @@ export async function GET(request: NextRequest) {
 
   const products = await prisma.product.findMany({
     where: {
-      isActive: true,
-      deletedAt: null,
+      ...publicProductWhere(),
       ...(search && {
         name: { contains: search, mode: "insensitive" },
       }),
       ...(category && {
-        category: { slug: category },
+        category: { slug: category, isActive: true },
       }),
       ...(size || color
         ? {

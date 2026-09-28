@@ -41,7 +41,7 @@ export async function updateVariantStock(variantId: string, newStock: number) {
     });
 
     // Admin audit log
-    const sessionUserId = (session.user as any)?.id;
+    const sessionUserId = (session.user as { id?: string })?.id;
     const sessionEmail = session.user?.email?.toLowerCase();
     const adminUser = await prisma.user.findFirst({
       where: {
@@ -72,9 +72,81 @@ export async function updateVariantStock(variantId: string, newStock: number) {
     }
 
     revalidatePath("/admin/inventory");
+    revalidatePath("/admin");
     return { success: true };
-  } catch (err: any) {
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to update stock.";
     console.error("[Update Variant Stock Error]:", err);
-    return { success: false, error: "Failed to update stock in database." };
+    return { success: false, error: errorMsg };
   }
 }
+
+const restockSchema = z.object({
+  variantId: z.string().min(1, "Variant ID is required"),
+  amount: z.number().int().min(1, "Restock quantity must be at least 1"),
+});
+
+export async function restockVariantQuantity(variantId: string, amount: number) {
+  const session = await requireAdmin();
+
+  const parseResult = restockSchema.safeParse({ variantId, amount });
+  if (!parseResult.success) {
+    return {
+      success: false as const,
+      error: parseResult.error.issues[0]?.message || "Invalid restock quantity",
+    };
+  }
+
+  const { variantId: id, amount: qty } = parseResult.data;
+
+  try {
+    const updated = await prisma.productVariant.update({
+      where: { id },
+      data: {
+        stock: { increment: qty },
+      },
+      include: {
+        product: { select: { name: true } },
+      },
+    });
+
+    const adminEmail = session.user?.email?.toLowerCase();
+    const adminUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(session.user?.id ? [{ id: session.user.id }] : []),
+          ...(adminEmail ? [{ email: adminEmail }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (adminUser) {
+      await prisma.adminActivityLog.create({
+        data: {
+          adminId: adminUser.id,
+          action: "RESTOCKED_VARIANT",
+          entity: "ProductVariant",
+          entityId: id,
+          metadata: {
+            productName: updated.product.name,
+            size: updated.size,
+            color: updated.color,
+            addedQuantity: qty,
+            newStock: updated.stock,
+          },
+        },
+      });
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/inventory");
+
+    return { success: true as const, newStock: updated.stock };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to restock in database.";
+    console.error("[Restock Error]:", err);
+    return { success: false as const, error: errorMsg };
+  }
+}
+

@@ -200,11 +200,24 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
           {/* Status Toggle */}
           <div className="flex items-center justify-between rounded-xl border border-[var(--color-sand)]/70 bg-white/50 p-4">
             <div>
-              <p className="text-sm font-semibold text-[var(--color-navy)]">
-                Category Visibility
-              </p>
-              <p className="text-xs text-[var(--color-navy)]/60">
-                Active categories are visible to customers in store filtering.
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-[var(--color-navy)]">
+                  Category Status
+                </p>
+                {isActive ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-stone-400" />
+                    Inactive
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[var(--color-navy)]/60 mt-0.5">
+                Inactive categories and their shoes will be hidden from the storefront.
               </p>
             </div>
             <label className="relative inline-flex cursor-pointer items-center">
@@ -214,7 +227,7 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
                 onChange={(e) => setIsActive(e.target.checked)}
                 className="peer sr-only"
               />
-              <div className="peer h-6 w-11 rounded-full bg-[var(--color-sand)] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-[var(--color-navy)] peer-checked:after:translate-x-full"></div>
+              <div className="peer h-6 w-11 rounded-full bg-[var(--color-sand)] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-emerald-600 peer-checked:after:translate-x-full"></div>
             </label>
           </div>
         </div>
@@ -263,7 +276,7 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
                 Delete Category
               </DialogTitle>
               <DialogDescription className="text-sm text-[var(--color-navy)]/70">
-                Are you sure you want to delete <strong className="text-[var(--color-navy)]">"{initialData?.name}"</strong>? This action cannot be undone.
+                Are you sure you want to delete <strong className="text-[var(--color-navy)]">&quot;{initialData?.name}&quot;</strong>? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="gap-2 sm:gap-0">

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
+import { publicProductWhere } from "@/lib/visibility";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductDetailInteractive } from "@/components/product/ProductDetailInteractive";
 import { ProductGrid } from "@/components/product/ProductGrid";
@@ -15,7 +16,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const product = await prisma.product.findFirst({
-    where: { slug, isActive: true, deletedAt: null },
+    where: { slug, ...publicProductWhere() },
     include: {
       category: true,
       images: { orderBy: { position: "asc" }, take: 1 },
@@ -63,7 +64,7 @@ export default async function ProductDetailPage({
   const [session, product] = await Promise.all([
     auth(),
     prisma.product.findFirst({
-      where: { slug, isActive: true, deletedAt: null },
+      where: { slug, ...publicProductWhere() },
       include: {
         category: true,
         images: { orderBy: { position: "asc" } },
@@ -87,10 +88,9 @@ export default async function ProductDetailPage({
   // Fetch up to 4 related products from the same category (excluding current product)
   let relatedProducts = await prisma.product.findMany({
     where: {
+      ...publicProductWhere(),
       categoryId: product.categoryId,
       id: { not: product.id },
-      isActive: true,
-      deletedAt: null,
     },
     take: 4,
     include: {
@@ -105,9 +105,8 @@ export default async function ProductDetailPage({
     const existingIds = [product.id, ...relatedProducts.map((p) => p.id)];
     const additional = await prisma.product.findMany({
       where: {
+        ...publicProductWhere(),
         id: { notIn: existingIds },
-        isActive: true,
-        deletedAt: null,
       },
       take: 4 - relatedProducts.length,
       include: {

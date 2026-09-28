@@ -46,6 +46,13 @@ export async function decrementStockWithLock(
         id: item.variantId,
         stock: { gte: item.quantity },
         isActive: true,
+        product: {
+          isActive: true,
+          deletedAt: null,
+          category: {
+            isActive: true,
+          },
+        },
       },
       data: {
         stock: { decrement: item.quantity },

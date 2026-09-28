@@ -6,6 +6,7 @@ import { PerksMarquee } from "@/components/layout/PerksMarquee";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
+import { publicProductWhere, publicCategoryWhere } from "@/lib/visibility";
 
 export const revalidate = 60;
 
@@ -22,7 +23,7 @@ async function executeHomePageData() {
     // 1. Fetch New Arrivals, Best Sellers variants, and Available Categories in parallel
     const [newArrivalsData, topVariants, dbCategories] = await Promise.all([
       prisma.product.findMany({
-        where: { isActive: true, deletedAt: null },
+        where: publicProductWhere(),
         orderBy: { createdAt: "desc" },
         take: 8,
         include: {
@@ -67,9 +68,8 @@ async function executeHomePageData() {
     if (variantIds.length > 0) {
       bestSellersData = await prisma.product.findMany({
         where: {
+          ...publicProductWhere(),
           variants: { some: { id: { in: variantIds } } },
-          isActive: true,
-          deletedAt: null,
         },
         take: 8,
         include: {

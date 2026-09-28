@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/prisma";
+import { publicProductWhere, publicCategoryWhere } from "@/lib/visibility";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl =
@@ -66,7 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     // Dynamic products
     const products = await prisma.product.findMany({
-      where: { isActive: true, deletedAt: null },
+      where: publicProductWhere(),
       select: { slug: true, updatedAt: true },
     });
 
@@ -79,7 +80,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     // Dynamic categories
     const categories = await prisma.category.findMany({
-      where: { isActive: true },
+      where: publicCategoryWhere(),
       select: { slug: true, updatedAt: true },
     });
 

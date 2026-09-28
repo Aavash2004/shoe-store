@@ -6,6 +6,7 @@ import { ProductGrid } from "@/components/product/ProductGrid";
 import { ShopFilters } from "@/components/product/ShopFilters";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
+import { publicProductWhere, publicCategoryWhere } from "@/lib/visibility";
 
 export const revalidate = 60;
 
@@ -47,25 +48,26 @@ async function executeShopQueries(whereClause: any, orderBy: any, skip: number, 
         }),
         prisma.product.count({ where: whereClause }),
         prisma.category.findMany({
+          where: publicCategoryWhere(),
           select: { name: true },
         }),
         prisma.product.findMany({
-          where: { isActive: true, deletedAt: null, brand: { not: null } },
+          where: { ...publicProductWhere(), brand: { not: null } },
           select: { brand: true },
           distinct: ["brand"],
         }),
         prisma.productVariant.groupBy({
           by: ["size"],
-          where: { isActive: true, product: { isActive: true, deletedAt: null } },
+          where: { isActive: true, product: publicProductWhere() },
         }),
         prisma.productVariant.groupBy({
           by: ["color"],
-          where: { isActive: true, product: { isActive: true, deletedAt: null } },
+          where: { isActive: true, product: publicProductWhere() },
         }),
         prisma.productVariant.aggregate({
           _min: { price: true },
           _max: { price: true },
-          where: { isActive: true, product: { isActive: true, deletedAt: null } },
+          where: { isActive: true, product: publicProductWhere() },
         }),
       ]);
 
@@ -132,8 +134,7 @@ export default async function ShopPage({
 
   // Build high-performance composite WHERE query
   const whereClause: any = {
-    isActive: true,
-    deletedAt: null,
+    ...publicProductWhere(),
     ...(q && {
       OR: [
         { name: { contains: q, mode: "insensitive" } },
@@ -142,7 +143,7 @@ export default async function ShopPage({
       ],
     }),
     ...(category && {
-      category: { slug: category.toLowerCase() },
+      category: { slug: category.toLowerCase(), isActive: true },
     }),
     ...(brand && {
       brand: { equals: brand, mode: "insensitive" },

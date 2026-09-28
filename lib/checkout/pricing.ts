@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db/prisma";
-import { COUNTRIES, getCountryByCode } from "@/lib/constants/countries";
+import { getCountryByCode } from "@/lib/constants/countries";
 import { CURRENCIES } from "@/lib/constants/currencies";
 import { calculateShipping, ShippingQuote } from "@/lib/checkout/shipping";
 import { getExchangeRates } from "@/lib/services/exchangeRates";
+import { Prisma } from "@/lib/generated/prisma/client";
 
 export interface PricingOrderItem {
   variantId: string;
@@ -44,7 +45,7 @@ export async function calculateOrderPricing(
   items: Array<{ variantId: string; quantity: number }>,
   countryCode: string,
   couponCode?: string,
-  dbClient: any = prisma
+  dbClient: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<OrderPricingResult> {
   const code = (countryCode || "NP").toUpperCase();
   const country = getCountryByCode(code);
@@ -66,6 +67,9 @@ export async function calculateOrderPricing(
       product: {
         isActive: true,
         deletedAt: null,
+        category: {
+          isActive: true,
+        },
       },
     },
     include: {
@@ -80,14 +84,14 @@ export async function calculateOrderPricing(
 
   if (variants.length !== items.length) {
     throw new PricingError(
-      "One or more items in your cart are no longer available.",
+      "One or more items in your cart are no longer available or belong to a seasonal collection that is currently inactive.",
       "ITEM_UNAVAILABLE"
     );
   }
 
   // Calculate item prices in destination currency
   const orderItems: PricingOrderItem[] = items.map((item) => {
-    const variant = variants.find((v: any) => v.id === item.variantId);
+    const variant = variants.find((v) => v.id === item.variantId);
     if (!variant) {
       throw new PricingError(
         `Variant ${item.variantId} not found or inactive`,

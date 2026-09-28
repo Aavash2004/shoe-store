@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --font-display: AdihausDIN, Helvetica, Arial, sans-serif;
-  --font-body: AdihausDIN, Helvetica, Arial, sans-serif;
-  --font-sans: AdihausDIN, Helvetica, Arial, sans-serif;
+  --font-urbanist: "Urbanist", sans-serif;
+  --font-display: var(--font-urbanist), "Urbanist", sans-serif;
+  --font-body: var(--font-urbanist), "Urbanist", sans-serif;
+  --font-sans: var(--font-urbanist), "Urbanist", sans-serif;
 }
 
 /* ========================================
@@ -19,9 +20,9 @@
   --color-sand: #E2E8F0;
 
   /* Fonts */
-  --font-display: AdihausDIN, Helvetica, Arial, sans-serif;
-  --font-body: AdihausDIN, Helvetica, Arial, sans-serif;
-  --font-sans: AdihausDIN, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-urbanist), "Urbanist", sans-serif;
+  --font-body: var(--font-urbanist), "Urbanist", sans-serif;
+  --font-sans: var(--font-urbanist), "Urbanist", sans-serif;
 
   /* Semantic colors */
   --color-background: var(--color-cream);
@@ -58,6 +59,7 @@
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-family: var(--font-body);
   }
 
   body {

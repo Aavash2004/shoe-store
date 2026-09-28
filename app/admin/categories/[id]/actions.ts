@@ -75,9 +75,9 @@ export async function updateCategory(
     revalidatePath("/shop");
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Update Category Error]:", err);
-    return { success: false, error: err?.message || "Failed to update category." };
+    return { success: false, error: err instanceof Error ? err.message : "Failed to update category." };
   }
 }
 
@@ -118,8 +118,86 @@ export async function deleteCategory(id: string) {
     revalidatePath("/shop");
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Delete Category Error]:", err);
-    return { success: false, error: err?.message || "Failed to delete category." };
+    return { success: false, error: err instanceof Error ? err.message : "Failed to delete category." };
+  }
+}
+
+export async function updateCategoryStatus(id: string, isActive: boolean) {
+  await requireAdmin();
+
+  const idCheck = z.string().min(1, "Valid category ID is required.").safeParse(id);
+  if (!idCheck.success) {
+    return { success: false, error: "Invalid category ID." };
+  }
+
+  try {
+    const existing = await prisma.category.findUnique({
+      where: { id: idCheck.data },
+      select: { id: true, isActive: true, name: true },
+    });
+
+    if (!existing) {
+      return { success: false, error: "Category not found." };
+    }
+
+    const updated = await prisma.category.update({
+      where: { id: existing.id },
+      data: { isActive },
+    });
+
+    revalidatePath("/admin/categories");
+    revalidatePath("/admin/products");
+    revalidatePath("/admin");
+    revalidatePath("/");
+    revalidatePath("/shop");
+
+    return { success: true, isActive: updated.isActive };
+  } catch (err: unknown) {
+    console.error("[Update Category Status Error]:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to update category status.",
+    };
+  }
+}
+
+export async function toggleCategoryActive(id: string) {
+  await requireAdmin();
+
+  const idCheck = z.string().min(1, "Valid category ID is required.").safeParse(id);
+  if (!idCheck.success) {
+    return { success: false, error: "Invalid category ID." };
+  }
+
+  try {
+    const existing = await prisma.category.findUnique({
+      where: { id: idCheck.data },
+      select: { id: true, isActive: true, name: true },
+    });
+
+    if (!existing) {
+      return { success: false, error: "Category not found." };
+    }
+
+    const updated = await prisma.category.update({
+      where: { id: existing.id },
+      data: { isActive: !existing.isActive },
+    });
+
+    revalidatePath("/admin/categories");
+    revalidatePath("/admin/products");
+    revalidatePath("/admin");
+    revalidatePath("/");
+    revalidatePath("/shop");
+
+    return { success: true, isActive: updated.isActive };
+  } catch (err: unknown) {
+    console.error("[Toggle Category Active Error]:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to toggle category visibility.",
+    };
   }
 }

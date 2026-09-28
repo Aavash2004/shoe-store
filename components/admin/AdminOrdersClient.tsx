@@ -20,15 +20,19 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  CreditCard,
   Eye,
-  ArrowUpDown,
   ShoppingBag,
   DollarSign,
   TrendingUp,
 } from "lucide-react";
 import { formatCurrency, convertCurrency, CURRENCIES } from "@/lib/constants/currencies";
 import { updateOrderStatus } from "@/app/admin/orders/[id]/actions";
+import {
+  getNextStatuses,
+  isTerminalStatus,
+  ORDER_STATUS_LABELS,
+  type OrderStatus,
+} from "@/lib/order-status";
 
 export type AdminOrderRow = {
   id: string;
@@ -134,9 +138,11 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
   const PAGE_SIZE = 10;
 
   // Sync state if initialOrders prop changes
-  useEffect(() => {
+  const [prevInitialOrders, setPrevInitialOrders] = useState(initialOrders);
+  if (initialOrders !== prevInitialOrders) {
+    setPrevInitialOrders(initialOrders);
     setOrders(initialOrders);
-  }, [initialOrders]);
+  }
 
   // Close context menu on outside click
   useEffect(() => {
@@ -220,9 +226,13 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
   }, [filteredOrders, currentPage]);
 
   // Reset pagination on search or tab change
-  useEffect(() => {
+  const [prevQuery, setPrevQuery] = useState(searchQuery);
+  const [prevTab, setPrevTab] = useState(selectedTab);
+  if (searchQuery !== prevQuery || selectedTab !== prevTab) {
+    setPrevQuery(searchQuery);
+    setPrevTab(selectedTab);
     setCurrentPage(1);
-  }, [searchQuery, selectedTab]);
+  }
 
   // Quick Status Update
   function handleQuickStatus(orderId: string, nextStatus: string) {
@@ -864,44 +874,85 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
                         </div>
 
                         {/* Floating Action Menu Popover */}
-                        {actionMenuOpenId === order.id && (
-                          <div
-                            ref={menuRef}
-                            className="absolute right-5 top-12 z-50 w-48 rounded-2xl border border-[var(--color-sand)] bg-white p-1.5 shadow-xl animate-in fade-in zoom-in-95 text-left"
-                          >
-                            <div className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-navy)]/40 border-b border-slate-100">
-                              Quick Change Status
-                            </div>
+                        {actionMenuOpenId === order.id && (() => {
+                          const nextStatuses = getNextStatuses(order.status);
+                          const isTerminal = isTerminalStatus(order.status);
 
-                            <button
-                              type="button"
-                              onClick={() => handleQuickStatus(order.id, "PROCESSING")}
-                              disabled={order.status === "PROCESSING"}
-                              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-[var(--color-navy)] hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-40"
+                          return (
+                            <div
+                              ref={menuRef}
+                              className="absolute right-5 top-12 z-50 w-52 rounded-2xl border border-[var(--color-sand)] bg-white p-1.5 shadow-xl animate-in fade-in zoom-in-95 text-left"
                             >
-                              <Clock className="h-3.5 w-3.5 text-blue-600" />
-                              <span>Mark Processing</span>
-                            </button>
+                              {!isTerminal && nextStatuses.length > 0 && (
+                                <>
+                                  <div className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-navy)]/40 border-b border-slate-100">
+                                    Next Action
+                                  </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleQuickStatus(order.id, "SHIPPED")}
-                              disabled={order.status === "SHIPPED"}
-                              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-[var(--color-navy)] hover:bg-sky-50 hover:text-sky-700 transition-colors disabled:opacity-40"
-                            >
-                              <Truck className="h-3.5 w-3.5 text-sky-600" />
-                              <span>Mark Shipped</span>
-                            </button>
+                                  <div className="py-1 space-y-0.5">
+                                    {nextStatuses.includes("CONFIRMED") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatus(order.id, "CONFIRMED")}
+                                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-[var(--color-navy)] hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                                      >
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                        <span>Confirm Order</span>
+                                      </button>
+                                    )}
 
-                            <button
-                              type="button"
-                              onClick={() => handleQuickStatus(order.id, "DELIVERED")}
-                              disabled={order.status === "DELIVERED"}
-                              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-[var(--color-navy)] hover:bg-emerald-50 hover:text-emerald-700 transition-colors disabled:opacity-40"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                              <span>Mark Delivered</span>
-                            </button>
+                                    {nextStatuses.includes("PROCESSING") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatus(order.id, "PROCESSING")}
+                                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-[var(--color-navy)] hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                                      >
+                                        <Clock className="h-3.5 w-3.5 text-blue-600" />
+                                        <span>Mark Processing</span>
+                                      </button>
+                                    )}
+
+                                    {nextStatuses.includes("SHIPPED") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatus(order.id, "SHIPPED")}
+                                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-[var(--color-navy)] hover:bg-sky-50 hover:text-sky-700 transition-colors"
+                                      >
+                                        <Truck className="h-3.5 w-3.5 text-sky-600" />
+                                        <span>Mark Shipped</span>
+                                      </button>
+                                    )}
+
+                                    {nextStatuses.includes("DELIVERED") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatus(order.id, "DELIVERED")}
+                                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-[var(--color-navy)] hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                                      >
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                        <span>Mark Delivered</span>
+                                      </button>
+                                    )}
+
+                                    {nextStatuses.includes("CANCELLED") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatus(order.id, "CANCELLED")}
+                                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                                      >
+                                        <X className="h-3.5 w-3.5 text-rose-600" />
+                                        <span>Cancel Order</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+
+                              {isTerminal && (
+                                <div className="px-2.5 py-1.5 text-[10px] font-semibold text-[var(--color-navy)]/50 italic">
+                                  Terminal Status ({ORDER_STATUS_LABELS[order.status as OrderStatus] || order.status})
+                                </div>
+                              )}
 
                             <div className="my-1 border-t border-slate-100" />
 
@@ -926,7 +977,8 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
                               <span>View Full Details</span>
                             </Link>
                           </div>
-                        )}
+                        );
+                        })()}
                       </td>
                     </tr>
                   );

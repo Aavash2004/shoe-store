@@ -57,7 +57,8 @@ async function executeAdminDashboardData() {
       () =>
         prisma.productVariant.findMany({
           where: { stock: { lte: 5 }, isActive: true },
-          take: 4,
+          take: 12,
+          orderBy: { stock: "asc" },
           include: { product: { select: { name: true, slug: true, images: { take: 1 } } } },
         }),
       []
@@ -116,6 +117,7 @@ async function executeAdminDashboardData() {
     name: item.product.name,
     size: item.size,
     color: item.color,
+    sku: item.sku,
     stock: item.stock,
     imageUrl: item.product.images?.[0]?.url || "/images/Shoes/gmm.jpeg",
   }));
