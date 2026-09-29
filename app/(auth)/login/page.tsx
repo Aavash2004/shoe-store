@@ -54,28 +54,51 @@ function CustomerLoginForm() {
       redirect: false,
     });
 
-    setLoading(false);
-
     if (res?.error) {
+      setLoading(false);
       setServerError("Invalid email or password.");
       return;
     }
 
     if (cartItems.length > 0) {
-      await fetch("/api/cart/merge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: cartItems.map((item) => ({
-            variantId: item.variantId,
-            quantity: item.quantity,
-          })),
-        }),
-      });
-      clearCart();
+      try {
+        await fetch("/api/cart/merge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: cartItems.map((item) => ({
+              variantId: item.variantId,
+              quantity: item.quantity,
+            })),
+          }),
+        });
+        clearCart();
+      } catch (err) {
+        console.error("Cart merge error:", err);
+      }
     }
 
-    window.location.href = callbackUrl;
+    // Fetch the authenticated session to route appropriately
+    try {
+      const sessionRes = await fetch("/api/auth/session");
+      const sessionData = await sessionRes.json();
+      const role = sessionData?.user?.role;
+
+      if (role === "ADMIN") {
+        window.location.href = "/admin";
+        return;
+      }
+    } catch {
+      // fallback below
+    }
+
+    // Normal users must never be routed to /admin even if callbackUrl points there
+    const destination =
+      callbackUrl && !callbackUrl.startsWith("/admin")
+        ? callbackUrl
+        : "/account";
+
+    window.location.href = destination;
   }
 
   return (

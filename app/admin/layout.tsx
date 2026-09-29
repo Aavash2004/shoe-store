@@ -1,19 +1,36 @@
 import { auth } from "@/lib/auth/auth";
+import { isAdminSession } from "@/lib/auth/authorization";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") || "";
 
-  // If rendering without an active admin session (e.g. on /admin/login page),
-  // return plain children without the AdminSidebar chrome.
-  // Protection of /admin sub-routes is enforced by proxy.ts & page-level checks.
-  if (!isAdmin) {
+  const session = await auth();
+  const isAdmin = isAdminSession(session);
+
+  // /admin/login is the only public route under /admin
+  if (pathname === "/admin/login") {
+    if (isAdmin) {
+      redirect("/admin");
+    }
     return <>{children}</>;
+  }
+
+  // Unauthenticated guests must go to login
+  if (!session?.user) {
+    redirect("/login?callbackUrl=/admin");
+  }
+
+  // Normal users must be blocked from /admin
+  if (!isAdmin) {
+    redirect("/?error=AccessDenied");
   }
 
   return (

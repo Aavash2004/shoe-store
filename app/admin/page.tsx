@@ -133,8 +133,10 @@ async function executeAdminDashboardData() {
   };
 }
 
+import { requireAdmin } from "@/lib/auth/authorization";
+
 export default async function AdminDashboardPage() {
-  const session = await auth();
+  const session = await requireAdmin();
   const adminName = session?.user?.name || session?.user?.email?.split("@")[0] || "Admin";
 
   const {

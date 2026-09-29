@@ -39,8 +39,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const loginType = (credentials.loginType as string) || "customer";
 
         if (loginType === "admin") {
-          // Admin login: ONLY allow configured ADMIN_EMAIL with role === ADMIN
-          if (configuredAdminEmail && email !== configuredAdminEmail) {
+          // Admin login: Fail closed. MUST have configured ADMIN_EMAIL, email must match, and role must be ADMIN
+          if (!configuredAdminEmail || email !== configuredAdminEmail) {
             throw new InvalidCredentialsError();
           }
 
@@ -66,18 +66,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
-        // Customer login: strictly REJECT admin email or admin role
-        if (configuredAdminEmail && email === configuredAdminEmail) {
-          throw new AdminOnCustomerLoginError();
-        }
-
+        // Standard/Customer login: allow authenticating customers and admins (which redirect to /admin post-login)
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.password) {
           throw new InvalidCredentialsError();
-        }
-
-        if (user.role === "ADMIN" || user.role !== "CUSTOMER") {
-          throw new AdminOnCustomerLoginError();
         }
 
         const isValid = await bcrypt.compare(
@@ -87,6 +79,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!isValid) {
           throw new InvalidCredentialsError();
+        }
+
+        // If the user has an ADMIN role, ensure ADMIN_EMAIL matches (fail closed)
+        if (user.role === "ADMIN") {
+          if (!configuredAdminEmail || email !== configuredAdminEmail) {
+            throw new InvalidCredentialsError();
+          }
         }
 
         return {

@@ -11,6 +11,16 @@ const proxy = auth((req) => {
 
   const isLoggedIn = !!req.auth;
   const userRole = req.auth?.user?.role;
+  const userEmail = req.auth?.user?.email?.trim().toLowerCase();
+  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+
+  // Fail closed: User must have ADMIN role and match configured ADMIN_EMAIL
+  const isAdmin =
+    isLoggedIn &&
+    userRole === "ADMIN" &&
+    !!configuredAdminEmail &&
+    !!userEmail &&
+    userEmail === configuredAdminEmail;
 
   // Redirect legacy /auth/login to /login
   if (pathname === "/auth/login") {
@@ -24,12 +34,18 @@ const proxy = auth((req) => {
   // Customer login route handling (/login)
   if (pathname === "/login") {
     if (isLoggedIn) {
-      if (userRole === "ADMIN") {
+      if (isAdmin) {
         return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
           headers: requestHeaders,
         });
       }
-      return NextResponse.redirect(new URL("/account", req.nextUrl.origin), {
+      const callbackUrl = req.nextUrl.searchParams.get("callbackUrl");
+      // Prevent normal user from ever being redirected to /admin
+      const target =
+        callbackUrl && !callbackUrl.startsWith("/admin")
+          ? callbackUrl
+          : "/account";
+      return NextResponse.redirect(new URL(target, req.nextUrl.origin), {
         headers: requestHeaders,
       });
     }
@@ -40,9 +56,9 @@ const proxy = auth((req) => {
 
   // Customer account routes handling (/account, /account/*)
   if (pathname.startsWith("/account")) {
-    // Sub-routes (/account/orders, /account/profile, etc.) require CUSTOMER session
+    // Sub-routes (/account/orders, /account/profile, etc.) require logged in session
     if (pathname !== "/account") {
-      if (!isLoggedIn || userRole !== "CUSTOMER") {
+      if (!isLoggedIn) {
         const loginUrl = new URL("/login", req.nextUrl.origin);
         loginUrl.searchParams.set("callbackUrl", pathname);
         return NextResponse.redirect(loginUrl, { headers: requestHeaders });
@@ -50,10 +66,10 @@ const proxy = auth((req) => {
     }
   }
 
-  // Admin routes protection (/admin/*)
+  // Admin routes protection (/admin, /admin/*)
   if (pathname.startsWith("/admin")) {
     if (pathname === "/admin/login") {
-      if (isLoggedIn && userRole === "ADMIN") {
+      if (isAdmin) {
         return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
           headers: requestHeaders,
         });
@@ -63,10 +79,18 @@ const proxy = auth((req) => {
       });
     }
 
-    if (!isLoggedIn || userRole !== "ADMIN") {
-      const loginUrl = new URL("/admin/login", req.nextUrl.origin);
+    if (!isLoggedIn) {
+      // Unauthenticated requests to /admin go to login page
+      const loginUrl = new URL("/login", req.nextUrl.origin);
       loginUrl.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(loginUrl, { headers: requestHeaders });
+    }
+
+    if (!isAdmin) {
+      // Normal authenticated users visiting /admin must be blocked
+      const blockedUrl = new URL("/", req.nextUrl.origin);
+      blockedUrl.searchParams.set("error", "AccessDenied");
+      return NextResponse.redirect(blockedUrl, { headers: requestHeaders });
     }
   }
 
