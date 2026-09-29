@@ -34,7 +34,7 @@ export default async function AccountPage() {
 
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href="/login"
+            href="/login?callbackUrl=/account"
             className="w-full sm:w-auto px-6 py-3 bg-[var(--color-navy)] text-[var(--color-cream)] font-semibold text-sm rounded-xl hover:bg-[var(--color-navy)]/90 transition-colors shadow-xs"
           >
             Sign In

@@ -8,9 +8,15 @@ import { signIn } from "next-auth/react";
 import { adminLoginSchema, AdminLoginInput } from "@/lib/validations/auth";
 import { ShieldCheck, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
+import { sanitizeCallbackUrl } from "@/lib/auth/authorization";
+
 function AdminLoginForm() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/admin";
+  const rawCallbackUrl = searchParams.get("callbackUrl");
+  const callbackUrl = sanitizeCallbackUrl(rawCallbackUrl, {
+    allowAdmin: true,
+    fallback: "/admin",
+  });
   const errorParam = searchParams.get("error");
 
   const [serverError, setServerError] = useState<string | null>(

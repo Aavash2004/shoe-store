@@ -23,10 +23,16 @@ type LoginForm = z.infer<typeof loginSchema>;
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { sanitizeCallbackUrl } from "@/lib/auth/authorization";
+
 function CustomerLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/account";
+  const rawCallbackUrl = searchParams.get("callbackUrl");
+  const callbackUrl = sanitizeCallbackUrl(rawCallbackUrl, {
+    allowAdmin: false,
+    fallback: "/account",
+  });
 
   const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -92,11 +98,11 @@ function CustomerLoginForm() {
       // fallback below
     }
 
-    // Normal users must never be routed to /admin even if callbackUrl points there
-    const destination =
-      callbackUrl && !callbackUrl.startsWith("/admin")
-        ? callbackUrl
-        : "/account";
+    // Normal users must never be routed to /admin even if callbackUrl points there, and open redirects are blocked
+    const destination = sanitizeCallbackUrl(rawCallbackUrl, {
+      allowAdmin: false,
+      fallback: "/account",
+    });
 
     window.location.href = destination;
   }

@@ -1,4 +1,4 @@
-import { isAdminSession } from "../lib/auth/authorization";
+import { isAdminSession, sanitizeCallbackUrl } from "../lib/auth/authorization";
 
 function runTests() {
   console.log("=== Running Auth & Routing Security Tests ===\n");
@@ -89,39 +89,66 @@ function runTests() {
       "Allows admin access with case-insensitive email comparison"
     );
 
-    // 7. Post-login destination sanitization logic test
-    function sanitizePostLoginRedirect(role: string, callbackUrl: string | null): string {
-      if (role === "ADMIN") {
-        return "/admin";
-      }
-      return callbackUrl && !callbackUrl.startsWith("/admin")
-        ? callbackUrl
-        : "/account";
-    }
-
+    // 7. Test sanitizeCallbackUrl directly
     assert(
-      sanitizePostLoginRedirect("CUSTOMER", "/admin") === "/account",
-      "Normal user requesting /admin callbackUrl is redirected to /account instead of /admin"
+      sanitizeCallbackUrl("//evil.com") === "/account",
+      "Rejects '//evil.com' protocol-relative open redirect and falls back to /account"
     );
 
     assert(
-      sanitizePostLoginRedirect("CUSTOMER", "/admin/orders") === "/account",
-      "Normal user requesting /admin/orders callbackUrl is redirected to /account instead of /admin"
+      sanitizeCallbackUrl("https://evil.com") === "/account",
+      "Rejects 'https://evil.com' absolute URL open redirect and falls back to /account"
     );
 
     assert(
-      sanitizePostLoginRedirect("CUSTOMER", "/shop") === "/shop",
-      "Normal user requesting /shop callbackUrl is correctly routed to /shop"
+      sanitizeCallbackUrl("/\\evil.com") === "/account",
+      "Rejects '/\\evil.com' backslash bypass and falls back to /account"
     );
 
     assert(
-      sanitizePostLoginRedirect("CUSTOMER", null) === "/account",
-      "Normal user with no callbackUrl defaults to /account"
+      sanitizeCallbackUrl("/admin") === "/account",
+      "Rejects '/admin' for normal customer and falls back to /account"
     );
 
     assert(
-      sanitizePostLoginRedirect("ADMIN", "/shop") === "/admin",
-      "Admin user logging in always routes to /admin"
+      sanitizeCallbackUrl("/admin/orders") === "/account",
+      "Rejects '/admin/orders' for normal customer and falls back to /account"
+    );
+
+    assert(
+      sanitizeCallbackUrl("/shop") === "/shop",
+      "Accepts valid relative storefront path '/shop'"
+    );
+
+    assert(
+      sanitizeCallbackUrl("") === "/account",
+      "Falls back to /account for empty string"
+    );
+
+    assert(
+      sanitizeCallbackUrl(undefined) === "/account",
+      "Falls back to /account for undefined value"
+    );
+
+    assert(
+      sanitizeCallbackUrl(null) === "/account",
+      "Falls back to /account for null value"
+    );
+
+    // Admin option tests
+    assert(
+      sanitizeCallbackUrl("/admin", { allowAdmin: true }) === "/admin",
+      "Allows '/admin' when allowAdmin is true"
+    );
+
+    assert(
+      sanitizeCallbackUrl("/admin/orders", { allowAdmin: true }) === "/admin/orders",
+      "Allows '/admin/orders' when allowAdmin is true"
+    );
+
+    assert(
+      sanitizeCallbackUrl("//evil.com", { allowAdmin: true, fallback: "/admin" }) === "/admin",
+      "Rejects '//evil.com' even when allowAdmin is true"
     );
 
   } finally {

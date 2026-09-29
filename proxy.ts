@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/auth.config";
+import { sanitizeCallbackUrl } from "@/lib/auth/authorization";
 
 const { auth } = NextAuth(authConfig);
 
@@ -39,12 +40,11 @@ const proxy = auth((req) => {
           headers: requestHeaders,
         });
       }
-      const callbackUrl = req.nextUrl.searchParams.get("callbackUrl");
-      // Prevent normal user from ever being redirected to /admin
-      const target =
-        callbackUrl && !callbackUrl.startsWith("/admin")
-          ? callbackUrl
-          : "/account";
+      const rawCallbackUrl = req.nextUrl.searchParams.get("callbackUrl");
+      const target = sanitizeCallbackUrl(rawCallbackUrl, {
+        allowAdmin: false,
+        fallback: "/account",
+      });
       return NextResponse.redirect(new URL(target, req.nextUrl.origin), {
         headers: requestHeaders,
       });

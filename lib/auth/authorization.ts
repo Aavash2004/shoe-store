@@ -17,6 +17,52 @@ export async function requireAuth() {
   return session;
 }
 
+/**
+ * Sanitizes a callbackUrl to prevent open redirects and unauthorized routing:
+ * 1. Must be a relative path starting with a single '/'
+ * 2. Rejects '//' (protocol-relative) and '/\' (Windows path / URL bypass)
+ * 3. Rejects any path containing backslashes
+ * 4. Rejects absolute schemes (e.g. https://, http://, javascript:)
+ * 5. For customers (allowAdmin !== true), rejects paths starting with /admin
+ * 6. Falls back to fallback (default: "/account") on any invalid or missing value.
+ */
+export function sanitizeCallbackUrl(
+  callbackUrl: string | null | undefined,
+  options?: { allowAdmin?: boolean; fallback?: string }
+): string {
+  const fallback = options?.fallback ?? "/account";
+
+  if (!callbackUrl || typeof callbackUrl !== "string") {
+    return fallback;
+  }
+
+  const trimmed = callbackUrl.trim();
+
+  // Must start with exactly one '/' and not '//' or '/\'
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/\\")) {
+    return fallback;
+  }
+
+  // Must not contain backslashes
+  if (trimmed.includes("\\")) {
+    return fallback;
+  }
+
+  // Must not contain a protocol scheme (e.g. https:, http:, javascript:, data:)
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    return fallback;
+  }
+
+  // Customer restriction: never allow routing to /admin or /admin/*
+  if (!options?.allowAdmin) {
+    if (trimmed === "/admin" || trimmed.startsWith("/admin/") || trimmed.startsWith("/admin?")) {
+      return fallback;
+    }
+  }
+
+  return trimmed;
+}
+
 export function isAdminSession(
   session: { user?: { role?: string; email?: string | null } } | null | undefined
 ): boolean {
