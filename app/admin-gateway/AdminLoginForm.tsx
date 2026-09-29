@@ -1,16 +1,16 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
 import { adminLoginSchema, AdminLoginInput } from "@/lib/validations/auth";
-import { ShieldCheck, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
+import { Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { sanitizeCallbackUrl } from "@/lib/auth/authorization";
 
-function AdminLoginForm() {
+function AdminLoginFormInner() {
   const searchParams = useSearchParams();
   const rawCallbackUrl = searchParams.get("callbackUrl");
   const callbackUrl = sanitizeCallbackUrl(rawCallbackUrl, {
@@ -48,7 +48,11 @@ function AdminLoginForm() {
     });
 
     if (res?.error) {
-      setServerError("Invalid administrator credentials.");
+      if (res.code === "locked_out") {
+        setServerError("Too many failed login attempts. Please try again in 15 minutes.");
+      } else {
+        setServerError("Invalid administrator credentials.");
+      }
       return;
     }
 
@@ -62,7 +66,7 @@ function AdminLoginForm() {
         {/* Header Branding */}
         <div className="text-center space-y-2">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-transparent">
-            <Image src="/images/Shoes/logo.png" alt="ABXV Logo" width={100} height={100} className="object-contain" />
+            <Image src="/images/Shoes/logo.png" alt="ABXV Logo" width={100} height={100} className="object-contain" priority />
           </div>
           <p className="text-xs text-[var(--color-navy)]/60 uppercase tracking-[0.25em] font-semibold">
             ADMINISTRATOR
@@ -178,7 +182,7 @@ function AdminLoginForm() {
   );
 }
 
-export default function AdminLoginPage() {
+export default function AdminLoginForm() {
   return (
     <Suspense
       fallback={
@@ -187,7 +191,7 @@ export default function AdminLoginPage() {
         </div>
       }
     >
-      <AdminLoginForm />
+      <AdminLoginFormInner />
     </Suspense>
   );
 }

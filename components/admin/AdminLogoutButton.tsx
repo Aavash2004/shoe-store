@@ -15,7 +15,7 @@ export function AdminLogoutButton() {
 
   async function handleConfirm() {
     setLoading(true);
-    await signOut({ callbackUrl: "/admin/login" });
+    await signOut({ callbackUrl: "/" });
   }
 
   return (

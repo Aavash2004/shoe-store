@@ -74,7 +74,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
 
   async function handleLogout() {
     setLoggingOut(true);
-    await signOut({ callbackUrl: "/admin/login" });
+    await signOut({ callbackUrl: "/" });
   }
 
   const isLinkActive = (href: string) => {

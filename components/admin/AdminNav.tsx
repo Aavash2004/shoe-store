@@ -33,7 +33,7 @@ export function AdminNav({ email }: { email: string }) {
 
   async function handleLogout() {
     setLoading(true);
-    await signOut({ callbackUrl: "/admin/login" });
+    await signOut({ callbackUrl: "/" });
   }
 
   return (

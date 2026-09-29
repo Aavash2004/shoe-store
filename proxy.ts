@@ -54,6 +54,46 @@ const proxy = auth((req) => {
     });
   }
 
+  const configuredAdminPath = process.env.ADMIN_LOGIN_PATH?.trim();
+  const normalizedAdminPath =
+    configuredAdminPath && configuredAdminPath.length > 0
+      ? configuredAdminPath.startsWith("/")
+        ? configuredAdminPath
+        : `/${configuredAdminPath}`
+      : null;
+
+  // Secret admin login route handling
+  if (normalizedAdminPath && pathname === normalizedAdminPath) {
+    if (isLoggedIn && isAdmin) {
+      return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
+        headers: requestHeaders,
+      });
+    }
+    requestHeaders.set("x-admin-gateway-access", "true");
+    requestHeaders.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    const res = NextResponse.rewrite(new URL("/admin-gateway", req.nextUrl.origin), {
+      headers: requestHeaders,
+    });
+    res.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    return res;
+  }
+
+  // Block direct access to internal admin-gateway route
+  if (pathname === "/admin-gateway" || pathname.startsWith("/admin-gateway/")) {
+    return NextResponse.rewrite(new URL("/_not-found", req.nextUrl.origin), {
+      status: 404,
+      headers: requestHeaders,
+    });
+  }
+
+  // Ensure old /admin/login permanently returns 404
+  if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
+    return NextResponse.rewrite(new URL("/_not-found", req.nextUrl.origin), {
+      status: 404,
+      headers: requestHeaders,
+    });
+  }
+
   // Customer account routes handling (/account, /account/*)
   if (pathname.startsWith("/account")) {
     // Sub-routes (/account/orders, /account/profile, etc.) require logged in session
@@ -67,23 +107,13 @@ const proxy = auth((req) => {
   }
 
   // Admin routes protection (/admin, /admin/*)
-  if (pathname.startsWith("/admin")) {
-    if (pathname === "/admin/login") {
-      if (isAdmin) {
-        return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
-          headers: requestHeaders,
-        });
-      }
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      });
-    }
-
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     if (!isLoggedIn) {
-      // Unauthenticated requests to /admin go to login page
-      const loginUrl = new URL("/login", req.nextUrl.origin);
-      loginUrl.searchParams.set("callbackUrl", pathname);
-      return NextResponse.redirect(loginUrl, { headers: requestHeaders });
+      // Plain 404 for unauthenticated users so admin area does not reveal itself
+      return NextResponse.rewrite(new URL("/_not-found", req.nextUrl.origin), {
+        status: 404,
+        headers: requestHeaders,
+      });
     }
 
     if (!isAdmin) {

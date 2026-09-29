@@ -62,7 +62,11 @@ function CustomerLoginForm() {
 
     if (res?.error) {
       setLoading(false);
-      setServerError("Invalid email or password.");
+      if (res.code === "locked_out") {
+        setServerError("Too many failed login attempts. Please try again in 15 minutes.");
+      } else {
+        setServerError("Invalid email or password.");
+      }
       return;
     }
 

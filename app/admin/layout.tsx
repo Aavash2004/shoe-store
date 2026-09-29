@@ -1,34 +1,22 @@
 import { auth } from "@/lib/auth/auth";
 import { isAdminSession } from "@/lib/auth/authorization";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { redirect, notFound } from "next/navigation";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const headersList = await headers();
-  const pathname = headersList.get("x-pathname") || "";
-
   const session = await auth();
   const isAdmin = isAdminSession(session);
 
-  // /admin/login is the only public route under /admin
-  if (pathname === "/admin/login") {
-    if (isAdmin) {
-      redirect("/admin");
-    }
-    return <>{children}</>;
-  }
-
-  // Unauthenticated guests must go to login
+  // Unauthenticated requests must return 404 to conceal the admin area
   if (!session?.user) {
-    redirect("/login?callbackUrl=/admin");
+    notFound();
   }
 
-  // Normal users must be blocked from /admin
+  // Authenticated non-admins must be blocked
   if (!isAdmin) {
     redirect("/?error=AccessDenied");
   }

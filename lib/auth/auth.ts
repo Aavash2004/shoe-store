@@ -6,15 +6,18 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { authConfig } from "./auth.config";
 
+import {
+  checkLoginLockout,
+  recordFailedLogin,
+  clearFailedLogins,
+} from "@/lib/security/loginRateLimit";
+
 // Custom error classes — Auth.js v5 surfaces these as res.code on the client
-class InvalidCredentialsError extends CredentialsSignin {
+export class InvalidCredentialsError extends CredentialsSignin {
   code = "invalid_credentials";
 }
-class AdminOnCustomerLoginError extends CredentialsSignin {
-  code = "admin_use_admin_login";
-}
-class CustomerOnAdminLoginError extends CredentialsSignin {
-  code = "unauthorized_admin";
+export class RateLimitLockedOutError extends CredentialsSignin {
+  code = "locked_out";
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -29,23 +32,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
         loginType: { label: "Login Type", type: "text" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) {
           throw new InvalidCredentialsError();
         }
+
+        const ip =
+          (typeof request?.headers?.get === "function"
+            ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+              request.headers.get("x-real-ip")
+            : null) ||
+          (credentials as any)?.clientIp ||
+          "127.0.0.1";
 
         const email = (credentials.email as string).trim().toLowerCase();
         const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
         const loginType = (credentials.loginType as string) || "customer";
 
+        // 1. Rate Limit Lockout Check
+        const lockout = await checkLoginLockout(ip, email);
+        if (lockout.isLockedOut) {
+          throw new RateLimitLockedOutError();
+        }
+
         if (loginType === "admin") {
-          // Admin login: Fail closed. MUST have configured ADMIN_EMAIL, email must match, and role must be ADMIN
+          // Private admin login: Fail closed. MUST have configured ADMIN_EMAIL, email must match, and role must be ADMIN
           if (!configuredAdminEmail || email !== configuredAdminEmail) {
+            await recordFailedLogin(ip, email);
             throw new InvalidCredentialsError();
           }
 
           const user = await prisma.user.findUnique({ where: { email } });
           if (!user || !user.password || user.role !== "ADMIN") {
+            await recordFailedLogin(ip, email);
             throw new InvalidCredentialsError();
           }
 
@@ -55,8 +74,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           );
 
           if (!isValid) {
+            await recordFailedLogin(ip, email);
             throw new InvalidCredentialsError();
           }
+
+          // Clear rate limit failed count on success
+          await clearFailedLogins(ip, email);
 
           return {
             id: user.id,
@@ -66,9 +89,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
-        // Standard/Customer login: allow authenticating customers and admins (which redirect to /admin post-login)
+        // Public / customer login:
+        // Must reject admin email with the exact same generic InvalidCredentialsError
+        if (configuredAdminEmail && email === configuredAdminEmail) {
+          await recordFailedLogin(ip, email);
+          throw new InvalidCredentialsError();
+        }
+
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.password) {
+          await recordFailedLogin(ip, email);
+          throw new InvalidCredentialsError();
+        }
+
+        // Also reject if user has ADMIN role in DB
+        if (user.role === "ADMIN") {
+          await recordFailedLogin(ip, email);
           throw new InvalidCredentialsError();
         }
 
@@ -78,15 +114,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
 
         if (!isValid) {
+          await recordFailedLogin(ip, email);
           throw new InvalidCredentialsError();
         }
 
-        // If the user has an ADMIN role, ensure ADMIN_EMAIL matches (fail closed)
-        if (user.role === "ADMIN") {
-          if (!configuredAdminEmail || email !== configuredAdminEmail) {
-            throw new InvalidCredentialsError();
-          }
-        }
+        // Clear rate limit failed count on success
+        await clearFailedLogins(ip, email);
 
         return {
           id: user.id,
