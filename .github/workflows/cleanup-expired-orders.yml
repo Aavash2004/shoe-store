@@ -1,0 +1,30 @@
+name: Cleanup Expired Orders
+
+on:
+  schedule:
+    # Triggered every 30 minutes
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Run Expired Orders Cleanup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cleanup Endpoint
+        run: |
+          echo "Calling expired orders cleanup endpoint..."
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            https://abxv.vercel.app/api/cron/cleanup-expired-orders)
+
+          echo "Response HTTP Status: $HTTP_STATUS"
+          echo "Response Body:"
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -gt 299 ]; then
+            echo "::error::Cleanup endpoint returned non-2xx status code: $HTTP_STATUS"
+            exit 1
+          fi

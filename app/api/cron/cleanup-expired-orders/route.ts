@@ -14,14 +14,12 @@ async function handleCleanup(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
 
-  // Enforce CRON_SECRET authorization in production
-  if (process.env.NODE_ENV === "production") {
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { error: "Unauthorized cron execution" },
-        { status: 401 }
-      );
-    }
+  // Enforce CRON_SECRET authorization: return 401 if missing or mismatched
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json(
+      { error: "Unauthorized: Missing or invalid CRON_SECRET authorization header." },
+      { status: 401 }
+    );
   }
 
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
