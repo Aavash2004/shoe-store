@@ -1,0 +1,23 @@
+name: Keepalive Scheduled Workflows
+
+on:
+  schedule:
+    # Runs on the 1st of every month at 00:00 UTC
+    - cron: "0 0 1 * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  keepalive:
+    name: Ensure Workflows Remain Enabled
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-enable Cleanup Workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Ensuring cleanup-expired-orders.yml remains active against 60-day GitHub dormancy..."
+          gh workflow enable cleanup-expired-orders.yml --repo "$GITHUB_REPOSITORY"
+          echo "Workflow cleanup-expired-orders.yml is confirmed enabled."

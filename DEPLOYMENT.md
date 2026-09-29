@@ -78,3 +78,46 @@ The following environment variable must be maintained:
 | `CRON_SECRET` | **GitHub** (Repository Secrets) | Used by `.github/workflows/*.yml` to authenticate requests to Vercel. |
 
 *Note: Never commit secret values into source control or document them in plaintext.*
+
+---
+
+## 6. Cleanup Scheduler
+
+### What Runs Every 30 Minutes
+- **Workflow:** `.github/workflows/cleanup-expired-orders.yml`
+- **Target:** `POST https://abxv.vercel.app/api/cron/cleanup-expired-orders`
+- **Purpose:** Identifies pending Stripe checkout sessions older than 30 minutes, cancels uncaptured PaymentIntents, restores reserved stock back to product inventory, and transitions orders to `CANCELLED`.
+- **Failure Alert:** If the endpoint returns a non-2xx status code (or connection fails), the workflow terminates with an exit code of `1`, automatically triggering GitHub email alerts for the failed run.
+
+### Secret Management & Synchronization
+The workflow passes `Authorization: Bearer ${{ secrets.CRON_SECRET }}` and the Next.js API route validates against `process.env.CRON_SECRET`. **Both secrets must match exactly.**
+
+### How to Rotate `CRON_SECRET`
+To rotate the secret without exposing its value:
+```powershell
+# 1. Generate new 32-byte secret in shell variable (never printed)
+$secret = (node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")
+
+# 2. Update GitHub secret
+$secret | & "C:\Program Files\GitHub CLI\gh.exe" secret set CRON_SECRET --repo Aavash2004/shoe-store
+
+# 3. Update Vercel production environment variable
+$secret | npx vercel env add CRON_SECRET production --force
+
+# 4. Clean variable from shell
+Remove-Variable secret
+
+# 5. Redeploy to apply updated env var to live production functions
+git commit --allow-empty -m "chore: redeploy with rotated CRON_SECRET"
+git push origin main
+```
+
+### Re-enabling the Workflow if Disabled
+GitHub automatically disables scheduled workflows on repositories that have had no commits or activity for 60 days.
+- **Automated Prevention:** `.github/workflows/keepalive.yml` runs on the 1st of every month to keep the schedule active using `gh workflow enable`.
+- **Manual Re-enable Command:**
+  ```powershell
+  & "C:\Program Files\GitHub CLI\gh.exe" workflow enable cleanup-expired-orders.yml --repo Aavash2004/shoe-store
+  ```
+  *(Or navigate to GitHub repository -> Actions -> select "Cleanup Expired Orders" -> click "Enable workflow").*
+
