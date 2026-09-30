@@ -7,7 +7,9 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:auth": "tsx tests/auth-routing.test.ts",
+    "test:products": "tsx tests/product-flow.test.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

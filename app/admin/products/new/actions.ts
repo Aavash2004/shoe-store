@@ -8,9 +8,10 @@ import { createProductSchema, type CreateProductInput } from "@/lib/validations/
 export async function createProduct(data: CreateProductInput) {
   await requireAdmin();
 
-  // Sanitize any React Flight serialized "$undefined" string markers
+  // Sanitize any React Flight serialized "$undefined" string markers and normalize SKU
   const cleanedData = {
     ...data,
+    slug: data.slug?.trim().toLowerCase(),
     brand: data.brand === "$undefined" ? undefined : data.brand,
     metaTitle: data.metaTitle === "$undefined" ? undefined : data.metaTitle,
     metaDescription: data.metaDescription === "$undefined" ? undefined : data.metaDescription,
@@ -20,7 +21,11 @@ export async function createProduct(data: CreateProductInput) {
     })),
     variants: data.variants?.map((v) => {
       const { id, ...rest } = v;
-      return id && id !== "$undefined" ? { ...rest, id } : rest;
+      return {
+        ...rest,
+        sku: typeof v.sku === "string" ? v.sku.trim().toUpperCase() : v.sku,
+        ...(id && id !== "$undefined" ? { id } : {}),
+      };
     }),
   };
 
@@ -31,21 +36,28 @@ export async function createProduct(data: CreateProductInput) {
 
   const { images, variants, ...productData } = validated.data;
 
+  // 1. Slug uniqueness check
   const existing = await prisma.product.findUnique({ where: { slug: productData.slug } });
   if (existing) {
-    return { success: false as const, error: { slug: ["A product with this slug already exists"] } };
+    return { success: false as const, error: { slug: ["A product with this slug already exists."] } };
   }
 
-  // 1. Check for duplicate SKUs within the submitted variants list
-  const trimmedSkus = variants.map((v) => v.sku.trim());
+  // 2. Normalize and check for duplicate SKUs within the submitted variants list
+  const normalizedVariants = variants.map((v) => ({
+    ...v,
+    size: v.size.trim(),
+    color: v.color.trim(),
+    sku: v.sku.trim().toUpperCase(),
+  }));
+
+  const normalizedSkus = normalizedVariants.map((v) => v.sku);
   const seenSkus = new Set<string>();
   const duplicateSkisInForm: string[] = [];
-  for (const s of trimmedSkus) {
-    const lower = s.toLowerCase();
-    if (seenSkus.has(lower)) {
+  for (const s of normalizedSkus) {
+    if (seenSkus.has(s)) {
       duplicateSkisInForm.push(s);
     } else {
-      seenSkus.add(lower);
+      seenSkus.add(s);
     }
   }
 
@@ -60,12 +72,10 @@ export async function createProduct(data: CreateProductInput) {
     };
   }
 
-  // 2. Case-insensitive database check against existing SKUs
+  // 3. Database check against existing SKUs (normalized uppercase)
   const existingSkus = await prisma.productVariant.findMany({
     where: {
-      OR: trimmedSkus.map((s) => ({
-        sku: { equals: s, mode: "insensitive" },
-      })),
+      sku: { in: normalizedSkus },
     },
     select: { sku: true },
   });
@@ -73,11 +83,11 @@ export async function createProduct(data: CreateProductInput) {
   if (existingSkus.length > 0) {
     return {
       success: false as const,
-      error: { variants: [`SKU "${existingSkus[0].sku}" is already in use by another product`] },
+      error: { variants: [`SKU "${existingSkus[0].sku}" is already in use by another product.`] },
     };
   }
 
-  // 3. Create product and variants wrapped in try/catch to gracefully handle DB constraints
+  // 4. Create product and variants wrapped in try/catch to gracefully handle DB constraints
   try {
     const product = await prisma.product.create({
       data: {
@@ -91,10 +101,10 @@ export async function createProduct(data: CreateProductInput) {
           })),
         },
         variants: {
-          create: variants.map((v) => ({
-            size: v.size.trim(),
-            color: v.color.trim(),
-            sku: v.sku.trim(),
+          create: normalizedVariants.map((v) => ({
+            size: v.size,
+            color: v.color,
+            sku: v.sku,
             price: v.price,
             stock: v.stock,
           })),
@@ -102,12 +112,14 @@ export async function createProduct(data: CreateProductInput) {
       },
     });
 
-    revalidatePath("/admin/products");
-    revalidatePath("/");
-    revalidatePath("/shop");
+    // Revalidate dynamic pages using "page" type argument or concrete path
+    revalidatePath("/admin/products", "page");
+    revalidatePath("/", "page");
+    revalidatePath("/shop", "page");
     if (product.slug) {
-      revalidatePath(`/products/${product.slug}`);
+      revalidatePath(`/products/${product.slug}`, "page");
     }
+
     return { success: true as const, productId: product.id };
   } catch (err: any) {
     console.error("[createProduct DB error]:", err);
@@ -144,4 +156,3 @@ export async function createProduct(data: CreateProductInput) {
     };
   }
 }
-

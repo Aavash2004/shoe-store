@@ -300,7 +300,11 @@ export function ProductForm({
     value: string
   ) {
     setVariants((prev) =>
-      prev.map((v, i) => (i === index ? { ...v, [field]: value } : v))
+      prev.map((v, i) =>
+        i === index
+          ? { ...v, [field]: field === "sku" ? value.toUpperCase() : value }
+          : v
+      )
     );
   }
 
@@ -329,9 +333,9 @@ export function ProductForm({
         .filter((v) => v.sku && v.sku.trim() !== "")
         .map((v) => ({
           ...(v.id ? { id: v.id } : {}),
-          size: v.size,
-          color: v.color,
-          sku: v.sku,
+          size: v.size.trim(),
+          color: v.color.trim(),
+          sku: v.sku.trim().toUpperCase(),
           price: parseFloat(v.price) || 0,
           stock: parseInt(v.stock) || 0,
         })),
