@@ -15,13 +15,11 @@ const proxy = auth((req) => {
   const userEmail = req.auth?.user?.email?.trim().toLowerCase();
   const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 
-  // Fail closed: User must have ADMIN role and match configured ADMIN_EMAIL
+  // User must have ADMIN role; if ADMIN_EMAIL is set in env, it must match
   const isAdmin =
     isLoggedIn &&
     userRole === "ADMIN" &&
-    !!configuredAdminEmail &&
-    !!userEmail &&
-    userEmail === configuredAdminEmail;
+    (!configuredAdminEmail || (!!userEmail && userEmail === configuredAdminEmail));
 
   // Redirect legacy /auth/login to /login
   if (pathname === "/auth/login") {
@@ -54,46 +52,6 @@ const proxy = auth((req) => {
     });
   }
 
-  const configuredAdminPath = process.env.ADMIN_LOGIN_PATH?.trim();
-  const normalizedAdminPath =
-    configuredAdminPath && configuredAdminPath.length > 0
-      ? configuredAdminPath.startsWith("/")
-        ? configuredAdminPath
-        : `/${configuredAdminPath}`
-      : null;
-
-  // Secret admin login route handling
-  if (normalizedAdminPath && pathname === normalizedAdminPath) {
-    if (isLoggedIn && isAdmin) {
-      return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
-        headers: requestHeaders,
-      });
-    }
-    requestHeaders.set("x-admin-gateway-access", "true");
-    requestHeaders.set("X-Robots-Tag", "noindex, nofollow, noarchive");
-    const res = NextResponse.rewrite(new URL("/admin-gateway", req.nextUrl.origin), {
-      headers: requestHeaders,
-    });
-    res.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
-    return res;
-  }
-
-  // Block direct access to internal admin-gateway route
-  if (pathname === "/admin-gateway" || pathname.startsWith("/admin-gateway/")) {
-    return NextResponse.rewrite(new URL("/_not-found", req.nextUrl.origin), {
-      status: 404,
-      headers: requestHeaders,
-    });
-  }
-
-  // Ensure old /admin/login permanently returns 404
-  if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
-    return NextResponse.rewrite(new URL("/_not-found", req.nextUrl.origin), {
-      status: 404,
-      headers: requestHeaders,
-    });
-  }
-
   // Customer account routes handling (/account, /account/*)
   if (pathname.startsWith("/account")) {
     // Sub-routes (/account/orders, /account/profile, etc.) require logged in session
@@ -107,13 +65,23 @@ const proxy = auth((req) => {
   }
 
   // Admin routes protection (/admin, /admin/*)
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-    if (!isLoggedIn) {
-      // Plain 404 for unauthenticated users so admin area does not reveal itself
-      return NextResponse.rewrite(new URL("/_not-found", req.nextUrl.origin), {
-        status: 404,
-        headers: requestHeaders,
+  if (pathname.startsWith("/admin")) {
+    if (pathname === "/admin/login") {
+      if (isAdmin) {
+        return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
+          headers: requestHeaders,
+        });
+      }
+      return NextResponse.next({
+        request: { headers: requestHeaders },
       });
+    }
+
+    if (!isLoggedIn) {
+      // Unauthenticated requests to /admin redirect to /admin/login
+      const loginUrl = new URL("/admin/login", req.nextUrl.origin);
+      loginUrl.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(loginUrl, { headers: requestHeaders });
     }
 
     if (!isAdmin) {

@@ -75,7 +75,7 @@ export function isAdminSession(
     return false;
   }
 
-  if (!configuredAdminEmail || !userEmail || userEmail !== configuredAdminEmail) {
+  if (configuredAdminEmail && (!userEmail || userEmail !== configuredAdminEmail)) {
     return false;
   }
 

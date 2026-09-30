@@ -56,8 +56,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         if (loginType === "admin") {
-          // Private admin login: Fail closed. MUST have configured ADMIN_EMAIL, email must match, and role must be ADMIN
-          if (!configuredAdminEmail || email !== configuredAdminEmail) {
+          // Admin login: if configuredAdminEmail is set in env, email must match
+          if (configuredAdminEmail && email !== configuredAdminEmail) {
             await recordFailedLogin(ip, email);
             throw new InvalidCredentialsError();
           }
