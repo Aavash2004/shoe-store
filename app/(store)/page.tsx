@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowRight, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Hero } from "@/components/layout/Hero";
 import { PerksMarquee } from "@/components/layout/PerksMarquee";
 import { ProductGrid } from "@/components/product/ProductGrid";
@@ -179,10 +179,6 @@ export default async function HomePage() {
             className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end border-b border-[var(--color-sand)] pb-6"
           >
             <div>
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-sky)]/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)] mb-2">
-                <Sparkles className="h-3 w-3 text-[var(--color-navy)]" />
-                Fresh Drops
-              </div>
               <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[var(--color-navy)] tracking-tight">
                 New Arrivals
               </h2>
@@ -214,10 +210,6 @@ export default async function HomePage() {
               className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end border-b border-[var(--color-sand)] pb-6"
             >
               <div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-green-200 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black mb-2">
-                  <TrendingUp className="h-3 w-3 text-black" />
-                  Community Favorites
-                </div>
                 <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[var(--color-navy)] tracking-tight">
                   Best Sellers
                 </h2>
