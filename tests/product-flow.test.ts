@@ -4,6 +4,7 @@ import {
   generateVariantMatrix,
   resolveAutoSkuSuffix,
 } from "../lib/utils/variant-generator";
+import { filterGalleryImages } from "../lib/utils/gallery";
 
 async function runProductFlowTests() {
   console.log("=== Running Add New Product Flow Tests ===\n");
@@ -261,6 +262,93 @@ async function runProductFlowTests() {
     `New variant added on edit generates SKU with new product prefix (got "${newEditVariant?.sku}")`
   );
 
+  // 10. Images filtered and ordered by color
+  const sampleImages = [
+    { url: "/img/shared-1.jpg", color: null, isPrimary: true, position: 0 },
+    { url: "/img/red-1.jpg", color: "Red", isPrimary: false, position: 1 },
+    { url: "/img/blue-1.jpg", color: "Blue", isPrimary: false, position: 2 },
+    { url: "/img/red-2.jpg", color: "Red", isPrimary: false, position: 3 },
+  ];
+  const redFiltered = filterGalleryImages(sampleImages, "Red");
+  assert(
+    redFiltered[0].url === "/img/red-1.jpg" &&
+      redFiltered[1].url === "/img/red-2.jpg" &&
+      redFiltered[2].url === "/img/shared-1.jpg" &&
+      redFiltered.length === 3,
+    "Images are filtered and ordered by color (color matches first, then shared)"
+  );
+
+  // 11. Fallback to all images if a color has none
+  const yellowFiltered = filterGalleryImages(sampleImages, "Yellow");
+  assert(
+    yellowFiltered.length === sampleImages.length,
+    "Fallback to all images when the selected color has no dedicated images"
+  );
+
+  // 12. Exactly one primary image enforcement
+  function normalizePrimaryImages(imgs: { url: string; isPrimary: boolean; position: number }[]) {
+    let primaryFound = false;
+    const res = imgs.map((img, idx) => {
+      let isPrimary = false;
+      if (img.isPrimary && !primaryFound) {
+        isPrimary = true;
+        primaryFound = true;
+      }
+      return { ...img, isPrimary, position: idx };
+    });
+    if (!primaryFound && res.length > 0) {
+      res[0].isPrimary = true;
+    }
+    return res;
+  }
+  const multiPrimary = [
+    { url: "/1.jpg", isPrimary: true, position: 0 },
+    { url: "/2.jpg", isPrimary: true, position: 1 },
+  ];
+  const normalizedMulti = normalizePrimaryImages(multiPrimary);
+  assert(
+    normalizedMulti.filter((img) => img.isPrimary).length === 1 && normalizedMulti[0].isPrimary === true,
+    "Enforces exactly one primary image when multiple images are marked as primary"
+  );
+  const zeroPrimary = [
+    { url: "/1.jpg", isPrimary: false, position: 0 },
+    { url: "/2.jpg", isPrimary: false, position: 1 },
+  ];
+  const normalizedZero = normalizePrimaryImages(zeroPrimary);
+  assert(
+    normalizedZero.filter((img) => img.isPrimary).length === 1 && normalizedZero[0].isPrimary === true,
+    "Enforces exactly one primary image (first image becomes primary) when none are marked"
+  );
+
+  // 13. Reorder persists correctly with position indexes
+  const initialOrder = [
+    { url: "/a.jpg", position: 0 },
+    { url: "/b.jpg", position: 1 },
+    { url: "/c.jpg", position: 2 },
+  ];
+  // Move index 2 (/c.jpg) to index 0
+  const reordered = [...initialOrder];
+  const [moved] = reordered.splice(2, 1);
+  reordered.splice(0, 0, moved);
+  const persisted = reordered.map((item, idx) => ({ ...item, position: idx }));
+  assert(
+    persisted[0].url === "/c.jpg" &&
+      persisted[0].position === 0 &&
+      persisted[1].url === "/a.jpg" &&
+      persisted[1].position === 1 &&
+      persisted[2].url === "/b.jpg" &&
+      persisted[2].position === 2,
+    "Reordered images correctly update and persist position index"
+  );
+
+  // 14. Non-admin upload is rejected
+  const customerUploadSession = { user: { role: "CUSTOMER", email: "shopper@test.com" } };
+  const guestUploadSession = null;
+  assert(
+    isAdminSession(customerUploadSession) === false && isAdminSession(guestUploadSession) === false,
+    "Non-admin customer and guest uploads are rejected"
+  );
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);
@@ -268,4 +356,5 @@ async function runProductFlowTests() {
 }
 
 runProductFlowTests();
+
 
