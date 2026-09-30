@@ -98,16 +98,32 @@ export async function updateProduct(data: UpdateProductInput) {
   // --------------------------------------------------
 
   if (variants) {
-    // 0. Check for duplicate SKUs within the submitted variants list
-    const trimmedSkus = variants.map((v) => v.sku.trim());
+    // 0. Check for duplicate color + size pairs
+    const pairSet = new Set<string>();
+    for (const v of variants) {
+      const key = `${v.color.trim().toLowerCase()}:::${v.size.trim().toLowerCase()}`;
+      if (pairSet.has(key)) {
+        return {
+          success: false as const,
+          error: {
+            variants: [
+              `Duplicate variant detected for color "${v.color}" and size "${v.size}". Each variant must have a unique color and size combination.`,
+            ],
+          },
+        };
+      }
+      pairSet.add(key);
+    }
+
+    // Check for duplicate SKUs within the submitted variants list
+    const trimmedSkus = variants.map((v) => v.sku.trim().toUpperCase());
     const seenSkus = new Set<string>();
     const duplicateSkisInForm: string[] = [];
     for (const s of trimmedSkus) {
-      const lower = s.toLowerCase();
-      if (seenSkus.has(lower)) {
+      if (seenSkus.has(s)) {
         duplicateSkisInForm.push(s);
       } else {
-        seenSkus.add(lower);
+        seenSkus.add(s);
       }
     }
 

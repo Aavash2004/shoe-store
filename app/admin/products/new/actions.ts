@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { createProductSchema, type CreateProductInput } from "@/lib/validations/product";
+import { resolveAutoSkuCollisionAsync } from "@/lib/utils/variant-generator";
 
 export async function createProduct(data: CreateProductInput) {
   await requireAdmin();
@@ -24,6 +25,7 @@ export async function createProduct(data: CreateProductInput) {
       return {
         ...rest,
         sku: typeof v.sku === "string" ? v.sku.trim().toUpperCase() : v.sku,
+        isManualSku: Boolean(v.isManualSku),
         ...(id && id !== "$undefined" ? { id } : {}),
       };
     }),
@@ -37,57 +39,81 @@ export async function createProduct(data: CreateProductInput) {
   const { images, variants, ...productData } = validated.data;
 
   // 1. Slug uniqueness check
-  const existing = await prisma.product.findUnique({ where: { slug: productData.slug } });
-  if (existing) {
+  const existingSlug = await prisma.product.findUnique({ where: { slug: productData.slug } });
+  if (existingSlug) {
     return { success: false as const, error: { slug: ["A product with this slug already exists."] } };
   }
 
-  // 2. Normalize and check for duplicate SKUs within the submitted variants list
-  const normalizedVariants = variants.map((v) => ({
-    ...v,
-    size: v.size.trim(),
-    color: v.color.trim(),
-    sku: v.sku.trim().toUpperCase(),
-  }));
-
-  const normalizedSkus = normalizedVariants.map((v) => v.sku);
-  const seenSkus = new Set<string>();
-  const duplicateSkisInForm: string[] = [];
-  for (const s of normalizedSkus) {
-    if (seenSkus.has(s)) {
-      duplicateSkisInForm.push(s);
-    } else {
-      seenSkus.add(s);
+  // 2. Validation: No duplicate color + size pair
+  const pairSet = new Set<string>();
+  for (const v of variants) {
+    const key = `${v.color.trim().toLowerCase()}:::${v.size.trim().toLowerCase()}`;
+    if (pairSet.has(key)) {
+      return {
+        success: false as const,
+        error: {
+          variants: [
+            `Duplicate variant detected for color "${v.color}" and size "${v.size}". Each variant must have a unique color and size combination.`,
+          ],
+        },
+      };
     }
+    pairSet.add(key);
   }
 
-  if (duplicateSkisInForm.length > 0) {
-    return {
-      success: false as const,
-      error: {
-        variants: [
-          `Duplicate SKU "${duplicateSkisInForm[0]}" detected in variants. Each variant must have a unique SKU.`,
-        ],
-      },
-    };
-  }
-
-  // 3. Database check against existing SKUs (normalized uppercase)
-  const existingSkus = await prisma.productVariant.findMany({
+  // 3. Resolve SKU collisions against Database
+  const incomingSkus = variants.map((v) => v.sku.trim().toUpperCase());
+  const existingDbVariants = await prisma.productVariant.findMany({
     where: {
-      sku: { in: normalizedSkus },
+      sku: { in: incomingSkus },
     },
     select: { sku: true },
   });
+  const takenSkusSet = new Set(existingDbVariants.map((v) => v.sku.toUpperCase()));
 
-  if (existingSkus.length > 0) {
-    return {
-      success: false as const,
-      error: { variants: [`SKU "${existingSkus[0].sku}" is already in use by another product.`] },
-    };
+  // Reject immediately if the admin manually typed a colliding SKU
+  for (const v of variants) {
+    const upperSku = v.sku.trim().toUpperCase();
+    if (takenSkusSet.has(upperSku) && v.isManualSku) {
+      return {
+        success: false as const,
+        error: {
+          variants: [`SKU "${upperSku}" is already in use by another product. Please choose a unique SKU.`],
+        },
+      };
+    }
   }
 
-  // 4. Create product and variants wrapped in try/catch to gracefully handle DB constraints
+  // Suffix auto-generated colliding SKUs (-2, -3, etc.)
+  const resolvedVariants = [];
+  const assignedSkus = new Set<string>();
+
+  for (const v of variants) {
+    let currentSku = v.sku.trim().toUpperCase();
+
+    // If auto-generated and collides with DB or another variant in this form
+    if (!v.isManualSku && (takenSkusSet.has(currentSku) || assignedSkus.has(currentSku))) {
+      currentSku = await resolveAutoSkuCollisionAsync(currentSku, async (candidate) => {
+        if (assignedSkus.has(candidate)) return true;
+        const inDb = await prisma.productVariant.findFirst({
+          where: { sku: { equals: candidate, mode: "insensitive" } },
+          select: { id: true },
+        });
+        return Boolean(inDb);
+      });
+    }
+
+    assignedSkus.add(currentSku);
+    resolvedVariants.push({
+      size: v.size.trim(),
+      color: v.color.trim(),
+      sku: currentSku,
+      price: v.price,
+      stock: v.stock,
+    });
+  }
+
+  // 4. Create product and variants wrapped in try/catch for P2002
   try {
     const product = await prisma.product.create({
       data: {
@@ -101,18 +127,11 @@ export async function createProduct(data: CreateProductInput) {
           })),
         },
         variants: {
-          create: normalizedVariants.map((v) => ({
-            size: v.size,
-            color: v.color,
-            sku: v.sku,
-            price: v.price,
-            stock: v.stock,
-          })),
+          create: resolvedVariants,
         },
       },
     });
 
-    // Revalidate dynamic pages using "page" type argument or concrete path
     revalidatePath("/admin/products", "page");
     revalidatePath("/", "page");
     revalidatePath("/shop", "page");

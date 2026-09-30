@@ -21,7 +21,8 @@ const productVariantSchema = z.object({
   color: z.string().min(1, "Color is required"),
   sku: z.string().min(1, "SKU is required"),
   price: z.number().min(0, "Price must be positive"),
-  stock: z.number().min(0, "Stock must be non-negative"),
+  stock: z.number().int("Stock must be an integer").min(0, "Stock must be non-negative"),
+  isManualSku: z.boolean().optional(),
 });
 
 // Used when EDITING a product.
