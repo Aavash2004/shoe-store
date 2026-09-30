@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -15,6 +15,10 @@ import {
   Layers,
   Sparkles,
   Settings2,
+  GripVertical,
+  AlertTriangle,
+  Star,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,14 +59,24 @@ type ExistingProduct = {
   metaTitle: string | null;
   metaDescription: string | null;
   isActive: boolean;
-  images: { url: string; altText: string | null; isPrimary: boolean }[];
+  images: {
+    id?: string;
+    url: string;
+    altText: string | null;
+    color?: string | null;
+    isPrimary: boolean;
+    position?: number;
+  }[];
   variants: { id?: string; size: string; color: string; sku: string; price: any; stock: number }[];
 };
 
 interface ImageField {
+  id?: string;
   url: string;
   altText: string;
+  color?: string; // empty string or color name
   isPrimary: boolean;
+  position?: number;
 }
 
 interface VariantField {
@@ -177,13 +191,28 @@ export function ProductForm({
 
   const [images, setImages] = useState<ImageField[]>(
     product?.images.length
-      ? product.images.map((img) => ({
+      ? product.images.map((img, idx) => ({
+          id: img.id,
           url: img.url,
           altText: img.altText ?? "",
+          color: img.color ?? "",
           isPrimary: img.isPrimary,
+          position: typeof img.position === "number" ? img.position : idx,
         }))
-      : [{ url: "", altText: "", isPrimary: true }]
+      : []
   );
+
+  interface UploadTask {
+    id: string;
+    name: string;
+    status: "compressing" | "uploading" | "done" | "error";
+    error?: string;
+  }
+  const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
+  const [isDraggingOverDropzone, setIsDraggingOverDropzone] = useState(false);
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+  const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
+  const multiFileInputRef = useRef<HTMLInputElement>(null);
 
   const [variants, setVariants] = useState<VariantField[]>(
     product?.variants.length
@@ -229,8 +258,6 @@ export function ProductForm({
   const [bulkStock, setBulkStock] = useState<string>("");
   const [bulkPrice, setBulkPrice] = useState<string>("");
 
-  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-
   function handleNameChange(val: string) {
     setName(val);
     if (!slugEdited) setSlug(slugify(val));
@@ -241,17 +268,13 @@ export function ProductForm({
     setSlug(slugify(val));
   }
 
-  function addImage() {
-    setImages((prev) => [...prev, { url: "", altText: "", isPrimary: false }]);
-  }
-
   function removeImage(index: number) {
     setImages((prev) => {
       const next = prev.filter((_, i) => i !== index);
       if (next.length && !next.some((img) => img.isPrimary)) {
         next[0].isPrimary = true;
       }
-      return next;
+      return next.map((img, idx) => ({ ...img, position: idx }));
     });
   }
 
@@ -271,59 +294,132 @@ export function ProductForm({
     );
   }
 
-  async function handleFileUpload(
-    index: number,
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function handleImageColorChange(index: number, newColor: string) {
+    setImages((prev) =>
+      prev.map((img, i) => {
+        if (i !== index) return img;
+        const prevColorLabel = img.color || "All Colors";
+        const isAutoAlt =
+          !img.altText ||
+          img.altText.trim() === "" ||
+          img.altText.includes(prevColorLabel);
 
-    // Reset input so picking the same file again triggers onChange
-    e.target.value = "";
+        const updatedAlt = isAutoAlt
+          ? `${name.trim() || "Product"} - ${newColor || "All Colors"}`
+          : img.altText;
 
-    setUploadingIndex(index);
-    try {
-      // Pre-compress image client-side to prevent network timeouts with large raw photos
-      const fileToUpload = await compressImage(file);
+        return {
+          ...img,
+          color: newColor,
+          altText: updatedAlt,
+        };
+      })
+    );
+  }
 
-      const formData = new FormData();
-      formData.append("file", fileToUpload);
+  function handleImageDrop(targetIndex: number) {
+    if (draggedImageIndex === null || draggedImageIndex === targetIndex) return;
+    setImages((prev) => {
+      const list = [...prev];
+      const [moved] = list.splice(draggedImageIndex, 1);
+      list.splice(targetIndex, 0, moved);
+      return list.map((item, idx) => ({ ...item, position: idx }));
+    });
+    setDraggedImageIndex(null);
+    setDragOverImageIndex(null);
+  }
 
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+  // ── Multi-file Parallel Upload (Max 3 concurrent) with compression ──
+  async function handleBatchFileUpload(selectedFiles: FileList | File[]) {
+    const validFiles = Array.from(selectedFiles).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (validFiles.length === 0) return;
 
-      const data = await res.json().catch(() => ({}));
+    const newTasks: UploadTask[] = validFiles.map((file, idx) => ({
+      id: `${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+      name: file.name,
+      status: "compressing",
+    }));
 
-      if (!res.ok) {
-        throw new Error(data.error || `Upload failed with status ${res.status}`);
+    setUploadTasks((prev) => [...prev, ...newTasks]);
+
+    const MAX_CONCURRENT = 3;
+    let cursor = 0;
+
+    async function uploadWorker() {
+      while (cursor < validFiles.length) {
+        const idx = cursor++;
+        const file = validFiles[idx];
+        const task = newTasks[idx];
+
+        try {
+          // Pre-compress client side to prevent timeout
+          setUploadTasks((prev) =>
+            prev.map((t) =>
+              t.id === task.id ? { ...t, status: "compressing" } : t
+            )
+          );
+          const compressed = await compressImage(file);
+
+          setUploadTasks((prev) =>
+            prev.map((t) =>
+              t.id === task.id ? { ...t, status: "uploading" } : t
+            )
+          );
+
+          const formData = new FormData();
+          formData.append("file", compressed);
+
+          const res = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            throw new Error(data.error || `Upload failed with status ${res.status}`);
+          }
+
+          if (!data.url) {
+            throw new Error("No image URL returned from upload server.");
+          }
+
+          setUploadTasks((prev) =>
+            prev.map((t) => (t.id === task.id ? { ...t, status: "done" } : t))
+          );
+
+          setImages((prev) => {
+            const hasPrimary = prev.some((img) => img.isPrimary && img.url);
+            const defaultAlt = name.trim() ? `${name.trim()} - All Colors` : "Product image";
+            const newImg: ImageField = {
+              url: data.url,
+              altText: defaultAlt,
+              color: "",
+              isPrimary: !hasPrimary, // First uploaded image becomes primary
+              position: prev.length,
+            };
+            return [...prev, newImg];
+          });
+        } catch (err: any) {
+          console.error("[Upload task error]:", err);
+          setUploadTasks((prev) =>
+            prev.map((t) =>
+              t.id === task.id
+                ? { ...t, status: "error", error: err?.message || "Upload failed" }
+                : t
+            )
+          );
+        }
       }
-
-      if (data.url) {
-        updateImage(index, "url", data.url);
-        window.dispatchEvent(
-          new CustomEvent("show-toast", {
-            detail: {
-              message: "Image uploaded successfully!",
-              type: "success",
-            },
-          })
-        );
-      }
-    } catch (err: any) {
-      console.error("[Upload Error]:", err);
-      window.dispatchEvent(
-        new CustomEvent("show-toast", {
-          detail: {
-            message: err?.message || "Failed to upload image. Please check your credentials/session.",
-            type: "error",
-          },
-        })
-      );
-    } finally {
-      setUploadingIndex(null);
     }
+
+    const workers = Array.from(
+      { length: Math.min(MAX_CONCURRENT, validFiles.length) },
+      () => uploadWorker()
+    );
+    await Promise.all(workers);
   }
 
   // ── Generator Chip and Matrix Handlers ──
@@ -553,10 +649,12 @@ export function ProductForm({
       images: images
         .filter((img) => img.url && img.url.trim() !== "")
         .map((img, i) => ({
-          url: img.url,
+          ...(img.id ? { id: img.id } : {}),
+          url: img.url.trim(),
           ...(img.altText && img.altText.trim() ? { altText: img.altText.trim() } : {}),
+          color: img.color?.trim() || null,
           isPrimary: img.isPrimary,
-          position: i,
+          position: typeof img.position === "number" ? img.position : i,
         })),
       variants: sanitizedVariants,
     };
@@ -766,86 +864,285 @@ export function ProductForm({
 
         {/* ── Product Images ── */}
         <section>
-          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1E2A38]">
-            Product Images
-          </h2>
-          <div className="mb-6 h-px bg-[#1E2A38]/10" />
+          <div className="mb-1 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1E2A38]">
+                Product Images
+              </h2>
+              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#1E2A38]/10 text-[#1E2A38]">
+                {images.length}
+              </span>
+            </div>
+            {images.length > 1 && (
+              <span className="text-[11px] text-[#1E2A38]/45">
+                Drag cards to reorder · Exactly 1 primary image
+              </span>
+            )}
+          </div>
+          <div className="mb-4 h-px bg-[#1E2A38]/10" />
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {images.map((img, i) => (
-              <div key={i} className="group relative">
-                {img.url ? (
-                  <div className="relative aspect-square overflow-hidden rounded-md border border-[#1E2A38]/10 bg-[var(--color-cream-alt)]">
-                    <img
-                      src={img.url}
-                      alt={img.altText || `Product image ${i + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                    {img.isPrimary && (
-                      <span className="absolute left-2 top-2 rounded bg-[#1E2A38]/85 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[#F5F2EB]">
-                        MAIN
-                      </span>
-                    )}
-                    <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/40 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
-                      {!img.isPrimary && (
-                        <button
-                          type="button"
-                          onClick={() => setPrimaryImage(i)}
-                          className="rounded bg-white/90 px-2 py-1 text-[10px] font-medium text-[#1E2A38]"
-                        >
-                          Set main
-                        </button>
-                      )}
+          {/* Missing color images warning banner */}
+          {(() => {
+            const variantColors = Array.from(
+              new Set(variants.map((v) => v.color?.trim()).filter((c): c is string => Boolean(c)))
+            );
+            const colorsWithPhotos = new Set(
+              images
+                .filter((img) => img.url && img.color)
+                .map((img) => img.color!.trim().toLowerCase())
+            );
+            const colorsWithoutPhotos = variantColors.filter(
+              (c) => !colorsWithPhotos.has(c.toLowerCase())
+            );
+
+            if (colorsWithoutPhotos.length > 0 && images.some((img) => img.url)) {
+              return (
+                <div className="mb-4 flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="flex-1 leading-relaxed">
+                    <span className="font-semibold">Notice:</span> Some variant colors do not have color-specific images assigned:{" "}
+                    <strong>{colorsWithoutPhotos.join(", ")}</strong>. (Storefront will show shared "All Colors" images as fallback).
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {/* ── Multi-File Drag-and-Drop Dropzone ── */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingOverDropzone(true);
+            }}
+            onDragLeave={() => setIsDraggingOverDropzone(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingOverDropzone(false);
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleBatchFileUpload(e.dataTransfer.files);
+              }
+            }}
+            onClick={() => multiFileInputRef.current?.click()}
+            className={`mb-5 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-all cursor-pointer ${
+              isDraggingOverDropzone
+                ? "border-[#89B4D9] bg-[#89B4D9]/15 scale-[1.005]"
+                : "border-[#1E2A38]/15 bg-[var(--color-cream-alt)]/60 hover:border-[#89B4D9]/60 hover:bg-[var(--color-cream-alt)]"
+            }`}
+          >
+            <input
+              ref={multiFileInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  handleBatchFileUpload(e.target.files);
+                  e.target.value = "";
+                }
+              }}
+            />
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1E2A38]/5 text-[#1E2A38]/70">
+              <Upload className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[#1E2A38]">
+                Drag & drop photos here, or <span className="text-[#89B4D9] underline">browse files</span>
+              </p>
+              <p className="mt-0.5 text-xs text-[#1E2A38]/45">
+                Select multiple images · Automatic client-side compression · Uploads up to 3 in parallel
+              </p>
+            </div>
+          </div>
+
+          {/* ── Upload Tasks Progress List ── */}
+          {uploadTasks.length > 0 && (
+            <div className="mb-4 rounded-md border border-[#1E2A38]/10 bg-[var(--color-cream-alt)] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-[#1E2A38]">
+                  Uploading {uploadTasks.filter((t) => t.status === "uploading" || t.status === "compressing").length} / {uploadTasks.length} photos
+                </span>
+                {uploadTasks.every((t) => t.status === "done" || t.status === "error") && (
+                  <button
+                    type="button"
+                    onClick={() => setUploadTasks([])}
+                    className="text-[11px] font-semibold text-[#1E2A38]/60 hover:text-[#1E2A38]"
+                  >
+                    Clear history
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {uploadTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center justify-between gap-2 rounded bg-white/70 px-2.5 py-1.5 text-xs border border-[#1E2A38]/05"
+                  >
+                    <span className="truncate max-w-[130px] font-medium text-[#1E2A38]">
+                      {task.name}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                        task.status === "done"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : task.status === "error"
+                          ? "bg-rose-100 text-rose-800"
+                          : task.status === "uploading"
+                          ? "bg-blue-100 text-blue-800 animate-pulse"
+                          : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {task.status === "done"
+                        ? "Done"
+                        : task.status === "error"
+                        ? "Failed"
+                        : task.status === "uploading"
+                        ? "Uploading"
+                        : "Compressing"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Image Cards Grid (Drag & Drop Reordering, Primary toggle, Color selector, Alt text) ── */}
+          {images.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {images.map((img, i) => {
+                const variantColors = Array.from(
+                  new Set(variants.map((v) => v.color?.trim()).filter((c): c is string => Boolean(c)))
+                );
+                const isDraggingThis = draggedImageIndex === i;
+                const isDragOverThis = dragOverImageIndex === i;
+
+                return (
+                  <div
+                    key={img.id || img.url + i}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", String(i));
+                      setDraggedImageIndex(i);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverImageIndex(i);
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverImageIndex === i) setDragOverImageIndex(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleImageDrop(i);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedImageIndex(null);
+                      setDragOverImageIndex(null);
+                    }}
+                    className={`group relative flex flex-col rounded-lg border bg-[var(--color-cream-alt)] p-2.5 transition-all shadow-2xs ${
+                      isDraggingThis
+                        ? "opacity-35 scale-95 border-dashed border-[#1E2A38]/40"
+                        : isDragOverThis
+                        ? "border-[#89B4D9] ring-2 ring-[#89B4D9]/40 scale-[1.02]"
+                        : "border-[#1E2A38]/12 hover:border-[#1E2A38]/30"
+                    }`}
+                  >
+                    {/* Top action row */}
+                    <div className="flex items-center justify-between pb-2">
+                      <div className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing text-[#1E2A38]/40 hover:text-[#1E2A38]">
+                        <GripVertical className="h-4 w-4" />
+                        <span className="text-[11px] font-semibold">#{i + 1}</span>
+                      </div>
+
+                      {/* Primary Toggle Button */}
+                      <button
+                        type="button"
+                        onClick={() => setPrimaryImage(i)}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${
+                          img.isPrimary
+                            ? "bg-[#1E2A38] text-white shadow-2xs"
+                            : "bg-black/5 hover:bg-[#1E2A38]/10 text-[#1E2A38]/70"
+                        }`}
+                        title={img.isPrimary ? "Primary storefront image" : "Set as primary storefront image"}
+                      >
+                        <Star className={`h-2.5 w-2.5 ${img.isPrimary ? "fill-white text-white" : ""}`} />
+                        <span>{img.isPrimary ? "Primary" : "Set Primary"}</span>
+                      </button>
+
+                      {/* Delete Image Button */}
                       <button
                         type="button"
                         onClick={() => removeImage(i)}
-                        className="ml-auto rounded bg-white/90 p-1 text-rose-600"
+                        className="rounded p-1 text-[#1E2A38]/40 hover:bg-rose-50 hover:text-rose-600 transition"
+                        title="Delete image"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
+
+                    {/* Image Preview Box */}
+                    <div className="relative aspect-square w-full overflow-hidden rounded-md border border-[#1E2A38]/10 bg-black/5">
+                      <img
+                        src={img.url}
+                        alt={img.altText || `Product image ${i + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+
+                    {/* Controls: Color dropdown and Alt text */}
+                    <div className="mt-2.5 space-y-2">
+                      {/* Color Dropdown */}
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/60 block mb-0.5">
+                          Assigned Color:
+                        </label>
+                        <select
+                          value={img.color || ""}
+                          onChange={(e) => handleImageColorChange(i, e.target.value)}
+                          className="h-7 w-full rounded border border-[#1E2A38]/15 bg-white px-2 text-xs font-semibold text-[#1E2A38] outline-none transition focus:border-[#89B4D9]"
+                        >
+                          <option value="">All Colors (Shared)</option>
+                          {variantColors.map((color) => (
+                            <option key={color} value={color}>
+                              {color}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Alt Text Input */}
+                      <div>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/60">
+                            Alt text:
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const auto = `${name.trim() || "Product"} - ${img.color || "All Colors"}`;
+                              updateImage(i, "altText", auto);
+                            }}
+                            className="text-[9px] text-[#89B4D9] hover:underline"
+                          >
+                            Auto
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={img.altText}
+                          onChange={(e) => updateImage(i, "altText", e.target.value)}
+                          placeholder="e.g. Air Zoom - Black side view"
+                          className="h-7 w-full rounded border border-[#1E2A38]/15 bg-white px-2 text-[11px] text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9]"
+                        />
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#1E2A38]/15 bg-[var(--color-cream-alt)] transition hover:border-[#89B4D9]/60 hover:bg-slate-100">
-                    {uploadingIndex === i ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-[#1E2A38]/40" />
-                    ) : (
-                      <Upload className="h-5 w-5 text-[#1E2A38]/30" />
-                    )}
-                    <span className="text-[11px] text-[#1E2A38]/45">
-                      {uploadingIndex === i ? "Uploading…" : "Upload"}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handleFileUpload(i, e)}
-                    />
-                  </label>
-                )}
+                );
+              })}
+            </div>
+          )}
 
-                {img.url && (
-                  <Input
-                    value={img.altText}
-                    onChange={(e) => updateImage(i, "altText", e.target.value)}
-                    placeholder="Alt text"
-                    className="mt-1.5 h-8 rounded border border-[#1E2A38]/10 bg-transparent px-2 text-[12px] text-[#1E2A38] placeholder:text-[#1E2A38]/30 focus:border-[#89B4D9] focus:ring-0"
-                  />
-                )}
-              </div>
-            ))}
-
-            {/* Add image slot */}
-            <button
-              type="button"
-              onClick={addImage}
-              disabled={uploadingIndex !== null}
-              className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-[#1E2A38]/15 text-[#1E2A38]/40 transition hover:border-[#89B4D9]/50 hover:text-[#89B4D9]"
-            >
-              <Plus className="h-5 w-5" />
-              <span className="text-[11px]">Add image</span>
-            </button>
-          </div>
           {errors.images && <FieldError msg={errors.images} />}
         </section>
 

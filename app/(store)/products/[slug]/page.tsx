@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
 import { publicProductWhere } from "@/lib/visibility";
-import { ProductGallery } from "@/components/product/ProductGallery";
-import { ProductDetailInteractive } from "@/components/product/ProductDetailInteractive";
+import { ProductDetailSection } from "@/components/product/ProductDetailSection";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection";
@@ -138,33 +137,38 @@ export default async function ProductDetailPage({
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
-      {/* Product Main Detail Grid */}
-      <div className="grid grid-cols-1 gap-12 md:grid-cols-2">
-        <ProductGallery images={product.images.map((img) => img.url)} />
-        <ProductDetailInteractive
-          product={{
-            id: product.id,
-            name: product.name,
-            slug: product.slug,
-            price: minPrice,
-            image: product.images[0]?.url ?? "",
-            category: product.category.name,
-            brand: product.brand ?? "ABXV",
-            description: product.description,
-            images: product.images.map((img) => img.url),
-            sizes,
-            colors,
-            gender: product.gender ?? "UNISEX",
-            variants: product.variants.map((v) => ({
-              id: v.id,
-              size: v.size,
-              color: v.color,
-              price: Number(v.price),
-              stock: v.stock,
-            })),
-          }}
-        />
-      </div>
+      {/* Product Main Detail Grid with Synchronized Color Gallery */}
+      <ProductDetailSection
+        product={{
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          price: minPrice,
+          image: product.images[0]?.url ?? "",
+          category: product.category.name,
+          brand: product.brand ?? "ABXV",
+          description: product.description,
+          images: product.images.map((img) => img.url),
+          galleryImages: product.images.map((img) => ({
+            id: img.id,
+            url: img.url,
+            altText: img.altText,
+            color: img.color,
+            isPrimary: img.isPrimary,
+            position: img.position,
+          })),
+          sizes,
+          colors,
+          gender: product.gender ?? "UNISEX",
+          variants: product.variants.map((v) => ({
+            id: v.id,
+            size: v.size,
+            color: v.color,
+            price: Number(v.price),
+            stock: v.stock,
+          })),
+        }}
+      />
 
       {/* Customer Product Reviews & Ratings Section */}
       <ProductReviewsSection

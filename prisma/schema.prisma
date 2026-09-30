@@ -159,6 +159,7 @@ model ProductImage {
   productId String
   url       String
   altText   String?
+  color     String?
   isPrimary Boolean @default(false)
   position  Int     @default(0)
 

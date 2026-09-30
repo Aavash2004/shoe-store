@@ -81,14 +81,29 @@ export async function updateProduct(data: UpdateProductInput) {
     });
 
     if (images.length > 0) {
-      await prisma.productImage.createMany({
-        data: images.map((img) => ({
+      let primaryFound = false;
+      const normalizedImages = images.map((img, idx) => {
+        let isPrimary = false;
+        if (img.isPrimary && !primaryFound) {
+          isPrimary = true;
+          primaryFound = true;
+        }
+        return {
           productId: id,
-          url: img.url,
-          altText: img.altText || null,
-          isPrimary: img.isPrimary,
-          position: img.position,
-        })),
+          url: img.url.trim(),
+          altText: img.altText?.trim() || null,
+          color: img.color?.trim() || null,
+          position: typeof img.position === "number" ? img.position : idx,
+          isPrimary,
+        };
+      });
+
+      if (!primaryFound && normalizedImages.length > 0) {
+        normalizedImages[0].isPrimary = true;
+      }
+
+      await prisma.productImage.createMany({
+        data: normalizedImages,
       });
     }
   }

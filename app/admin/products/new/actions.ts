@@ -113,18 +113,34 @@ export async function createProduct(data: CreateProductInput) {
     });
   }
 
+  // 3.5. Normalize images: enforce exactly one primary image and clean color/position
+  let primaryFound = false;
+  const normalizedImages = images.map((img, idx) => {
+    let isPrimary = false;
+    if (img.isPrimary && !primaryFound) {
+      isPrimary = true;
+      primaryFound = true;
+    }
+    return {
+      url: img.url.trim(),
+      altText: img.altText?.trim() || null,
+      color: img.color?.trim() || null,
+      position: typeof img.position === "number" ? img.position : idx,
+      isPrimary,
+    };
+  });
+
+  if (!primaryFound && normalizedImages.length > 0) {
+    normalizedImages[0].isPrimary = true;
+  }
+
   // 4. Create product and variants wrapped in try/catch for P2002
   try {
     const product = await prisma.product.create({
       data: {
         ...productData,
         images: {
-          create: images.map((img) => ({
-            url: img.url,
-            altText: img.altText || null,
-            isPrimary: img.isPrimary,
-            position: img.position,
-          })),
+          create: normalizedImages,
         },
         variants: {
           create: resolvedVariants,

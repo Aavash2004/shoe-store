@@ -9,8 +9,10 @@ export const productQuerySchema = z.object({
 });
 
 const productImageSchema = z.object({
+  id: z.string().optional(),
   url: z.string().min(1, "Image URL is required"),
   altText: z.string().optional(),
+  color: z.string().nullable().optional(),
   isPrimary: z.boolean(),
   position: z.number(),
 });

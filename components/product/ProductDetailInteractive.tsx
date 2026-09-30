@@ -23,7 +23,7 @@ type Variant = {
   stock: number;
 };
 
-type ProductDetailData = {
+export type ProductDetailData = {
   id: string;
   name: string;
   slug: string;
@@ -33,19 +33,43 @@ type ProductDetailData = {
   brand: string;
   description: string;
   images: string[];
+  galleryImages?: {
+    id?: string;
+    url: string;
+    altText?: string | null;
+    color?: string | null;
+    isPrimary?: boolean;
+    position?: number;
+  }[];
   sizes: string[];
   colors: string[];
   gender?: string;
   variants: Variant[];
 };
 
+export interface ProductDetailInteractiveProps {
+  product: ProductDetailData;
+  externalSelectedColor?: string | null;
+  onColorChange?: (color: string) => void;
+}
+
 export function ProductDetailInteractive({
   product,
-}: {
-  product: ProductDetailData;
-}) {
+  externalSelectedColor,
+  onColorChange,
+}: ProductDetailInteractiveProps) {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [internalColor, setInternalColor] = useState<string | null>(null);
+  const selectedColor =
+    externalSelectedColor !== undefined ? externalSelectedColor : internalColor;
+
+  function handleColorSelect(color: string) {
+    if (onColorChange) {
+      onColorChange(color);
+    } else {
+      setInternalColor(color);
+    }
+  }
   const [sizeSystem, setSizeSystem] = useState<SizeSystem>("US_MEN");
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [added, setAdded] = useState(false);
@@ -196,7 +220,7 @@ export function ProductDetailInteractive({
             return (
               <button
                 key={color}
-                onClick={() => setSelectedColor(color)}
+                onClick={() => handleColorSelect(color)}
                 className={`rounded-md border px-3.5 py-1.5 text-sm transition-all ${isSelected
                   ? "border-[var(--color-navy)] bg-[var(--color-cream-alt)] text-[var(--color-navy)] shadow-xs"
                   : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40 hover:bg-white/60"
