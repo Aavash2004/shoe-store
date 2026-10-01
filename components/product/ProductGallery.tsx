@@ -133,6 +133,11 @@ export function ProductGallery({
   // Magnifying glass loupe update
   const updateLoupe = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!loupeRef.current) return;
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest("button")) {
+      setIsHovering(false);
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -268,7 +273,7 @@ export function ProductGallery({
                   role="tab"
                   aria-selected={isSelected}
                   onClick={() => selectImage(idx)}
-                  className={`group relative h-16 w-16 md:h-20 md:w-20 shrink-0 overflow-hidden rounded-sm border transition-all ${
+                  className={`group relative h-16 w-16 md:h-20 md:w-20 shrink-0 overflow-hidden rounded-sm border transition-all cursor-pointer ${
                     isSelected
                       ? "border-[var(--color-navy)] ring-2 ring-[var(--color-navy)]/35 shadow-xs scale-[1.02]"
                       : "border-[var(--color-sand)] hover:border-[var(--color-navy)]/50 opacity-70 hover:opacity-100"
@@ -295,7 +300,7 @@ export function ProductGallery({
         )}
 
         {/* ── Main Image Viewport ── */}
-        <div className="relative flex-1">
+        <div className="group relative flex-1">
           <div
             ref={mainImageRef}
             onMouseEnter={(e) => {
@@ -319,7 +324,7 @@ export function ProductGallery({
               setLightboxZoomed(false);
               setShowLightbox(true);
             }}
-            className={`group relative aspect-square w-full select-none overflow-hidden rounded-sm bg-[var(--color-sand)] border border-[var(--color-sand)]/70 ${
+            className={`relative aspect-square w-full select-none overflow-hidden rounded-sm bg-[var(--color-sand)] border border-[var(--color-sand)]/70 ${
               isTouchDevice
                 ? "cursor-pointer"
                 : isHovering
@@ -364,37 +369,9 @@ export function ProductGallery({
               </div>
             )}
 
-            {/* Prev / Next Navigation Buttons on Main Image */}
-            {safeImages.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePrev();
-                  }}
-                  aria-label="Previous photo"
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full bg-white/80 hover:bg-white text-[var(--color-navy)] shadow-sm transition-all opacity-80 md:opacity-0 group-hover:opacity-100 hover:scale-105"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNext();
-                  }}
-                  aria-label="Next photo"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full bg-white/80 hover:bg-white text-[var(--color-navy)] shadow-sm transition-all opacity-80 md:opacity-0 group-hover:opacity-100 hover:scale-105"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </>
-            )}
-
             {/* Image Counter Badge (e.g. 2/6) */}
             {safeImages.length > 1 && (
-              <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-xs shadow-xs">
+              <div className="pointer-events-none absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-xs shadow-xs">
                 <span>
                   {activeIndex + 1}/{safeImages.length}
                 </span>
@@ -425,6 +402,36 @@ export function ProductGallery({
               )}
             </div>
           </div>
+
+          {/* Prev / Next Navigation Buttons on Main Image */}
+          {safeImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrev();
+                }}
+                onMouseEnter={() => setIsHovering(false)}
+                aria-label="Previous photo"
+                className="cursor-pointer absolute left-2.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full bg-white/85 hover:bg-white text-[var(--color-navy)] shadow-md transition-all opacity-80 md:opacity-0 group-hover:opacity-100 hover:scale-105"
+              >
+                <ChevronLeft className="h-4 w-4 pointer-events-none" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNext();
+                }}
+                onMouseEnter={() => setIsHovering(false)}
+                aria-label="Next photo"
+                className="cursor-pointer absolute right-2.5 top-1/2 -translate-y-1/2 z-30 flex h-8 w-8 md:h-9 md:w-9 items-center justify-center rounded-full bg-white/85 hover:bg-white text-[var(--color-navy)] shadow-md transition-all opacity-80 md:opacity-0 group-hover:opacity-100 hover:scale-105"
+              >
+                <ChevronRight className="h-4 w-4 pointer-events-none" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -456,17 +463,17 @@ export function ProductGallery({
               <button
                 type="button"
                 onClick={() => setLightboxZoomed((z) => !z)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 text-xs font-semibold text-white transition-colors"
+                className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 text-xs font-semibold text-white transition-colors"
                 aria-label={lightboxZoomed ? "Reset zoom" : "Zoom in 2.5x"}
               >
                 {lightboxZoomed ? (
                   <>
-                    <ZoomOut className="w-3.5 h-3.5" />
+                    <ZoomOut className="w-3.5 h-3.5 pointer-events-none" />
                     <span>Zoom Out (1x)</span>
                   </>
                 ) : (
                   <>
-                    <ZoomIn className="w-3.5 h-3.5" />
+                    <ZoomIn className="w-3.5 h-3.5 pointer-events-none" />
                     <span>Zoom In (2.5x)</span>
                   </>
                 )}
@@ -477,9 +484,9 @@ export function ProductGallery({
                 type="button"
                 onClick={() => setShowLightbox(false)}
                 aria-label="Close lightbox (Esc)"
-                className="flex h-9 w-9 items-center justify-center rounded-md bg-white/15 hover:bg-white/25 text-white transition-colors"
+                className="cursor-pointer flex h-9 w-9 items-center justify-center rounded-md bg-white/15 hover:bg-white/25 text-white transition-colors"
               >
-                <X className="w-4.5 h-4.5" />
+                <X className="w-4.5 h-4.5 pointer-events-none" />
               </button>
             </div>
           </div>
@@ -498,10 +505,10 @@ export function ProductGallery({
                   e.stopPropagation();
                   handlePrev();
                 }}
-                className="absolute left-6 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white transition-colors border border-white/15 shadow-md"
+                className="cursor-pointer absolute left-6 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white transition-colors border border-white/15 shadow-md"
                 aria-label="Previous image"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5 pointer-events-none" />
               </button>
             )}
 
@@ -513,10 +520,10 @@ export function ProductGallery({
                   e.stopPropagation();
                   handleNext();
                 }}
-                className="absolute right-6 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white transition-colors border border-white/15 shadow-md"
+                className="cursor-pointer absolute right-6 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white transition-colors border border-white/15 shadow-md"
                 aria-label="Next image"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-5 h-5 pointer-events-none" />
               </button>
             )}
 
