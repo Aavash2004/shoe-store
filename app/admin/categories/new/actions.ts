@@ -63,7 +63,10 @@ export async function createCategory(rawInput: {
     });
 
     revalidatePath("/admin/categories");
+    revalidatePath("/admin/products");
     revalidatePath("/admin");
+    revalidatePath("/");
+    revalidatePath("/shop");
 
     return { success: true, categoryId: category.id };
   } catch (err: any) {

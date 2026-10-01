@@ -42,15 +42,7 @@ async function executeHomePageData() {
         .catch(() => []),
       prisma.category
         .findMany({
-          where: {
-            isActive: true,
-            products: {
-              some: {
-                isActive: true,
-                deletedAt: null,
-              },
-            },
-          },
+          where: publicCategoryWhere(),
           orderBy: { name: "asc" },
           select: {
             id: true,
@@ -87,21 +79,23 @@ async function executeHomePageData() {
       bestSellersData = [...bestSellersData, ...fallbacks].slice(0, 8);
     }
 
-    // Deduce categories fallback from products if dbCategories query was empty
-    let categories = dbCategories;
-    if (!categories || categories.length === 0) {
-      const map = new Map<string, { id: string; name: string; slug: string }>();
-      for (const p of newArrivalsData) {
-        if (p.category && p.category.isActive && !map.has(p.category.slug)) {
-          map.set(p.category.slug, {
-            id: p.category.id,
-            name: p.category.name,
-            slug: p.category.slug,
-          });
-        }
-      }
-      categories = Array.from(map.values());
+    // Combine all active database categories and fallback from products
+    const categoryMap = new Map<string, { id: string; name: string; slug: string }>();
+    for (const c of dbCategories) {
+      categoryMap.set(c.slug.toLowerCase(), c);
     }
+    for (const p of newArrivalsData) {
+      if (p.category && p.category.isActive && !categoryMap.has(p.category.slug.toLowerCase())) {
+        categoryMap.set(p.category.slug.toLowerCase(), {
+          id: p.category.id,
+          name: p.category.name,
+          slug: p.category.slug,
+        });
+      }
+    }
+    const categories = Array.from(categoryMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
 
     return { newArrivalsData, bestSellersData, categories };
   };
