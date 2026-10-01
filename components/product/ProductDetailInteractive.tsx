@@ -13,6 +13,7 @@ import {
   getDualDisplaySize,
 } from "@/lib/constants/sizing";
 import { Price } from "@/components/ui/Price";
+import { getImagesForColor } from "@/lib/utils/gallery";
 
 type Variant = {
   id: string;
@@ -157,12 +158,18 @@ export function ProductDetailInteractive({
           return;
         }
       } else {
+        const matchingImages = getImagesForColor(
+          product.galleryImages || product.images || [],
+          matchedVariant.color
+        );
+        const variantImage = matchingImages[0]?.url || product.image;
+
         addItem({
           variantId: matchedVariant.id,
           productId: product.id,
           productName: product.name,
           slug: product.slug,
-          image: product.image,
+          image: variantImage,
           size: matchedVariant.size,
           color: matchedVariant.color,
           price: matchedVariant.price,

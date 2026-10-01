@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Star,
   Image as ImageIcon,
+  Edit2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,10 +210,12 @@ export function ProductForm({
     error?: string;
   }
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
-  const [isDraggingOverDropzone, setIsDraggingOverDropzone] = useState(false);
+  const [dragOverDropzoneColor, setDragOverDropzoneColor] = useState<string | null>(null);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
-  const multiFileInputRef = useRef<HTMLInputElement>(null);
+  const [colorToRemove, setColorToRemove] = useState<{ color: string; count: number } | null>(null);
+  const [showColorRemovalDialog, setShowColorRemovalDialog] = useState(false);
+  const [renamingColor, setRenamingColor] = useState<{ oldName: string; newName: string } | null>(null);
 
   const [variants, setVariants] = useState<VariantField[]>(
     product?.variants.length
@@ -238,6 +241,14 @@ export function ProductForm({
   );
   const [generatorColors, setGeneratorColors] = useState<string[]>(initialColors);
   const [colorInput, setColorInput] = useState<string>("");
+
+  // All colors present across generator chips and variant list
+  const availableColors = Array.from(
+    new Set([
+      ...generatorColors.map((c) => c.trim()).filter(Boolean),
+      ...variants.map((v) => v.color?.trim()).filter(Boolean),
+    ])
+  );
 
   const initialSizes = Array.from(
     new Set(
@@ -270,9 +281,17 @@ export function ProductForm({
 
   function removeImage(index: number) {
     setImages((prev) => {
+      const removed = prev[index];
       const next = prev.filter((_, i) => i !== index);
-      if (next.length && !next.some((img) => img.isPrimary)) {
-        next[0].isPrimary = true;
+      if (!removed) return next;
+
+      const groupKey = removed.color?.trim().toLowerCase() || "";
+      const groupRemaining = next.filter(
+        (img) => (img.color?.trim().toLowerCase() || "") === groupKey
+      );
+      if (removed.isPrimary && groupRemaining.length > 0) {
+        const first = groupRemaining[0];
+        return next.map((img) => (img === first ? { ...img, isPrimary: true } : img));
       }
       return next.map((img, idx) => ({ ...img, position: idx }));
     });
@@ -288,33 +307,64 @@ export function ProductForm({
     );
   }
 
-  function setPrimaryImage(index: number) {
-    setImages((prev) =>
-      prev.map((img, i) => ({ ...img, isPrimary: i === index }))
-    );
+  function setPrimaryImageInGroup(index: number) {
+    setImages((prev) => {
+      const target = prev[index];
+      if (!target) return prev;
+      const targetGroup = target.color?.trim().toLowerCase() || "";
+      return prev.map((img, i) => {
+        const imgGroup = img.color?.trim().toLowerCase() || "";
+        if (imgGroup === targetGroup) {
+          return { ...img, isPrimary: i === index };
+        }
+        return img;
+      });
+    });
   }
 
   function handleImageColorChange(index: number, newColor: string) {
-    setImages((prev) =>
-      prev.map((img, i) => {
+    setImages((prev) => {
+      const target = prev[index];
+      if (!target) return prev;
+      const norm = newColor.trim();
+
+      const targetGroupHasPrimary = prev.some(
+        (img, i) =>
+          i !== index &&
+          (img.color?.trim().toLowerCase() || "") === norm.toLowerCase() &&
+          img.isPrimary
+      );
+
+      const oldColor = target.color?.trim() || "";
+      let updatedAlt = target.altText;
+      if (name.trim()) {
+        const oldDefault = oldColor ? `${name.trim()} ${oldColor}` : name.trim();
+        if (!target.altText || target.altText === oldDefault) {
+          updatedAlt = norm ? `${name.trim()} ${norm}` : name.trim();
+        }
+      }
+
+      const updated = prev.map((img, i) => {
         if (i !== index) return img;
-        const prevColorLabel = img.color || "All Colors";
-        const isAutoAlt =
-          !img.altText ||
-          img.altText.trim() === "" ||
-          img.altText.includes(prevColorLabel);
-
-        const updatedAlt = isAutoAlt
-          ? `${name.trim() || "Product"} - ${newColor || "All Colors"}`
-          : img.altText;
-
         return {
           ...img,
-          color: newColor,
+          color: norm,
           altText: updatedAlt,
+          isPrimary: !targetGroupHasPrimary,
         };
-      })
-    );
+      });
+
+      const oldGroupKey = oldColor.toLowerCase();
+      const oldGroupRemaining = updated.filter(
+        (img) => (img.color?.trim().toLowerCase() || "") === oldGroupKey
+      );
+      if (oldGroupRemaining.length > 0 && !oldGroupRemaining.some((img) => img.isPrimary)) {
+        const first = oldGroupRemaining[0];
+        return updated.map((img) => (img === first ? { ...img, isPrimary: true } : img));
+      }
+
+      return updated;
+    });
   }
 
   function handleImageDrop(targetIndex: number) {
@@ -330,7 +380,7 @@ export function ProductForm({
   }
 
   // ── Multi-file Parallel Upload (Max 3 concurrent) with compression ──
-  async function handleBatchFileUpload(selectedFiles: FileList | File[]) {
+  async function handleBatchFileUpload(selectedFiles: FileList | File[], targetColor?: string) {
     const validFiles = Array.from(selectedFiles).filter((f) =>
       f.type.startsWith("image/")
     );
@@ -391,13 +441,20 @@ export function ProductForm({
           );
 
           setImages((prev) => {
-            const hasPrimary = prev.some((img) => img.isPrimary && img.url);
-            const defaultAlt = name.trim() ? `${name.trim()} - All Colors` : "Product image";
+            const normColor = targetColor ? targetColor.trim() : "";
+            const existingInGroup = prev.filter(
+              (img) => (img.color?.trim().toLowerCase() || "") === normColor.toLowerCase()
+            );
+            const hasPrimaryInGroup = existingInGroup.some((img) => img.isPrimary);
+            const defaultAlt = name.trim()
+              ? (normColor ? `${name.trim()} ${normColor}` : `${name.trim()}`)
+              : (normColor ? `Product ${normColor}` : "Product image");
+
             const newImg: ImageField = {
               url: data.url,
               altText: defaultAlt,
-              color: "",
-              isPrimary: !hasPrimary, // First uploaded image becomes primary
+              color: normColor,
+              isPrimary: !hasPrimaryInGroup, // First uploaded image in group becomes primary
               position: prev.length,
             };
             return [...prev, newImg];
@@ -432,8 +489,77 @@ export function ProductForm({
     setColorInput("");
   }
 
-  function removeColorChip(colorToRemove: string) {
-    setGeneratorColors((prev) => prev.filter((c) => c !== colorToRemove));
+  function removeColorChip(colorToRemoveItem: string) {
+    const matchingImages = images.filter(
+      (img) => (img.color?.trim().toLowerCase() || "") === colorToRemoveItem.trim().toLowerCase()
+    );
+    if (matchingImages.length > 0) {
+      setColorToRemove({ color: colorToRemoveItem, count: matchingImages.length });
+      setShowColorRemovalDialog(true);
+      return;
+    }
+    setGeneratorColors((prev) => prev.filter((c) => c !== colorToRemoveItem));
+  }
+
+  function handleMoveColorImagesToShared() {
+    if (!colorToRemove) return;
+    const norm = colorToRemove.color.trim().toLowerCase();
+    setImages((prev) =>
+      prev.map((img) =>
+        (img.color?.trim().toLowerCase() || "") === norm ? { ...img, color: "" } : img
+      )
+    );
+    setGeneratorColors((prev) => prev.filter((c) => c !== colorToRemove.color));
+    setShowColorRemovalDialog(false);
+    setColorToRemove(null);
+  }
+
+  function handleDeleteColorImages() {
+    if (!colorToRemove) return;
+    const norm = colorToRemove.color.trim().toLowerCase();
+    setImages((prev) =>
+      prev.filter((img) => (img.color?.trim().toLowerCase() || "") !== norm)
+    );
+    setGeneratorColors((prev) => prev.filter((c) => c !== colorToRemove.color));
+    setShowColorRemovalDialog(false);
+    setColorToRemove(null);
+  }
+
+  function handleRenameColor() {
+    if (!renamingColor) return;
+    const { oldName, newName } = renamingColor;
+    const trimmedNew = newName.trim();
+    if (!trimmedNew || trimmedNew.toLowerCase() === oldName.toLowerCase()) {
+      setRenamingColor(null);
+      return;
+    }
+
+    setGeneratorColors((prev) =>
+      prev.map((c) => (c.toLowerCase() === oldName.toLowerCase() ? trimmedNew : c))
+    );
+    setVariants((prev) =>
+      prev.map((v) =>
+        v.color.toLowerCase() === oldName.toLowerCase() ? { ...v, color: trimmedNew } : v
+      )
+    );
+    setImages((prev) =>
+      prev.map((img) => {
+        if ((img.color?.trim().toLowerCase() || "") === oldName.toLowerCase()) {
+          const oldDefault = name.trim() ? `${name.trim()} ${oldName}` : `Product ${oldName}`;
+          const newDefault = name.trim() ? `${name.trim()} ${trimmedNew}` : `Product ${trimmedNew}`;
+          return {
+            ...img,
+            color: trimmedNew,
+            altText:
+              !img.altText || img.altText === oldDefault
+                ? newDefault
+                : img.altText.replace(new RegExp(oldName, "gi"), trimmedNew),
+          };
+        }
+        return img;
+      })
+    );
+    setRenamingColor(null);
   }
 
   function handleColorKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -442,6 +568,7 @@ export function ProductForm({
       addColorChip();
     }
   }
+
 
   function toggleSizeChip(sz: string) {
     const trimmed = sz.trim();
@@ -883,25 +1010,22 @@ export function ProductForm({
 
           {/* Missing color images warning banner */}
           {(() => {
-            const variantColors = Array.from(
-              new Set(variants.map((v) => v.color?.trim()).filter((c): c is string => Boolean(c)))
-            );
             const colorsWithPhotos = new Set(
               images
                 .filter((img) => img.url && img.color)
                 .map((img) => img.color!.trim().toLowerCase())
             );
-            const colorsWithoutPhotos = variantColors.filter(
+            const colorsWithoutPhotos = availableColors.filter(
               (c) => !colorsWithPhotos.has(c.toLowerCase())
             );
 
-            if (colorsWithoutPhotos.length > 0 && images.some((img) => img.url)) {
+            if (colorsWithoutPhotos.length > 0 && availableColors.length > 0) {
               return (
-                <div className="mb-4 flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900">
+                <div className="mb-6 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-900 shadow-2xs">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                   <div className="flex-1 leading-relaxed">
-                    <span className="font-semibold">Notice:</span> Some variant colors do not have color-specific images assigned:{" "}
-                    <strong>{colorsWithoutPhotos.join(", ")}</strong>. (Storefront will show shared "All Colors" images as fallback).
+                    <span className="font-semibold">Notice:</span> Some colors have no dedicated images assigned:{" "}
+                    <strong>{colorsWithoutPhotos.join(", ")}</strong>. (Storefront will show shared &quot;All Colors&quot; images as fallback).
                   </div>
                 </div>
               );
@@ -909,57 +1033,10 @@ export function ProductForm({
             return null;
           })()}
 
-          {/* ── Multi-File Drag-and-Drop Dropzone ── */}
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDraggingOverDropzone(true);
-            }}
-            onDragLeave={() => setIsDraggingOverDropzone(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDraggingOverDropzone(false);
-              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                handleBatchFileUpload(e.dataTransfer.files);
-              }
-            }}
-            onClick={() => multiFileInputRef.current?.click()}
-            className={`mb-5 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-all cursor-pointer ${
-              isDraggingOverDropzone
-                ? "border-[#89B4D9] bg-[#89B4D9]/15 scale-[1.005]"
-                : "border-[#1E2A38]/15 bg-[var(--color-cream-alt)]/60 hover:border-[#89B4D9]/60 hover:bg-[var(--color-cream-alt)]"
-            }`}
-          >
-            <input
-              ref={multiFileInputRef}
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  handleBatchFileUpload(e.target.files);
-                  e.target.value = "";
-                }
-              }}
-            />
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1E2A38]/5 text-[#1E2A38]/70">
-              <Upload className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[#1E2A38]">
-                Drag & drop photos here, or <span className="text-[#89B4D9] underline">browse files</span>
-              </p>
-              <p className="mt-0.5 text-xs text-[#1E2A38]/45">
-                Select multiple images · Automatic client-side compression · Uploads up to 3 in parallel
-              </p>
-            </div>
-          </div>
-
-          {/* ── Upload Tasks Progress List ── */}
+          {/* ── Global Upload Tasks Progress List ── */}
           {uploadTasks.length > 0 && (
-            <div className="mb-4 rounded-md border border-[#1E2A38]/10 bg-[var(--color-cream-alt)] p-3">
-              <div className="flex items-center justify-between mb-2">
+            <div className="mb-6 rounded-lg border border-[#1E2A38]/10 bg-[var(--color-cream-alt)] p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between mb-2.5">
                 <span className="text-xs font-semibold text-[#1E2A38]">
                   Uploading {uploadTasks.filter((t) => t.status === "uploading" || t.status === "compressing").length} / {uploadTasks.length} photos
                 </span>
@@ -967,9 +1044,9 @@ export function ProductForm({
                   <button
                     type="button"
                     onClick={() => setUploadTasks([])}
-                    className="text-[11px] font-semibold text-[#1E2A38]/60 hover:text-[#1E2A38]"
+                    className="text-[11px] font-semibold text-[#1E2A38]/60 hover:text-[#1E2A38] transition"
                   >
-                    Clear history
+                    Clear upload history
                   </button>
                 )}
               </div>
@@ -977,13 +1054,13 @@ export function ProductForm({
                 {uploadTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="flex items-center justify-between gap-2 rounded bg-white/70 px-2.5 py-1.5 text-xs border border-[#1E2A38]/05"
+                    className="flex items-center justify-between gap-2 rounded bg-white/80 px-2.5 py-1.5 text-xs border border-[#1E2A38]/08"
                   >
-                    <span className="truncate max-w-[130px] font-medium text-[#1E2A38]">
+                    <span className="truncate max-w-[140px] font-medium text-[#1E2A38]">
                       {task.name}
                     </span>
                     <span
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
                         task.status === "done"
                           ? "bg-emerald-100 text-emerald-800"
                           : task.status === "error"
@@ -1007,141 +1084,292 @@ export function ProductForm({
             </div>
           )}
 
-          {/* ── Image Cards Grid (Drag & Drop Reordering, Primary toggle, Color selector, Alt text) ── */}
-          {images.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {images.map((img, i) => {
-                const variantColors = Array.from(
-                  new Set(variants.map((v) => v.color?.trim()).filter((c): c is string => Boolean(c)))
+          {/* ── Color-Grouped Image Sections ── */}
+          <div className="space-y-8">
+            {(() => {
+              const groups = availableColors.length > 0
+                ? [
+                    ...availableColors.map((color) => ({
+                      key: color,
+                      title: `Color: ${color}`,
+                      colorBadge: color,
+                      isShared: false,
+                    })),
+                    {
+                      key: "",
+                      title: "Shared Images (All Colors)",
+                      colorBadge: null,
+                      isShared: true,
+                    },
+                  ]
+                : [
+                    {
+                      key: "",
+                      title: "Product Images (All Colors)",
+                      colorBadge: null,
+                      isShared: true,
+                    },
+                  ];
+
+              return groups.map((group) => {
+                const groupKeyNorm = group.key.trim().toLowerCase();
+                const groupImages = images.filter((img) =>
+                  group.isShared
+                    ? !img.color || img.color.trim() === ""
+                    : (img.color?.trim().toLowerCase() || "") === groupKeyNorm
                 );
-                const isDraggingThis = draggedImageIndex === i;
-                const isDragOverThis = dragOverImageIndex === i;
+
+                const hasPrimary = groupImages.some((img) => img.isPrimary);
+                const isDragOver = dragOverDropzoneColor === (group.key || "__shared__");
 
                 return (
                   <div
-                    key={img.id || img.url + i}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("text/plain", String(i));
-                      setDraggedImageIndex(i);
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOverImageIndex(i);
-                    }}
-                    onDragLeave={() => {
-                      if (dragOverImageIndex === i) setDragOverImageIndex(null);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleImageDrop(i);
-                    }}
-                    onDragEnd={() => {
-                      setDraggedImageIndex(null);
-                      setDragOverImageIndex(null);
-                    }}
-                    className={`group relative flex flex-col rounded-lg border bg-[var(--color-cream-alt)] p-2.5 transition-all shadow-2xs ${
-                      isDraggingThis
-                        ? "opacity-35 scale-95 border-dashed border-[#1E2A38]/40"
-                        : isDragOverThis
-                        ? "border-[#89B4D9] ring-2 ring-[#89B4D9]/40 scale-[1.02]"
-                        : "border-[#1E2A38]/12 hover:border-[#1E2A38]/30"
-                    }`}
+                    key={group.key || "__shared__"}
+                    className="rounded-xl border border-[#1E2A38]/12 bg-[var(--color-cream-alt)] p-4 sm:p-5 shadow-2xs space-y-4"
                   >
-                    {/* Top action row */}
-                    <div className="flex items-center justify-between pb-2">
-                      <div className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing text-[#1E2A38]/40 hover:text-[#1E2A38]">
-                        <GripVertical className="h-4 w-4" />
-                        <span className="text-[11px] font-semibold">#{i + 1}</span>
+                    {/* Group Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E2A38]/08 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        {group.colorBadge ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-[#1E2A38] text-white">
+                            <Layers className="h-3.5 w-3.5 text-[#89B4D9]" />
+                            {group.colorBadge}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-[#1E2A38]/10 text-[#1E2A38]">
+                            <ImageIcon className="h-3.5 w-3.5 text-[#1E2A38]/70" />
+                            {availableColors.length > 0 ? "Shared (All Colors)" : "Product Images"}
+                          </span>
+                        )}
+                        <span className="text-xs text-[#1E2A38]/60">
+                          {groupImages.length} {groupImages.length === 1 ? "image" : "images"}
+                        </span>
                       </div>
 
-                      {/* Primary Toggle Button */}
-                      <button
-                        type="button"
-                        onClick={() => setPrimaryImage(i)}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${
-                          img.isPrimary
-                            ? "bg-[#1E2A38] text-white shadow-2xs"
-                            : "bg-black/5 hover:bg-[#1E2A38]/10 text-[#1E2A38]/70"
-                        }`}
-                        title={img.isPrimary ? "Primary storefront image" : "Set as primary storefront image"}
-                      >
-                        <Star className={`h-2.5 w-2.5 ${img.isPrimary ? "fill-white text-white" : ""}`} />
-                        <span>{img.isPrimary ? "Primary" : "Set Primary"}</span>
-                      </button>
-
-                      {/* Delete Image Button */}
-                      <button
-                        type="button"
-                        onClick={() => removeImage(i)}
-                        className="rounded p-1 text-[#1E2A38]/40 hover:bg-rose-50 hover:text-rose-600 transition"
-                        title="Delete image"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-
-                    {/* Image Preview Box */}
-                    <div className="relative aspect-square w-full overflow-hidden rounded-md border border-[#1E2A38]/10 bg-black/5">
-                      <img
-                        src={img.url}
-                        alt={img.altText || `Product image ${i + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-
-                    {/* Controls: Color dropdown and Alt text */}
-                    <div className="mt-2.5 space-y-2">
-                      {/* Color Dropdown */}
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/60 block mb-0.5">
-                          Assigned Color:
-                        </label>
-                        <select
-                          value={img.color || ""}
-                          onChange={(e) => handleImageColorChange(i, e.target.value)}
-                          className="h-7 w-full rounded border border-[#1E2A38]/15 bg-white px-2 text-xs font-semibold text-[#1E2A38] outline-none transition focus:border-[#89B4D9]"
-                        >
-                          <option value="">All Colors (Shared)</option>
-                          {variantColors.map((color) => (
-                            <option key={color} value={color}>
-                              {color}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Alt Text Input */}
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <label className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/60">
-                            Alt text:
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const auto = `${name.trim() || "Product"} - ${img.color || "All Colors"}`;
-                              updateImage(i, "altText", auto);
-                            }}
-                            className="text-[9px] text-[#89B4D9] hover:underline"
-                          >
-                            Auto
-                          </button>
+                      {groupImages.length > 0 && (
+                        <div className="flex items-center gap-2 text-[11px]">
+                          {hasPrimary ? (
+                            <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              <Star className="h-3 w-3 fill-emerald-600 text-emerald-600" />
+                              Primary image set
+                            </span>
+                          ) : (
+                            <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              No primary selected
+                            </span>
+                          )}
                         </div>
-                        <input
-                          type="text"
-                          value={img.altText}
-                          onChange={(e) => updateImage(i, "altText", e.target.value)}
-                          placeholder="e.g. Air Zoom - Black side view"
-                          className="h-7 w-full rounded border border-[#1E2A38]/15 bg-white px-2 text-[11px] text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9]"
-                        />
-                      </div>
+                      )}
                     </div>
+
+                    {/* Warning if a specific color group has no images */}
+                    {!group.isShared && groupImages.length === 0 && (
+                      <div className="flex items-center gap-2 rounded-md bg-amber-50/70 border border-amber-200/80 px-3 py-2 text-xs text-amber-800">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                        <span>
+                          No images uploaded for <strong>{group.colorBadge}</strong> yet. (Storefront will fall back to shared images).
+                        </span>
+                      </div>
+                    )}
+
+                    {/* ── Dropzone for this Group ── */}
+                    <div>
+                      <input
+                        id={`file-input-${group.key || "shared"}`}
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            handleBatchFileUpload(e.target.files, group.key);
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`file-input-${group.key || "shared"}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverDropzoneColor(group.key || "__shared__");
+                        }}
+                        onDragLeave={() => setDragOverDropzoneColor(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDragOverDropzoneColor(null);
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            handleBatchFileUpload(e.dataTransfer.files, group.key);
+                          }
+                        }}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed p-4 text-center transition-all cursor-pointer ${
+                          isDragOver
+                            ? "border-[#89B4D9] bg-[#89B4D9]/15 scale-[1.005]"
+                            : "border-[#1E2A38]/15 bg-[var(--color-cream)]/70 hover:border-[#89B4D9]/70 hover:bg-[var(--color-cream)]"
+                        }`}
+                      >
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1E2A38]/06 text-[#1E2A38]/70">
+                          <Upload className="h-4 w-4" />
+                        </div>
+                        <p className="text-xs font-semibold text-[#1E2A38]">
+                          Drop photos for <span className="underline text-[#89B4D9]">{group.title}</span> here, or browse files
+                        </p>
+                        <p className="text-[11px] text-[#1E2A38]/45">
+                          Multi-file upload (max 3 parallel) · Client compression · Automatically tagged as &quot;{group.key || "Shared"}&quot;
+                        </p>
+                      </label>
+                    </div>
+
+                    {/* ── Cards Grid for this Group ── */}
+                    {groupImages.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 pt-1">
+                        {groupImages.map((img, groupIdx) => {
+                          const globalIdx = images.indexOf(img);
+                          const isDraggingThis = draggedImageIndex === globalIdx;
+                          const isDragOverThis = dragOverImageIndex === globalIdx;
+
+                          return (
+                            <div
+                              key={img.id || img.url + globalIdx}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", String(globalIdx));
+                                setDraggedImageIndex(globalIdx);
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                setDragOverImageIndex(globalIdx);
+                              }}
+                              onDragLeave={() => {
+                                if (dragOverImageIndex === globalIdx) setDragOverImageIndex(null);
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                handleImageDrop(globalIdx);
+                              }}
+                              onDragEnd={() => {
+                                setDraggedImageIndex(null);
+                                setDragOverImageIndex(null);
+                              }}
+                              className={`group relative flex flex-col rounded-lg border bg-[var(--color-cream)] p-2.5 transition-all shadow-2xs ${
+                                isDraggingThis
+                                  ? "opacity-35 scale-95 border-dashed border-[#1E2A38]/40"
+                                  : isDragOverThis
+                                  ? "border-[#89B4D9] ring-2 ring-[#89B4D9]/40 scale-[1.02]"
+                                  : "border-[#1E2A38]/12 hover:border-[#1E2A38]/30"
+                              }`}
+                            >
+                              {/* Top action row */}
+                              <div className="flex items-center justify-between pb-2">
+                                <div
+                                  className="flex items-center gap-1 cursor-grab active:cursor-grabbing text-[#1E2A38]/40 hover:text-[#1E2A38]"
+                                  title="Drag card to reorder position"
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                  <span className="text-[11px] font-semibold">#{groupIdx + 1}</span>
+                                </div>
+
+                                {/* Primary Toggle Button (One primary per color group) */}
+                                <button
+                                  type="button"
+                                  onClick={() => setPrimaryImageInGroup(globalIdx)}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                    img.isPrimary
+                                      ? "bg-[#1E2A38] text-white shadow-2xs"
+                                      : "bg-black/5 hover:bg-[#1E2A38]/10 text-[#1E2A38]/70"
+                                  }`}
+                                  title={
+                                    img.isPrimary
+                                      ? `Primary image for ${group.key || "all colors"}`
+                                      : `Set as primary image for ${group.key || "all colors"}`
+                                  }
+                                >
+                                  <Star
+                                    className={`h-2.5 w-2.5 ${
+                                      img.isPrimary ? "fill-white text-white" : ""
+                                    }`}
+                                  />
+                                  <span>{img.isPrimary ? "Primary" : "Set Primary"}</span>
+                                </button>
+
+                                {/* Delete Image Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => removeImage(globalIdx)}
+                                  className="rounded p-1 text-[#1E2A38]/40 hover:bg-rose-50 hover:text-rose-600 transition"
+                                  title="Delete image"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+
+                              {/* Image Preview Box */}
+                              <div className="relative aspect-square w-full overflow-hidden rounded-md border border-[#1E2A38]/10 bg-black/5">
+                                <img
+                                  src={img.url}
+                                  alt={img.altText || `Product image ${globalIdx + 1}`}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+
+                              {/* Controls: Move to group dropdown and Alt text */}
+                              <div className="mt-2.5 space-y-2">
+                                {/* Move to Color Group Dropdown */}
+                                <div>
+                                  <label className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/60 block mb-0.5">
+                                    Move to group:
+                                  </label>
+                                  <select
+                                    value={img.color || ""}
+                                    onChange={(e) => handleImageColorChange(globalIdx, e.target.value)}
+                                    className="h-7 w-full rounded border border-[#1E2A38]/15 bg-[var(--color-cream-alt)] px-2 text-xs font-semibold text-[#1E2A38] outline-none transition focus:border-[#89B4D9] cursor-pointer"
+                                  >
+                                    <option value="">Shared Images (All Colors)</option>
+                                    {availableColors.map((col) => (
+                                      <option key={col} value={col}>
+                                        {col}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Alt Text Input (defaulting to '<product name> <color>') */}
+                                <div>
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-[#1E2A38]/60">
+                                      Alt text:
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const auto = name.trim()
+                                          ? (group.key ? `${name.trim()} ${group.key}` : name.trim())
+                                          : (group.key ? `Product ${group.key}` : "Product image");
+                                        updateImage(globalIdx, "altText", auto);
+                                      }}
+                                      className="text-[9px] text-[#89B4D9] hover:underline"
+                                    >
+                                      Reset Auto
+                                    </button>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    value={img.altText}
+                                    onChange={(e) => updateImage(globalIdx, "altText", e.target.value)}
+                                    placeholder="e.g. Nike Air Max - Red"
+                                    className="h-7 w-full rounded border border-[#1E2A38]/15 bg-[var(--color-cream-alt)] px-2 text-[11px] text-[#1E2A38] placeholder:text-[#1E2A38]/35 outline-none transition focus:border-[#89B4D9]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
-              })}
-            </div>
-          )}
+              });
+            })()}
+          </div>
 
           {errors.images && <FieldError msg={errors.images} />}
         </section>
@@ -1200,14 +1428,24 @@ export function ProductForm({
                 {generatorColors.map((color) => (
                   <span
                     key={color}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-[#1E2A38]/08 text-[#1E2A38]"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-[#1E2A38]/08 text-[#1E2A38]"
                   >
-                    {color}
+                    <span>{color}</span>
+                    <button
+                      type="button"
+                      onClick={() => setRenamingColor({ oldName: color, newName: color })}
+                      className="text-[#1E2A38]/40 hover:text-[#89B4D9] transition p-0.5 rounded"
+                      aria-label={`Rename color ${color}`}
+                      title="Rename color"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => removeColorChip(color)}
-                      className="text-[#1E2A38]/50 hover:text-rose-600 transition"
+                      className="text-[#1E2A38]/40 hover:text-rose-600 transition p-0.5 rounded"
                       aria-label={`Remove color ${color}`}
+                      title="Remove color"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1615,7 +1853,113 @@ export function ProductForm({
   </div>
 </div>
 
-{/* ── Delete Confirmation Dialog ── */}
+        {/* ── Color Removal Confirmation Dialog ── */}
+        <Dialog open={showColorRemovalDialog} onOpenChange={setShowColorRemovalDialog}>
+          <DialogContent className="max-w-[440px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[var(--color-cream)] p-0 shadow-lg">
+            <div className="px-6 pt-6 pb-4">
+              <DialogHeader className="space-y-2 text-left">
+                <DialogTitle className="font-[family-name:var(--font-display)] text-[20px] font-semibold tracking-tight text-[#1E2A38]">
+                  Remove color &quot;{colorToRemove?.color}&quot;?
+                </DialogTitle>
+                <DialogDescription className="text-[13px] leading-relaxed text-[#1E2A38]/70">
+                  There {colorToRemove?.count === 1 ? "is" : "are"} currently{" "}
+                  <span className="font-semibold text-[#1E2A38]">{colorToRemove?.count}</span> image{colorToRemove?.count === 1 ? "" : "s"} assigned to this color.
+                  What would you like to do with these images?
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-[#1E2A38]/10 bg-[var(--color-cream-alt)] px-6 py-4">
+              <Button
+                type="button"
+                onClick={handleMoveColorImagesToShared}
+                className="w-full bg-[#1E2A38] text-[var(--color-cream)] hover:bg-[#89B4D9] hover:text-[#1E2A38] text-xs h-9 cursor-pointer"
+              >
+                Move images to &quot;Shared Images&quot;
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDeleteColorImages}
+                className="w-full bg-rose-600 text-white hover:bg-rose-700 text-xs h-9 cursor-pointer"
+              >
+                Delete these images
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowColorRemovalDialog(false);
+                  setColorToRemove(null);
+                }}
+                className="mt-1 text-center text-xs text-[#1E2A38]/60 hover:text-[#1E2A38] cursor-pointer"
+              >
+                Cancel (keep color)
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Color Rename Dialog ── */}
+        <Dialog open={!!renamingColor} onOpenChange={(open) => !open && setRenamingColor(null)}>
+          <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[var(--color-cream)] p-0 shadow-lg">
+            <div className="px-6 pt-6 pb-4">
+              <DialogHeader className="space-y-2 text-left">
+                <DialogTitle className="font-[family-name:var(--font-display)] text-[20px] font-semibold tracking-tight text-[#1E2A38]">
+                  Rename color &quot;{renamingColor?.oldName}&quot;
+                </DialogTitle>
+                <DialogDescription className="text-[13px] leading-relaxed text-[#1E2A38]/70">
+                  This will update all variants and images assigned to &quot;{renamingColor?.oldName}&quot;.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-4">
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-[#1E2A38]/70">
+                  New Color Name
+                </label>
+                <Input
+                  value={renamingColor?.newName || ""}
+                  onChange={(e) =>
+                    setRenamingColor((prev) =>
+                      prev ? { ...prev, newName: e.target.value } : null
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleRenameColor();
+                    }
+                  }}
+                  placeholder="e.g. Royal Blue"
+                  className="h-10 w-full rounded-md border border-[#1E2A38]/15 bg-[var(--color-cream-alt)] px-3 text-sm text-[#1E2A38]"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-[#1E2A38]/10 bg-[var(--color-cream-alt)] px-6 py-3.5">
+              <button
+                type="button"
+                onClick={() => setRenamingColor(null)}
+                className="h-9 rounded-md px-4 text-[13px] font-medium text-[#1E2A38]/60 transition hover:text-[#1E2A38] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <Button
+                type="button"
+                onClick={handleRenameColor}
+                disabled={
+                  !renamingColor?.newName.trim() ||
+                  renamingColor.newName.trim().toLowerCase() === renamingColor.oldName.toLowerCase()
+                }
+                className="h-9 rounded-md bg-[#1E2A38] text-[var(--color-cream)] hover:bg-[#89B4D9] hover:text-[#1E2A38] text-xs font-semibold cursor-pointer"
+              >
+                Update Color
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Delete Confirmation Dialog ── */}
 {isEditMode && (
   <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
     <DialogContent className="max-w-[400px] gap-0 overflow-hidden rounded-lg border border-[#1E2A38]/10 bg-[var(--color-cream)] p-0 shadow-lg">

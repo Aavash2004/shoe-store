@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { createProductSchema, type CreateProductInput } from "@/lib/validations/product";
 import { resolveAutoSkuCollisionAsync } from "@/lib/utils/variant-generator";
+import { normalizePrimaryPerColor } from "@/lib/utils/gallery";
 
 export async function createProduct(data: CreateProductInput) {
   await requireAdmin();
@@ -113,26 +114,16 @@ export async function createProduct(data: CreateProductInput) {
     });
   }
 
-  // 3.5. Normalize images: enforce exactly one primary image and clean color/position
-  let primaryFound = false;
-  const normalizedImages = images.map((img, idx) => {
-    let isPrimary = false;
-    if (img.isPrimary && !primaryFound) {
-      isPrimary = true;
-      primaryFound = true;
-    }
-    return {
-      url: img.url.trim(),
-      altText: img.altText?.trim() || null,
-      color: img.color?.trim() || null,
-      position: typeof img.position === "number" ? img.position : idx,
-      isPrimary,
-    };
-  });
+  // 3.5. Normalize images: enforce one primary image per color group (and one for shared)
+  const preparedImages = images.map((img, idx) => ({
+    url: img.url.trim(),
+    altText: img.altText?.trim() || null,
+    color: img.color?.trim() || null,
+    position: typeof img.position === "number" ? img.position : idx,
+    isPrimary: Boolean(img.isPrimary),
+  }));
 
-  if (!primaryFound && normalizedImages.length > 0) {
-    normalizedImages[0].isPrimary = true;
-  }
+  const normalizedImages = normalizePrimaryPerColor(preparedImages);
 
   // 4. Create product and variants wrapped in try/catch for P2002
   try {

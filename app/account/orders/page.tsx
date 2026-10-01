@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Search, ShoppingBag, ArrowRight, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/constants/currencies";
+import { getImagesForColor } from "@/lib/utils/gallery";
 
 interface OrderItemData {
   id: string;
@@ -15,10 +16,11 @@ interface OrderItemData {
   quantity: number;
   variant?: {
     product?: {
-      images?: { url: string }[];
+      images?: { url: string; color?: string | null; isPrimary?: boolean; position?: number }[];
     };
   };
 }
+
 
 interface OrderData {
   id: string;
@@ -210,7 +212,12 @@ export default function CustomerOrdersPage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
                     {order.items.map((item) => {
+                      const matching = getImagesForColor(
+                        item.variant?.product?.images || [],
+                        item.color
+                      );
                       const imgUrl =
+                        matching[0]?.url ||
                         item.variant?.product?.images?.[0]?.url ||
                         "/images/Shoes/gmm.jpeg";
                       return (

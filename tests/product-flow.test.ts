@@ -4,7 +4,12 @@ import {
   generateVariantMatrix,
   resolveAutoSkuSuffix,
 } from "../lib/utils/variant-generator";
-import { filterGalleryImages } from "../lib/utils/gallery";
+import {
+  filterGalleryImages,
+  getImagesForColor,
+  getPrimaryImageForColor,
+  normalizePrimaryPerColor,
+} from "../lib/utils/gallery";
 
 async function runProductFlowTests() {
   console.log("=== Running Add New Product Flow Tests ===\n");
@@ -285,48 +290,96 @@ async function runProductFlowTests() {
     "Fallback to all images when the selected color has no dedicated images"
   );
 
-  // 12. Exactly one primary image enforcement
-  function normalizePrimaryImages(imgs: { url: string; isPrimary: boolean; position: number }[]) {
-    let primaryFound = false;
-    const res = imgs.map((img, idx) => {
-      let isPrimary = false;
-      if (img.isPrimary && !primaryFound) {
-        isPrimary = true;
-        primaryFound = true;
-      }
-      return { ...img, isPrimary, position: idx };
-    });
-    if (!primaryFound && res.length > 0) {
-      res[0].isPrimary = true;
-    }
-    return res;
-  }
-  const multiPrimary = [
-    { url: "/1.jpg", isPrimary: true, position: 0 },
-    { url: "/2.jpg", isPrimary: true, position: 1 },
+  // 12. One primary per color enforcement
+  const multiColorImages = [
+    { url: "/shared-1.jpg", color: null, isPrimary: true, position: 0 },
+    { url: "/shared-2.jpg", color: null, isPrimary: true, position: 1 }, // extra primary in shared
+    { url: "/red-1.jpg", color: "Red", isPrimary: false, position: 2 },
+    { url: "/red-2.jpg", color: "Red", isPrimary: false, position: 3 }, // no primary in red
+    { url: "/blue-1.jpg", color: "Blue", isPrimary: true, position: 4 },
+    { url: "/blue-2.jpg", color: "Blue", isPrimary: true, position: 5 }, // extra primary in blue
   ];
-  const normalizedMulti = normalizePrimaryImages(multiPrimary);
+  const normalizedByColor = normalizePrimaryPerColor(multiColorImages);
+  const sharedPrimaries = normalizedByColor.filter((img) => !img.color && img.isPrimary);
+  const redPrimaries = normalizedByColor.filter((img) => img.color === "Red" && img.isPrimary);
+  const bluePrimaries = normalizedByColor.filter((img) => img.color === "Blue" && img.isPrimary);
+
   assert(
-    normalizedMulti.filter((img) => img.isPrimary).length === 1 && normalizedMulti[0].isPrimary === true,
-    "Enforces exactly one primary image when multiple images are marked as primary"
+    sharedPrimaries.length === 1 &&
+      redPrimaries.length === 1 &&
+      bluePrimaries.length === 1,
+    "Enforces exactly one primary per color (and one primary for shared images)"
   );
-  const zeroPrimary = [
-    { url: "/1.jpg", isPrimary: false, position: 0 },
-    { url: "/2.jpg", isPrimary: false, position: 1 },
-  ];
-  const normalizedZero = normalizePrimaryImages(zeroPrimary);
   assert(
-    normalizedZero.filter((img) => img.isPrimary).length === 1 && normalizedZero[0].isPrimary === true,
-    "Enforces exactly one primary image (first image becomes primary) when none are marked"
+    redPrimaries[0].url === "/red-1.jpg",
+    "First image in color group becomes primary if none were marked"
   );
 
-  // 13. Reorder persists correctly with position indexes
+  // 13. Color rename moves images
+  function renameColorInImages(
+    imgs: { url: string; color: string | null; altText?: string }[],
+    oldColor: string,
+    newColor: string
+  ) {
+    const normOld = oldColor.trim().toLowerCase();
+    const normNew = newColor.trim();
+    return imgs.map((img) => {
+      if ((img.color?.trim().toLowerCase() || "") === normOld) {
+        return {
+          ...img,
+          color: normNew,
+          altText: img.altText?.replace(new RegExp(oldColor, "gi"), normNew),
+        };
+      }
+      return img;
+    });
+  }
+
+  const imagesBeforeRename = [
+    { url: "/img/red-1.jpg", color: "Red", altText: "Shoe Red" },
+    { url: "/img/blue-1.jpg", color: "Blue", altText: "Shoe Blue" },
+    { url: "/img/shared.jpg", color: null, altText: "Shoe Shared" },
+  ];
+  const imagesAfterRename = renameColorInImages(imagesBeforeRename, "Red", "Crimson");
+  const crimsonImages = imagesAfterRename.filter((img) => img.color === "Crimson");
+  const oldRedImages = imagesAfterRename.filter((img) => img.color === "Red");
+  assert(
+    crimsonImages.length === 1 &&
+      crimsonImages[0].url === "/img/red-1.jpg" &&
+      crimsonImages[0].altText === "Shoe Crimson" &&
+      oldRedImages.length === 0,
+    "Color rename moves images to the new color and updates alt text"
+  );
+
+  // 14. Cart item uses the matching color image
+  const productGalleryImages = [
+    { url: "/img/default-shared.jpg", color: null, isPrimary: true, position: 0 },
+    { url: "/img/crimson-angle.jpg", color: "Crimson", isPrimary: false, position: 1 },
+    { url: "/img/crimson-hero.jpg", color: "Crimson", isPrimary: true, position: 2 },
+    { url: "/img/emerald-hero.jpg", color: "Emerald", isPrimary: true, position: 3 },
+  ];
+  // Variant with Crimson
+  const crimsonVariant = { color: "Crimson", size: "42" };
+  const crimsonCartImage = getImagesForColor(productGalleryImages, crimsonVariant.color)[0]?.url;
+  assert(
+    crimsonCartImage === "/img/crimson-hero.jpg",
+    "Cart item uses the primary matching color image for the selected variant"
+  );
+
+  // Variant with Yellow (has no dedicated images, should fall back to product primary image)
+  const yellowVariant = { color: "Yellow", size: "42" };
+  const yellowCartImage = getImagesForColor(productGalleryImages, yellowVariant.color)[0]?.url;
+  assert(
+    yellowCartImage === "/img/default-shared.jpg",
+    "Cart item falls back to primary product image when variant color has no dedicated images"
+  );
+
+  // 15. Reorder persists correctly with position indexes
   const initialOrder = [
     { url: "/a.jpg", position: 0 },
     { url: "/b.jpg", position: 1 },
     { url: "/c.jpg", position: 2 },
   ];
-  // Move index 2 (/c.jpg) to index 0
   const reordered = [...initialOrder];
   const [moved] = reordered.splice(2, 1);
   reordered.splice(0, 0, moved);
@@ -341,7 +394,7 @@ async function runProductFlowTests() {
     "Reordered images correctly update and persist position index"
   );
 
-  // 14. Non-admin upload is rejected
+  // 16. Non-admin upload is rejected
   const customerUploadSession = { user: { role: "CUSTOMER", email: "shopper@test.com" } };
   const guestUploadSession = null;
   assert(

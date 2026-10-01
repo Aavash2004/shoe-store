@@ -7,6 +7,7 @@ import { ShopFilters } from "@/components/product/ShopFilters";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
 import { publicProductWhere, publicCategoryWhere } from "@/lib/visibility";
+import { getImagesForColor } from "@/lib/utils/gallery";
 
 export const revalidate = 60;
 
@@ -36,7 +37,6 @@ async function executeShopQueries(whereClause: any, orderBy: any, skip: number, 
           include: {
             category: true,
             images: {
-              take: 1,
               orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
             },
             variants: {
@@ -424,15 +424,18 @@ export default async function ShopPage({
             <>
               <ScrollReveal>
                 <ProductGrid
-                  products={withPrice.map((product) => ({
-                    id: product.id,
-                    name: product.name,
-                    slug: product.slug,
-                    price: product.minPrice,
-                    image: product.images[0]?.url ?? "/images/Shoes/s05.avif",
-                    category: product.category.name,
-                    brand: product.brand ?? "",
-                  }))}
+                  products={withPrice.map((product) => {
+                    const matchingImages = color ? getImagesForColor(product.images, color) : product.images;
+                    return {
+                      id: product.id,
+                      name: product.name,
+                      slug: product.slug,
+                      price: product.minPrice,
+                      image: matchingImages[0]?.url ?? product.images[0]?.url ?? "/images/Shoes/s05.avif",
+                      category: product.category.name,
+                      brand: product.brand ?? "",
+                    };
+                  })}
                 />
               </ScrollReveal>
 

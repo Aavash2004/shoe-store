@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useCartStore } from "@/stores/cart-store";
 import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 import { Button } from "@/components/ui/button";
+import { getImagesForColor } from "@/lib/utils/gallery";
 import { Input } from "@/components/ui/input";
 import {
   Lock,
@@ -178,7 +179,9 @@ export default function CheckoutPage() {
       localPrice,
       productName: isLoggedIn ? i.variant.product.name : i.productName,
       image: isLoggedIn
-        ? i.variant.product.images?.[0]?.url || "/images/Shoes/s05.avif"
+        ? (getImagesForColor(i.variant.product.images || [], i.variant.color)[0]?.url ||
+            i.variant.product.images?.[0]?.url ||
+            "/images/Shoes/s05.avif")
         : i.image || "/images/Shoes/s05.avif",
       size: isLoggedIn ? i.variant.size : i.size,
       color: isLoggedIn ? i.variant.color : i.color,

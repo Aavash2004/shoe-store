@@ -94,3 +94,52 @@ export function filterGalleryImages(
     return (a.position ?? 0) - (b.position ?? 0);
   });
 }
+
+/**
+ * Standard helper to get filtered gallery images for a color.
+ */
+export const getImagesForColor = filterGalleryImages;
+
+/**
+ * Returns the primary image URL for a given color, falling back to shared/product primary image.
+ */
+export function getPrimaryImageForColor(
+  images: (GalleryImageItem | string)[],
+  selectedColor?: string | null
+): string | null {
+  const filtered = filterGalleryImages(images, selectedColor);
+  return filtered[0]?.url || null;
+}
+
+/**
+ * Ensures that each color group (and the shared group) has exactly one primary image.
+ */
+export function normalizePrimaryPerColor<T extends { color?: string | null; isPrimary?: boolean }>(
+  items: T[]
+): T[] {
+  const groups = new Map<string, T[]>();
+
+  for (const item of items) {
+    const key = item.color?.trim().toLowerCase() || "__shared__";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push({ ...item });
+  }
+
+  const result: T[] = [];
+  for (const [, group] of groups) {
+    let primarySet = false;
+    for (const img of group) {
+      if (img.isPrimary && !primarySet) {
+        primarySet = true;
+      } else {
+        img.isPrimary = false;
+      }
+    }
+    if (!primarySet && group.length > 0) {
+      group[0].isPrimary = true;
+    }
+    result.push(...group);
+  }
+
+  return result;
+}

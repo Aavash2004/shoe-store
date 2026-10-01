@@ -22,6 +22,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/button";
 import { debounce, type DebouncedFunction } from "@/lib/utils/debounce";
+import { getImagesForColor } from "@/lib/utils/gallery";
 
 type RecommendedProduct = {
   id: string;
@@ -130,17 +131,20 @@ export function CartDrawer() {
   // Unified items list
   const cartItems = useMemo(() => {
     if (isLoggedIn) {
-      return dbItems.map((item) => ({
-        variantId: item.variant.id,
-        productName: item.variant.product.name,
-        slug: item.variant.product.slug,
-        image: item.variant.product.images?.[0]?.url || "/placeholder-shoe.png",
-        size: item.variant.size,
-        color: item.variant.color,
-        price: Number(item.variant.price) || 0,
-        quantity: item.quantity,
-        stock: item.variant.stock ?? 999,
-      }));
+      return dbItems.map((item) => {
+        const matching = getImagesForColor(item.variant.product.images || [], item.variant.color);
+        return {
+          variantId: item.variant.id,
+          productName: item.variant.product.name,
+          slug: item.variant.product.slug,
+          image: matching[0]?.url || item.variant.product.images?.[0]?.url || "/placeholder-shoe.png",
+          size: item.variant.size,
+          color: item.variant.color,
+          price: Number(item.variant.price) || 0,
+          quantity: item.quantity,
+          stock: item.variant.stock ?? 999,
+        };
+      });
     }
     return localItems.map((item) => ({
       ...item,

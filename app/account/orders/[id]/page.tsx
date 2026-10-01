@@ -14,6 +14,7 @@ import {
   FileText,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/constants/currencies";
+import { getImagesForColor } from "@/lib/utils/gallery";
 import { OrderCustomerActions } from "@/components/account/OrderCustomerActions";
 
 export default async function OrderDetailPage({
@@ -42,7 +43,6 @@ export default async function OrderDetailPage({
               product: {
                 include: {
                   images: {
-                    take: 1,
                     orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
                   },
                 },
@@ -187,7 +187,12 @@ export default async function OrderDetailPage({
 
         <div className="divide-y divide-[var(--color-sand)]/60">
           {order.items.map((item) => {
+            const matching = getImagesForColor(
+              item.variant?.product?.images || [],
+              item.color
+            );
             const imgUrl =
+              matching[0]?.url ||
               item.variant?.product?.images?.[0]?.url ||
               "/images/Shoes/gmm.jpeg";
 
