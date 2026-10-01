@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ShoppingBag, Heart, User, Menu, X, Search, Loader2, ChevronRight } from "lucide-react";
+import { ShoppingBag, Heart, User, Menu, X, Search, Loader2, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore } from "@/stores/cart-store";
@@ -27,24 +27,32 @@ interface SuggestionItem {
   price: number;
 }
 
-interface NavLink {
-  href: Route;
-  label: string;
-  category: string | null;
+interface CategoryNav {
+  id: string;
+  name: string;
+  slug: string;
+  count?: number;
 }
 
-const links: NavLink[] = [
-  { href: "/shop", label: "Shop", category: null },
-  { href: "/shop?category=Running" as Route, label: "Running", category: "Running" },
-  { href: "/shop?category=Lifestyle" as Route, label: "Lifestyle", category: "Lifestyle" },
+const DEFAULT_CATEGORIES: CategoryNav[] = [
+  { id: "running", name: "Running", slug: "running" },
+  { id: "lifestyle", name: "Lifestyle", slug: "lifestyle" },
+  { id: "sport", name: "Sport", slug: "sport" },
 ];
+
 
 function HeaderInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get("category");
+  const activeSort = searchParams.get("sort");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [categories, setCategories] = useState<CategoryNav[]>(DEFAULT_CATEGORIES);
+  const categoriesRef = useRef<HTMLDivElement>(null);
+  const categoriesTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
@@ -54,6 +62,40 @@ function HeaderInner() {
   const [isPending, startTransition] = useTransition();
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
+
+  // Fetch active categories dynamically
+  useEffect(() => {
+    let isCancelled = false;
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isCancelled && Array.isArray(data?.categories) && data.categories.length > 0) {
+          setCategories(
+            data.categories.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              count: c._count?.products ?? 0,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const handleCategoriesEnter = () => {
+    if (categoriesTimeoutRef.current) clearTimeout(categoriesTimeoutRef.current);
+    setCategoriesOpen(true);
+  };
+
+  const handleCategoriesLeave = () => {
+    categoriesTimeoutRef.current = setTimeout(() => {
+      setCategoriesOpen(false);
+    }, 150);
+  };
 
   // Debounce search query changes by 200ms to avoid unnecessary network requests while typing
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
@@ -104,11 +146,14 @@ function HeaderInner() {
     };
   }, [debouncedSearchQuery]);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowDropdown(false);
+      }
+      if (categoriesRef.current && !categoriesRef.current.contains(e.target as Node)) {
+        setCategoriesOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -180,10 +225,11 @@ function HeaderInner() {
 
   const cartCount = isLoggedIn ? dbCount : localCount;
 
-  // Close mobile menu on route change
+  // Close menus on route change
   useEffect(() => {
     setMobileOpen(false);
     setShowDropdown(false);
+    setCategoriesOpen(false);
   }, [pathname, searchParams]);
 
   // Lock body scroll when mobile menu is open
@@ -196,19 +242,16 @@ function HeaderInner() {
 
   // Close on Escape
   useEffect(() => {
-    if (!mobileOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
+      if (e.key === "Escape") {
+        setMobileOpen(false);
+        setShowDropdown(false);
+        setCategoriesOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mobileOpen]);
-
-  const isLinkActive = (link: (typeof links)[number]) => {
-    if (pathname !== "/shop") return false;
-    if (link.category === null) return !activeCategory;
-    return activeCategory === link.category;
-  };
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--color-sand)]/70 bg-[var(--color-cream)]/90 backdrop-blur-md">
@@ -216,7 +259,7 @@ function HeaderInner() {
         {/* Logo */}
         <Link
           href="/"
-          className="group flex items-center gap-2.5 font-[family-name:var(--font-display)] text-xl font-extrabold tracking-wider text-[var(--color-navy)] transition-opacity hover:opacity-90 md:text-2xl"
+          className="group flex items-center gap-2.5 font-[family-name:var(--font-display)] text-xl font-extrabold tracking-wider text-[var(--color-navy)] transition-opacity hover:opacity-90 md:text-2xl shrink-0"
         >
           <div className="relative h-15 w-15 shrink-0 overflow-hidden p-0.5">
             <Image
@@ -229,28 +272,130 @@ function HeaderInner() {
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden items-center gap-8 md:flex">
-          {links.map((link) => {
-            const active = isLinkActive(link);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? "page" : undefined}
-                className={`relative text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${active
-                  ? "text-[var(--color-navy)] after:scale-x-100"
-                  : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
-                  }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+        {/* Desktop Navigation - Clean, un-congested, polished */}
+        <nav className="hidden items-center gap-5 lg:gap-8 md:flex">
+          {/* Shop All */}
+          <Link
+            href="/shop"
+            aria-current={pathname === "/shop" && !activeCategory && !activeSort ? "page" : undefined}
+            className={`relative py-1 text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${
+              pathname === "/shop" && !activeCategory && !activeSort
+                ? "text-[var(--color-navy)] font-semibold after:scale-x-100"
+                : "text-[var(--color-navy)]/65 hover:text-[var(--color-navy)]"
+            }`}
+          >
+            Shop
+          </Link>
+
+          {/* Categories Popover Menu */}
+          <div
+            ref={categoriesRef}
+            className="relative"
+            onMouseEnter={handleCategoriesEnter}
+            onMouseLeave={handleCategoriesLeave}
+          >
+            <button
+              type="button"
+              onClick={() => setCategoriesOpen((v) => !v)}
+              aria-expanded={categoriesOpen}
+              aria-haspopup="true"
+              className={`group flex items-center gap-1.5 py-1 text-sm font-medium transition-colors relative after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${
+                activeCategory
+                  ? "text-[var(--color-navy)] font-semibold after:scale-x-100"
+                  : "text-[var(--color-navy)]/65 hover:text-[var(--color-navy)]"
+              }`}
+            >
+              <span>Categories</span>
+              {activeCategory && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#FC563C]" />
+              )}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                  categoriesOpen ? "rotate-180 text-[var(--color-navy)]" : "text-[var(--color-navy)]/50 group-hover:text-[var(--color-navy)]"
+                }`}
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            {categoriesOpen && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="w-60 rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream)]/98 backdrop-blur-md p-2 shadow-xl">
+                  <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/40 flex items-center justify-between border-b border-[var(--color-sand)]/60">
+                    <span>Shop by Category</span>
+                    <span className="text-[9px] font-medium text-[var(--color-navy)]/40">
+                      {categories.length} {categories.length === 1 ? "group" : "groups"}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 space-y-0.5 max-h-64 overflow-y-auto">
+                    {categories.map((cat) => {
+                      const active = activeCategory?.toLowerCase() === cat.slug.toLowerCase();
+                      return (
+                        <Link
+                          key={cat.id}
+                          href={`/shop?category=${cat.slug}` as Route}
+                          onClick={() => setCategoriesOpen(false)}
+                          className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                            active
+                              ? "bg-[var(--color-navy)] text-white shadow-xs"
+                              : "text-[var(--color-navy)]/80 hover:bg-[var(--color-sand)]/50 hover:text-[var(--color-navy)]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                active ? "bg-[var(--color-sky)]" : "bg-[var(--color-navy)]/30"
+                              }`}
+                            />
+                            <span>{cat.name}</span>
+                          </div>
+                          {typeof cat.count === "number" && cat.count > 0 && (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                active
+                                  ? "bg-white/20 text-white"
+                                  : "bg-[var(--color-sand)]/60 text-[var(--color-navy)]/60"
+                              }`}
+                            >
+                              {cat.count}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-1.5 pt-1.5 border-t border-[var(--color-sand)]/60">
+                    <Link
+                      href="/shop"
+                      onClick={() => setCategoriesOpen(false)}
+                      className="flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold text-[var(--color-navy)]/70 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors"
+                    >
+                      <span>Browse All Shoes</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* New Arrivals */}
+          <Link
+            href={"/shop?sort=newest" as Route}
+            aria-current={activeSort === "newest" ? "page" : undefined}
+            className={`relative py-1 text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${
+              activeSort === "newest"
+                ? "text-[var(--color-navy)] font-semibold after:scale-x-100"
+                : "text-[var(--color-navy)]/65 hover:text-[var(--color-navy)]"
+            }`}
+          >
+            New Arrivals
+          </Link>
         </nav>
 
         {/* Search Bar & Icons */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 lg:gap-3">
           {/* Header Search Form & Autocomplete Container */}
           <div ref={searchRef} className="relative flex items-center">
             <form onSubmit={handleSearchSubmit} className="relative flex items-center">
@@ -265,7 +410,7 @@ function HeaderInner() {
                 }}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={isPending ? "Searching..." : "Search shoes..."}
-                className={`w-32 sm:w-48 md:w-56 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3.5 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-44 sm:focus:w-60 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs ${isPending ? "opacity-60 cursor-not-allowed" : ""
+                className={`w-28 sm:w-36 md:w-36 lg:w-56 rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/80 px-3.5 py-1.5 pl-8 text-xs text-[var(--color-navy)] placeholder:[var(--color-navy)]/40 focus:w-40 sm:focus:w-48 md:focus:w-52 lg:focus:w-64 focus:border-[var(--color-navy)]/40 focus:bg-white focus:outline-none transition-all duration-300 shadow-2xs ${isPending ? "opacity-60 cursor-not-allowed" : ""
                   }`}
               />
               {isPending || isFetchingSuggestions ? (
@@ -448,34 +593,68 @@ function HeaderInner() {
         }`}
       >
         <div className="px-4 space-y-4">
-          {/* Category Navigation Links */}
+          {/* Main Navigation */}
           <nav className="space-y-1">
             <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/40">
-              Explore Shoes
+              Navigation
             </p>
-            {links.map((link) => {
-              const active = isLinkActive(link);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                    active
-                      ? "bg-[var(--color-navy)] text-white shadow-xs"
-                      : "text-[var(--color-navy)]/75 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 active:scale-[0.99]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    {active && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-sky)]" />}
-                    <span>{link.label}</span>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 transition-transform ${active ? "text-white/70" : "text-[var(--color-navy)]/30"}`} />
-                </Link>
-              );
-            })}
+            <Link
+              href="/shop"
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                pathname === "/shop" && !activeCategory && !activeSort
+                  ? "bg-[var(--color-navy)] text-white shadow-xs"
+                  : "text-[var(--color-navy)]/75 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 active:scale-[0.99]"
+              }`}
+            >
+              <span>All Shoes</span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${pathname === "/shop" && !activeCategory && !activeSort ? "text-white/70" : "text-[var(--color-navy)]/30"}`} />
+            </Link>
+            <Link
+              href={"/shop?sort=newest" as Route}
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                activeSort === "newest"
+                  ? "bg-[var(--color-navy)] text-white shadow-xs"
+                  : "text-[var(--color-navy)]/75 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 active:scale-[0.99]"
+              }`}
+            >
+              <span>New Arrivals</span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${activeSort === "newest" ? "text-white/70" : "text-[var(--color-navy)]/30"}`} />
+            </Link>
           </nav>
+
+          {/* Categories Grid */}
+          <div className="space-y-2 pt-2 border-t border-[var(--color-sand)]/60">
+            <div className="px-3 flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/40">
+                Categories
+              </p>
+              <span className="text-[10px] text-[var(--color-navy)]/40 font-medium">
+                {categories.length} available
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 px-1">
+              {categories.map((cat) => {
+                const active = activeCategory?.toLowerCase() === cat.slug.toLowerCase();
+                return (
+                  <Link
+                    key={cat.id}
+                    href={`/shop?category=${cat.slug}` as Route}
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      active
+                        ? "bg-[var(--color-navy)] text-white shadow-xs"
+                        : "bg-[var(--color-cream-alt)] border border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:bg-[var(--color-sand)]/40"
+                    }`}
+                  >
+                    <span className="truncate">{cat.name}</span>
+                    {active && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-sky)] shrink-0" />}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Quick Action Tiles (Wishlist & Account) */}
           <div className="pt-2 border-t border-[var(--color-sand)]/60 sm:hidden">
