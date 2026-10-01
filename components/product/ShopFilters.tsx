@@ -3,6 +3,8 @@
 import { Suspense, useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SlidersHorizontal, X, Check, RotateCcw, ArrowUpDown } from "lucide-react";
+import { useCurrencyStore } from "@/stores/currency-store";
+import { CURRENCIES } from "@/lib/constants/currencies";
 
 interface ShopFiltersProps {
   categories: readonly string[] | string[];
@@ -46,6 +48,9 @@ function ShopFiltersInner({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const activeCurrency = useCurrencyStore((state) => state.currency);
+  const currencyConfig = CURRENCIES[activeCurrency] || CURRENCIES.USD;
+  const currencySymbol = currencyConfig.symbol || "$";
 
   // Temporary drawer state before clicking "APPLY FILTERS"
   const [draftCategory, setDraftCategory] = useState<string | undefined>(activeCategory);
@@ -363,13 +368,13 @@ function ShopFiltersInner({
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <span className="text-[10px] text-[var(--color-navy)]/60 uppercase font-semibold">
-                  Min ($)
+                  Min ({currencySymbol})
                 </span>
                 <input
                   type="number"
                   min={catalogMinPrice}
                   max={catalogMaxPrice}
-                  placeholder={`$${catalogMinPrice}`}
+                  placeholder={`${currencySymbol}${catalogMinPrice}`}
                   value={draftMinPrice ?? ""}
                   onChange={(e) => setDraftMinPrice(e.target.value || undefined)}
                   className="w-full mt-1 px-3 py-2 rounded-lg bg-[var(--color-cream-alt)] border border-[var(--color-sand)] text-xs font-semibold text-[var(--color-navy)] focus:outline-none focus:border-[var(--color-navy)]"
@@ -380,13 +385,13 @@ function ShopFiltersInner({
 
               <div className="flex-1">
                 <span className="text-[10px] text-[var(--color-navy)]/60 uppercase font-semibold">
-                  Max ($)
+                  Max ({currencySymbol})
                 </span>
                 <input
                   type="number"
                   min={catalogMinPrice}
                   max={catalogMaxPrice}
-                  placeholder={`$${catalogMaxPrice}`}
+                  placeholder={`${currencySymbol}${catalogMaxPrice}`}
                   value={draftMaxPrice ?? ""}
                   onChange={(e) => setDraftMaxPrice(e.target.value || undefined)}
                   className="w-full mt-1 px-3 py-2 rounded-lg bg-[var(--color-cream-alt)] border border-[var(--color-sand)] text-xs font-semibold text-[var(--color-navy)] focus:outline-none focus:border-[var(--color-navy)]"
@@ -397,9 +402,9 @@ function ShopFiltersInner({
             {/* Quick Price Bracket Buttons */}
             <div className="flex flex-wrap gap-1.5 pt-1">
               {[
-                { label: "Under $100", min: undefined, max: "100" },
-                { label: "$100 – $200", min: "100", max: "200" },
-                { label: "$200+", min: "200", max: undefined },
+                { label: `Under ${currencySymbol}100`, min: undefined, max: "100" },
+                { label: `${currencySymbol}100 – ${currencySymbol}200`, min: "100", max: "200" },
+                { label: `${currencySymbol}200+`, min: "200", max: undefined },
               ].map((bracket) => {
                 const isActiveBracket =
                   draftMinPrice === bracket.min && draftMaxPrice === bracket.max;

@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
 import Link from "next/link";
 import { useCartStore } from "@/stores/cart-store";
-import { useCurrencyStore } from "@/stores/currency-store";
+import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -37,6 +37,7 @@ import {
 import {
   getEnabledCountries,
   getCountryByCode,
+  isCountryEnabled,
 } from "@/lib/constants/countries";
 import { CURRENCIES, formatCurrency } from "@/lib/constants/currencies";
 import { calculateShipping } from "@/lib/checkout/shipping";
@@ -78,6 +79,19 @@ export default function CheckoutPage() {
   } | null>(null);
 
   const enabledCountries = getEnabledCountries();
+  const storeCurrency = useCurrencyStore((state) => state.currency);
+
+  const CURRENCY_TO_COUNTRY: Record<string, string> = {
+    GBP: "GB",
+    USD: "US",
+    NPR: "NP",
+    EUR: "US",
+  };
+
+  const initialMatchingCountry = CURRENCY_TO_COUNTRY[storeCurrency] || "US";
+  const defaultCountry = isCountryEnabled(initialMatchingCountry)
+    ? initialMatchingCountry
+    : enabledCountries[0]?.code || "NP";
 
   const {
     register,
@@ -88,15 +102,15 @@ export default function CheckoutPage() {
   } = useForm<FormData>({
     resolver: zodResolver(checkoutAddressSchema),
     defaultValues: {
-      country: enabledCountries[0]?.code || "NP",
-      paymentMethod: "COD",
+      country: defaultCountry,
+      paymentMethod: defaultCountry === "NP" ? "COD" : "STRIPE",
     },
     mode: "onChange",
   });
 
-  const selectedCountryCode = watch("country") || "NP";
+  const selectedCountryCode = watch("country") || defaultCountry;
   const selectedCountry = getCountryByCode(selectedCountryCode);
-  const currentPaymentMethod = watch("paymentMethod") || "COD";
+  const currentPaymentMethod = watch("paymentMethod") || (selectedCountryCode === "NP" ? "COD" : "STRIPE");
 
   const rates = useCurrencyStore((state) => state.rates);
   const syncRates = useCurrencyStore((state) => state.syncRatesFromServer);
@@ -105,8 +119,26 @@ export default function CheckoutPage() {
     syncRates();
   }, [syncRates]);
 
-  const currency = selectedCountry?.currency || "NPR";
-  const currencyConfig = CURRENCIES[currency] || CURRENCIES.NPR;
+  // Synchronize country whenever active currency changes (e.g. user toggles CurrencySwitcher in Header)
+  useEffect(() => {
+    const matchingCountry = CURRENCY_TO_COUNTRY[storeCurrency];
+    if (matchingCountry && isCountryEnabled(matchingCountry) && selectedCountryCode !== matchingCountry) {
+      setValue("country", matchingCountry, { shouldValidate: true });
+    }
+  }, [storeCurrency, selectedCountryCode, setValue]);
+
+  // Synchronize currency store whenever user selects a different country in checkout dropdown
+  useEffect(() => {
+    if (selectedCountry?.currency) {
+      const countryCur = selectedCountry.currency as SupportedCurrency;
+      if (countryCur && useCurrencyStore.getState().currency !== countryCur) {
+        useCurrencyStore.getState().setCurrency(countryCur);
+      }
+    }
+  }, [selectedCountryCode, selectedCountry]);
+
+  const currency = selectedCountry?.currency || storeCurrency || "USD";
+  const currencyConfig = CURRENCIES[currency] || CURRENCIES[storeCurrency] || CURRENCIES.USD;
   const exchangeRate = rates[currency] || currencyConfig.rateToBaseUSD || 1.0;
 
   // Price conversion helper ensuring Display = Charge
