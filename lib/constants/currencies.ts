@@ -87,11 +87,11 @@ export function formatCurrency(
 
   try {
     if (upperCurrency === "NPR") {
-      // Formats as "NPR 12,000" in English numerals rather than Devnagari script
+      // Formats as "Rs. 12,000" in English numerals rather than "NPR 12,000"
       const formattedNumber = new Intl.NumberFormat(targetLocale, {
         maximumFractionDigits: 0,
       }).format(amount);
-      return `NPR ${formattedNumber}`;
+      return `Rs. ${formattedNumber}`;
     }
 
     return new Intl.NumberFormat(targetLocale, {
