@@ -47,6 +47,10 @@ import {
   parseSizeRange,
   generateBaseSku,
 } from "@/lib/utils/variant-generator";
+import {
+  evaluateImageDimensions,
+  getImageDimensionsFromFile,
+} from "@/lib/validations/image";
 
 type Category = { id: string; name: string };
 
@@ -78,6 +82,9 @@ interface ImageField {
   color?: string; // empty string or color name
   isPrimary: boolean;
   position?: number;
+  width?: number;
+  height?: number;
+  qualityWarning?: string;
 }
 
 interface VariantField {
@@ -210,6 +217,9 @@ export function ProductForm({
     error?: string;
   }
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
+  const [measuredDimensions, setMeasuredDimensions] = useState<
+    Record<string, { width: number; height: number }>
+  >({});
   const [dragOverDropzoneColor, setDragOverDropzoneColor] = useState<string | null>(null);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
@@ -379,16 +389,74 @@ export function ProductForm({
     setDragOverImageIndex(null);
   }
 
-  // ── Multi-file Parallel Upload (Max 3 concurrent) with compression ──
+  // ── Multi-file Parallel Upload (Max 3 concurrent) with quality checks & compression ──
   async function handleBatchFileUpload(selectedFiles: FileList | File[], targetColor?: string) {
-    const validFiles = Array.from(selectedFiles).filter((f) =>
+    const rawFiles = Array.from(selectedFiles).filter((f) =>
       f.type.startsWith("image/")
     );
-    if (validFiles.length === 0) return;
+    if (rawFiles.length === 0) return;
 
-    const newTasks: UploadTask[] = validFiles.map((file, idx) => ({
+    // 1. Read each image's natural width/height before compressing or uploading
+    const filesToUpload: {
+      file: File;
+      width: number;
+      height: number;
+      warning?: string;
+    }[] = [];
+
+    for (const file of rawFiles) {
+      try {
+        const { width, height } = await getImageDimensionsFromFile(file);
+        const dimensionCheck = evaluateImageDimensions(width, height);
+
+        // If width < 300px or height < 300px, reject with clear error and don't upload
+        if (!dimensionCheck.valid) {
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: {
+                message: `"${file.name}": ${dimensionCheck.error}`,
+                type: "error",
+              },
+            })
+          );
+          continue;
+        }
+
+        // If width < 800px, show non-blocking warning toast
+        if (dimensionCheck.warn) {
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: {
+                message: `"${file.name}": ${dimensionCheck.warning}`,
+                type: "info",
+              },
+            })
+          );
+        }
+
+        filesToUpload.push({
+          file,
+          width,
+          height,
+          warning: dimensionCheck.warning,
+        });
+      } catch (err: any) {
+        window.dispatchEvent(
+          new CustomEvent("show-toast", {
+            detail: {
+              message: `Could not verify dimensions for "${file.name}": ${err?.message || "Invalid image"}`,
+              type: "error",
+            },
+          })
+        );
+      }
+    }
+
+    if (filesToUpload.length === 0) return;
+
+    const newTasks: UploadTask[] = filesToUpload.map((item, idx) => ({
       id: `${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
-      name: file.name,
+      name: item.file.name,
       status: "compressing",
     }));
 
@@ -398,9 +466,9 @@ export function ProductForm({
     let cursor = 0;
 
     async function uploadWorker() {
-      while (cursor < validFiles.length) {
+      while (cursor < filesToUpload.length) {
         const idx = cursor++;
-        const file = validFiles[idx];
+        const item = filesToUpload[idx];
         const task = newTasks[idx];
 
         try {
@@ -410,7 +478,7 @@ export function ProductForm({
               t.id === task.id ? { ...t, status: "compressing" } : t
             )
           );
-          const compressed = await compressImage(file);
+          const compressed = await compressImage(item.file);
 
           setUploadTasks((prev) =>
             prev.map((t) =>
@@ -440,6 +508,12 @@ export function ProductForm({
             prev.map((t) => (t.id === task.id ? { ...t, status: "done" } : t))
           );
 
+          // Store measured dimensions immediately so badge and warning display instantly
+          setMeasuredDimensions((prev) => ({
+            ...prev,
+            [data.url]: { width: item.width, height: item.height },
+          }));
+
           setImages((prev) => {
             const normColor = targetColor ? targetColor.trim() : "";
             const existingInGroup = prev.filter(
@@ -456,6 +530,9 @@ export function ProductForm({
               color: normColor,
               isPrimary: !hasPrimaryInGroup, // First uploaded image in group becomes primary
               position: prev.length,
+              width: item.width,
+              height: item.height,
+              qualityWarning: item.warning,
             };
             return [...prev, newImg];
           });
@@ -473,7 +550,7 @@ export function ProductForm({
     }
 
     const workers = Array.from(
-      { length: Math.min(MAX_CONCURRENT, validFiles.length) },
+      { length: Math.min(MAX_CONCURRENT, filesToUpload.length) },
       () => uploadWorker()
     );
     await Promise.all(workers);
@@ -1227,6 +1304,18 @@ export function ProductForm({
                           const isDraggingThis = draggedImageIndex === globalIdx;
                           const isDragOverThis = dragOverImageIndex === globalIdx;
 
+                          const dims =
+                            measuredDimensions[img.url] ||
+                            (img.width && img.height
+                              ? { width: img.width, height: img.height }
+                              : undefined);
+                          const isLowRes = dims ? dims.width < 800 : false;
+                          const warningText =
+                            img.qualityWarning ||
+                            (dims && dims.width < 800
+                              ? `Only ${dims.width}x${dims.height}, will look blurry on the product page`
+                              : undefined);
+
                           return (
                             <div
                               key={img.id || img.url + globalIdx}
@@ -1308,8 +1397,54 @@ export function ProductForm({
                                   src={img.url}
                                   alt={img.altText || `Product image ${globalIdx + 1}`}
                                   className="h-full w-full object-cover"
+                                  onLoad={(e) => {
+                                    const naturalWidth = e.currentTarget.naturalWidth;
+                                    const naturalHeight = e.currentTarget.naturalHeight;
+                                    if (naturalWidth && naturalHeight) {
+                                      setMeasuredDimensions((prev) => {
+                                        if (
+                                          prev[img.url]?.width === naturalWidth &&
+                                          prev[img.url]?.height === naturalHeight
+                                        ) {
+                                          return prev;
+                                        }
+                                        return {
+                                          ...prev,
+                                          [img.url]: {
+                                            width: naturalWidth,
+                                            height: naturalHeight,
+                                          },
+                                        };
+                                      });
+                                    }
+                                  }}
                                 />
+
+                                {/* Low resolution badge */}
+                                {isLowRes && (
+                                  <div
+                                    className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded bg-amber-500/95 text-white px-1.5 py-0.5 text-[10px] font-bold shadow-xs uppercase tracking-wider backdrop-blur-xs"
+                                    title={warningText || "Image width is under 800px"}
+                                  >
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    <span>Low resolution</span>
+                                  </div>
+                                )}
+
+                                {dims && (
+                                  <div className="absolute bottom-1.5 right-1.5 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white/90 backdrop-blur-xs">
+                                    {dims.width} × {dims.height}
+                                  </div>
+                                )}
                               </div>
+
+                              {/* Non-blocking warning banner on image card */}
+                              {warningText && (
+                                <div className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 border border-amber-200/90 p-2 text-[11px] text-amber-800 leading-tight">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 mt-0.5" />
+                                  <span>{warningText}</span>
+                                </div>
+                              )}
 
                               {/* Controls: Move to group dropdown and Alt text */}
                               <div className="mt-2.5 space-y-2">

@@ -2,80 +2,66 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ShopLoading() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header skeleton */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between border-b border-[var(--color-sand)] pb-6">
-        <div>
-          <Skeleton className="h-4 w-24 bg-[var(--color-sand)]/60 rounded" />
-          <Skeleton className="mt-2 h-9 w-64 bg-[var(--color-sand)] rounded-lg" />
-          <Skeleton className="mt-2 h-4 w-96 max-w-full bg-[var(--color-sand)]/50 rounded" />
-        </div>
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-10 w-32 bg-[var(--color-sand)] rounded-xl" />
-          <Skeleton className="h-10 w-44 bg-[var(--color-sand)] rounded-xl" />
-        </div>
-      </div>
-
-      {/* Main layout with sidebar filters & product grid */}
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-4">
-        {/* Filter sidebar skeleton */}
-        <div className="hidden lg:block space-y-6">
-          <div className="rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-5 space-y-6">
-            <div className="flex items-center justify-between border-b border-[var(--color-sand)] pb-4">
-              <Skeleton className="h-5 w-20 bg-[var(--color-sand)] rounded" />
-              <Skeleton className="h-4 w-12 bg-[var(--color-sand)]/60 rounded" />
-            </div>
-
-            {/* Categories filter skeleton */}
-            <div className="space-y-3">
-              <Skeleton className="h-4 w-24 bg-[var(--color-sand)] rounded" />
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <Skeleton className="h-4 w-4 bg-[var(--color-sand)] rounded" />
-                  <Skeleton className="h-4 w-28 bg-[var(--color-sand)]/60 rounded" />
-                </div>
-              ))}
-            </div>
-
-            {/* Price slider skeleton */}
-            <div className="space-y-3 pt-4 border-t border-[var(--color-sand)]">
-              <Skeleton className="h-4 w-24 bg-[var(--color-sand)] rounded" />
-              <Skeleton className="h-2 w-full bg-[var(--color-sand)] rounded-full" />
-              <div className="flex justify-between">
-                <Skeleton className="h-4 w-12 bg-[var(--color-sand)]/60 rounded" />
-                <Skeleton className="h-4 w-12 bg-[var(--color-sand)]/60 rounded" />
-              </div>
-            </div>
+    <main className="min-h-screen bg-[var(--color-cream)] text-[var(--color-navy)] animate-pulse">
+      {/* 1. Collection Banner Skeleton */}
+      <section className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 pt-4">
+        <div className="relative h-[220px] sm:h-[260px] lg:h-[300px] overflow-hidden rounded-2xl bg-[var(--color-navy)]/15 flex items-center justify-center">
+          <div className="text-center px-6">
+            <h1 className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#F5F2EB]/90">
+              Shop Collection
+            </h1>
           </div>
         </div>
+      </section>
 
-        {/* Product Cards Grid skeleton */}
-        <div className="lg:col-span-3">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, index) => (
+      {/* 2. Main Content Container */}
+      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8 mt-8 sm:mt-10 pb-20">
+        {/* Shop Introduction */}
+        <div className="max-w-xl space-y-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#1E2A38]/50 block">
+            COLLECTION
+          </span>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-bold text-[#1E2A38]">
+            All Footwear
+          </h2>
+          <p className="text-xs sm:text-sm text-[#1E2A38]/70 pt-0.5 leading-relaxed">
+            Explore the latest footwear designed for everyday movement, sport, and lifestyle.
+          </p>
+        </div>
+
+        {/* 3. Filter & Sort Toolbar placeholder */}
+        <div className="mt-6">
+          <div className="h-12 w-full rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/60" />
+        </div>
+
+        {/* 4. Full-width 4-column Product Grid (matching ProductGrid & ProductCard) */}
+        <div className="mt-8">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {[...Array(12)].map((_, index) => (
               <div
                 key={index}
-                className="overflow-hidden rounded-2xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-4 space-y-4"
+                className="overflow-hidden rounded-sm border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)]/60"
               >
-                {/* Image box skeleton */}
-                <Skeleton className="aspect-square w-full rounded-xl bg-[var(--color-sand)]/70" />
-
-                {/* Title & Brand */}
-                <div className="space-y-2">
-                  <Skeleton className="h-3 w-16 bg-[var(--color-sand)]/60 rounded" />
-                  <Skeleton className="h-5 w-3/4 bg-[var(--color-sand)] rounded" />
+                {/* Image Container */}
+                <div className="relative aspect-square overflow-hidden bg-stone-200/60">
+                  <Skeleton className="h-full w-full rounded-none bg-[var(--color-sand)]/40" />
+                  <div className="absolute top-2.5 right-2.5">
+                    <Skeleton className="h-8 w-8 rounded-full bg-white/70" />
+                  </div>
                 </div>
 
-                {/* Price and Add button */}
-                <div className="flex items-center justify-between pt-2">
-                  <Skeleton className="h-6 w-20 bg-[var(--color-sand)] rounded" />
-                  <Skeleton className="h-9 w-9 rounded-full bg-[var(--color-sand)]" />
+                {/* Info Section */}
+                <div className="p-3.5 sm:p-4 space-y-1.5">
+                  <Skeleton className="h-3 w-20 rounded bg-[var(--color-sand)]/60" />
+                  <Skeleton className="h-4 w-3/4 rounded bg-[var(--color-sand)]" />
+                  <Skeleton className="mt-1 h-4 w-14 rounded bg-[var(--color-sand)]/70" />
                 </div>
               </div>
             ))}
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
+

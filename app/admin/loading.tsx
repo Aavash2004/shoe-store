@@ -4,15 +4,21 @@ export default function AdminDashboardLoading() {
   return (
     <div className="space-y-8 animate-pulse">
       {/* Header skeleton */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Skeleton className="h-3 w-28 bg-[var(--color-navy)]/20 rounded" />
-          <Skeleton className="mt-2 h-9 w-64 bg-[var(--color-sand)] rounded-xl" />
-          <Skeleton className="mt-2 h-4 w-72 bg-[var(--color-sand)]/60 rounded" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-navy)]/55">
+            Overview
+          </span>
+          <h1 className="mt-0.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-[var(--color-navy)]">
+            Welcome back
+          </h1>
+          <p className="mt-1 text-xs text-[var(--color-navy)]/60">
+            Here&apos;s what&apos;s happening with your store today.
+          </p>
         </div>
         <div className="flex items-center gap-2.5">
-          <Skeleton className="h-10 w-28 bg-[var(--color-sand)]/70 rounded-full" />
-          <Skeleton className="h-10 w-32 bg-[var(--color-sand)] rounded-xl" />
+          <Skeleton className="h-9 w-28 bg-[var(--color-sand)]/70 rounded-xl" />
+          <Skeleton className="h-9 w-32 bg-[var(--color-sand)] rounded-xl" />
         </div>
       </div>
 
@@ -102,7 +108,7 @@ export default function AdminDashboardLoading() {
               <Skeleton className="h-4 w-20 bg-[var(--color-sand)]/60 rounded" />
             </div>
             <div className="divide-y divide-[var(--color-sand)]/60">
-              {[...Array(3)].map((_, i) => (
+              {[...Array(4)].map((_, i) => (
                 <div key={i} className="flex items-center gap-4 py-3">
                   <Skeleton className="h-12 w-12 rounded-xl bg-[var(--color-sand)] shrink-0" />
                   <div className="flex-1 space-y-1.5">

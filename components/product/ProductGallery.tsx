@@ -335,6 +335,7 @@ export function ProductGallery({
           >
             {/* Base Image with aspect-ratio protection and next/image performance */}
             <Image
+              key={currentImgUrl}
               src={currentImgUrl}
               alt={currentImgAlt}
               fill
@@ -545,12 +546,14 @@ export function ProductGallery({
                 }}
               >
                 <Image
+                  key={currentImgUrl}
                   src={currentImgUrl}
                   alt={currentImgAlt}
                   fill
                   className="object-contain pointer-events-none"
                   priority
-                  sizes="(max-width: 1200px) 100vw, 1200px"
+                  quality={95}
+                  sizes="100vw"
                 />
               </div>
             </div>

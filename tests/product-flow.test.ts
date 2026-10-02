@@ -10,6 +10,7 @@ import {
   getPrimaryImageForColor,
   normalizePrimaryPerColor,
 } from "../lib/utils/gallery";
+import { evaluateImageDimensions } from "../lib/validations/image";
 
 async function runProductFlowTests() {
   console.log("=== Running Add New Product Flow Tests ===\n");
@@ -400,6 +401,43 @@ async function runProductFlowTests() {
   assert(
     isAdminSession(customerUploadSession) === false && isAdminSession(guestUploadSession) === false,
     "Non-admin customer and guest uploads are rejected"
+  );
+
+  // 17. Image dimension safeguards & size thresholds
+  // 799px width warns
+  const check799 = evaluateImageDimensions(799, 1000);
+  assert(
+    check799.valid === true &&
+      check799.warn === true &&
+      check799.warning === "Only 799x1000, will look blurry on the product page",
+    "799px width warns with blurry warning (non-blocking)"
+  );
+
+  // 800px width passes
+  const check800 = evaluateImageDimensions(800, 1000);
+  assert(
+    check800.valid === true && check800.warn === false && !check800.warning,
+    "800px width passes without warning"
+  );
+
+  // 299px width rejects
+  const check299Width = evaluateImageDimensions(299, 800);
+  assert(
+    check299Width.valid === false &&
+      check299Width.warn === false &&
+      typeof check299Width.error === "string" &&
+      check299Width.error.includes("299x800px"),
+    "299px width rejects with clear error"
+  );
+
+  // 299px height rejects
+  const check299Height = evaluateImageDimensions(800, 299);
+  assert(
+    check299Height.valid === false &&
+      check299Height.warn === false &&
+      typeof check299Height.error === "string" &&
+      check299Height.error.includes("800x299px"),
+    "299px height rejects with clear error"
   );
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

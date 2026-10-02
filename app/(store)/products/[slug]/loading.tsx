@@ -2,77 +2,76 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProductDetailLoading() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Breadcrumbs skeleton */}
-      <div className="flex items-center gap-2 mb-8">
-        <Skeleton className="h-4 w-12 bg-[var(--color-sand)] rounded" />
-        <span className="text-[var(--color-sand)]">/</span>
-        <Skeleton className="h-4 w-16 bg-[var(--color-sand)] rounded" />
-        <span className="text-[var(--color-sand)]">/</span>
-        <Skeleton className="h-4 w-32 bg-[var(--color-sand)] rounded" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
-        {/* Left Column: Image Gallery Skeleton */}
-        <div className="space-y-4">
-          <Skeleton className="aspect-square w-full rounded-3xl bg-[var(--color-sand)]/70 border border-[var(--color-sand)]" />
-          <div className="flex gap-4">
-            {[...Array(4)].map((_, i) => (
+    <div className="mx-auto max-w-6xl px-6 py-12 animate-pulse">
+      <div className="grid grid-cols-1 gap-12 md:grid-cols-2">
+        {/* Left Column: Product Gallery Skeleton (Matching ProductGallery: vertical thumbs on desktop, aspect-square main image) */}
+        <div className="flex flex-col-reverse md:flex-row gap-4 w-full">
+          {/* Thumbnails strip */}
+          <div className="flex flex-row md:flex-col gap-2.5 shrink-0 py-1">
+            {[...Array(4)].map((_, idx) => (
               <Skeleton
-                key={i}
-                className="h-20 w-20 rounded-xl bg-[var(--color-sand)] border border-[var(--color-sand)] shrink-0"
+                key={idx}
+                className="h-16 w-16 md:h-20 md:w-20 shrink-0 rounded-sm bg-[var(--color-sand)]/70 border border-[var(--color-sand)]"
               />
             ))}
           </div>
+
+          {/* Main Image Viewport */}
+          <div className="relative flex-1 aspect-square overflow-hidden rounded-sm border border-[var(--color-sand)]/80 bg-[var(--color-cream-alt)]">
+            <Skeleton className="h-full w-full rounded-none bg-[var(--color-sand)]/40" />
+          </div>
         </div>
 
-        {/* Right Column: Details & Buy Actions Skeleton */}
-        <div className="space-y-6">
-          <div>
-            <Skeleton className="h-4 w-24 bg-[var(--color-sand)]/60 rounded" />
-            <Skeleton className="mt-2 h-9 w-3/4 bg-[var(--color-sand)] rounded-lg" />
-            <Skeleton className="mt-3 h-8 w-28 bg-[var(--color-sand)] rounded-md" />
+        {/* Right Column: Product Info & Buy Box (Matching ProductDetailInteractive) */}
+        <div className="flex flex-col">
+          {/* Brand & Category */}
+          <Skeleton className="h-3.5 w-32 bg-[var(--color-sand)]/60 rounded" />
+
+          {/* Title */}
+          <Skeleton className="mt-2 h-9 w-3/4 bg-[var(--color-sand)] rounded-lg md:h-10" />
+
+          {/* Price */}
+          <div className="mt-4">
+            <Skeleton className="h-8 w-28 bg-[var(--color-sand)] rounded" />
           </div>
 
-          <Skeleton className="h-20 w-full bg-[var(--color-cream-alt)] rounded-2xl border border-[var(--color-sand)]" />
+          {/* Description */}
+          <div className="mt-6 max-w-md space-y-2">
+            <Skeleton className="h-4 w-full bg-[var(--color-sand)]/60 rounded" />
+            <Skeleton className="h-4 w-5/6 bg-[var(--color-sand)]/60 rounded" />
+          </div>
 
-          {/* Color selector skeleton */}
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-20 bg-[var(--color-sand)] rounded" />
-            <div className="flex gap-3">
+          {/* Color selector */}
+          <div className="mt-10 space-y-3">
+            <Skeleton className="h-4 w-16 bg-[var(--color-sand)] rounded" />
+            <div className="flex gap-2">
               {[...Array(3)].map((_, i) => (
-                <Skeleton key={i} className="h-10 w-20 bg-[var(--color-sand)] rounded-xl" />
+                <Skeleton key={i} className="h-9 w-20 bg-[var(--color-sand)]/60 rounded-md" />
               ))}
             </div>
           </div>
 
-          {/* Size selector skeleton */}
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <Skeleton className="h-4 w-20 bg-[var(--color-sand)] rounded" />
-              <Skeleton className="h-4 w-16 bg-[var(--color-sand)]/60 rounded" />
+          {/* Size selector */}
+          <div className="mt-8 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-24 bg-[var(--color-sand)] rounded" />
+              <Skeleton className="h-4 w-28 bg-[var(--color-sand)]/60 rounded" />
             </div>
-            <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-6">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
               {[...Array(8)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full bg-[var(--color-sand)] rounded-xl" />
+                <Skeleton key={i} className="h-14 w-full bg-[var(--color-sand)]/50 rounded-md" />
               ))}
             </div>
           </div>
 
-          {/* Action buttons skeleton */}
-          <div className="pt-4 space-y-3">
-            <Skeleton className="h-14 w-full bg-[var(--color-navy)]/30 rounded-2xl" />
-            <Skeleton className="h-12 w-full bg-[var(--color-sand)] rounded-2xl" />
-          </div>
-
-          {/* Highlights / Features skeleton */}
-          <div className="border-t border-[var(--color-sand)] pt-6 space-y-3">
-            <Skeleton className="h-4 w-36 bg-[var(--color-sand)] rounded" />
-            <Skeleton className="h-4 w-full bg-[var(--color-sand)]/50 rounded" />
-            <Skeleton className="h-4 w-5/6 bg-[var(--color-sand)]/50 rounded" />
+          {/* Add to Cart & Wishlist Buttons */}
+          <div className="mt-8 flex items-center gap-3">
+            <Skeleton className="h-12 flex-1 bg-[var(--color-navy)]/30 rounded-xl" />
+            <Skeleton className="h-12 w-12 bg-[var(--color-sand)]/60 rounded-xl shrink-0" />
           </div>
         </div>
       </div>
     </div>
   );
 }
+
