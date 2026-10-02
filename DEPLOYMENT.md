@@ -121,3 +121,31 @@ GitHub automatically disables scheduled workflows on repositories that have had 
   ```
   *(Or navigate to GitHub repository -> Actions -> select "Cleanup Expired Orders" -> click "Enable workflow").*
 
+---
+
+## 7. External Dedicated Schedulers (cron-job.org / Upstash QStash)
+
+Because GitHub Actions schedules run on shared runner queues and can experience latency jitter (ranging from a few minutes to hours during peak platform traffic), you can complement or replace it with a dedicated external scheduler:
+
+### Option A: cron-job.org (Free Cloud Cron)
+1. In the [cron-job.org](https://cron-job.org) dashboard, click **Create Cronjob**.
+2. **Title**: `ABXV Cleanup Expired Orders`
+3. **URL**: `https://abxv.vercel.app/api/cron/cleanup-expired-orders`
+4. **Schedule**: User-defined / Every 30 minutes (`*/30 * * * *`).
+5. **Request Method**: `POST`
+6. **Headers**:
+   - `Authorization`: `Bearer <CRON_SECRET>` *(Use the value stored in Vercel Production Environment Variables)*
+   - `Content-Type`: `application/json`
+7. **Alerts**: Enable email alerts if status is not `200 OK`.
+
+### Option B: Upstash QStash (Serverless Cron with Retries)
+1. In the [Upstash Console](https://console.upstash.com/qstash) -> **QStash** -> **Schedules**:
+2. Click **Create Schedule**:
+   - **Destination URL**: `https://abxv.vercel.app/api/cron/cleanup-expired-orders`
+   - **Cron Expression**: `*/30 * * * *`
+   - **HTTP Method**: `POST`
+   - **Headers**:
+     - `Authorization`: `Bearer <CRON_SECRET>`
+3. QStash handles automatic exponential retries and detailed delivery logs.
+
+

@@ -1,4 +1,8 @@
-import { isAdminSession, sanitizeCallbackUrl } from "../lib/auth/authorization";
+import {
+  isAdminSession,
+  sanitizeCallbackUrl,
+  evaluateAdminRouteAccess,
+} from "../lib/auth/authorization";
 import {
   checkLoginLockout,
   recordFailedLogin,
@@ -237,52 +241,97 @@ async function runTests() {
       "/admin/login rejects normal customer credentials"
     );
 
-    // 10. Test Routing / Proxy Rules Simulation
-    function proxyRoutingSimulation(pathname: string, isLoggedIn: boolean, isAdmin: boolean) {
-      if (pathname.startsWith("/admin")) {
-        if (pathname === "/admin/login") {
-          if (isAdmin) {
-            return { redirect: "/admin" };
-          }
-          return { status: 200, allow: true };
-        }
+    // 10. Test Admin Route Access and ADMIN_LOGIN_PATH Hardening
+    // A. When ADMIN_LOGIN_PATH is missing/unset:
+    // - Guest on /admin returns 404 (not a redirect)
+    const guestAdminMissingEnv = evaluateAdminRouteAccess({
+      pathname: "/admin",
+      isLoggedIn: false,
+      isAdmin: false,
+      adminLoginPath: undefined,
+    });
+    assert(guestAdminMissingEnv.action === "404", "Guest on /admin returns plain 404 when ADMIN_LOGIN_PATH is unset");
 
-        if (!isLoggedIn) {
-          return { redirect: `/admin/login?callbackUrl=${pathname}` };
-        }
+    // - Guest on /admin/orders returns 404 (not a redirect)
+    const guestOrdersMissingEnv = evaluateAdminRouteAccess({
+      pathname: "/admin/orders",
+      isLoggedIn: false,
+      isAdmin: false,
+      adminLoginPath: undefined,
+    });
+    assert(guestOrdersMissingEnv.action === "404", "Guest on /admin/orders returns plain 404 when ADMIN_LOGIN_PATH is unset");
 
-        if (!isAdmin) {
-          return { redirect: "/?error=AccessDenied" };
-        }
+    // - Direct visit to /admin/login returns 404 when ADMIN_LOGIN_PATH is unset (no fallback)
+    const guestLoginMissingEnv = evaluateAdminRouteAccess({
+      pathname: "/admin/login",
+      isLoggedIn: false,
+      isAdmin: false,
+      adminLoginPath: undefined,
+    });
+    assert(guestLoginMissingEnv.action === "404", "/admin/login returns 404 when ADMIN_LOGIN_PATH is unset (disabled route, no fallback)");
 
-        return { status: 200, access: true };
-      }
+    // - Authenticated non-admin on /admin returns 404
+    const customerAdminMissingEnv = evaluateAdminRouteAccess({
+      pathname: "/admin",
+      isLoggedIn: true,
+      isAdmin: false,
+      adminLoginPath: undefined,
+    });
+    assert(customerAdminMissingEnv.action === "404", "Normal customer on /admin returns 404");
 
-      return { status: 200, allow: true };
-    }
+    // - Authenticated admin on /admin has access
+    const adminAccessAllowed = evaluateAdminRouteAccess({
+      pathname: "/admin",
+      isLoggedIn: true,
+      isAdmin: true,
+      adminLoginPath: undefined,
+    });
+    assert(adminAccessAllowed.action === "allow", "Authenticated admin on /admin has access");
 
-    // Guest on /admin redirects to /admin/login
-    const guestAdminResult = proxyRoutingSimulation("/admin", false, false);
-    assert(guestAdminResult.redirect === "/admin/login?callbackUrl=/admin", "Guest on /admin redirects to /admin/login");
+    // B. When ADMIN_LOGIN_PATH is configured (e.g. '/secret-admin-portal'):
+    const customAdminPath = "/secret-admin-portal";
 
-    const guestAdminSubResult = proxyRoutingSimulation("/admin/orders", false, false);
-    assert(guestAdminSubResult.redirect === "/admin/login?callbackUrl=/admin/orders", "Guest on /admin/orders redirects to /admin/login");
+    // - Guest on /admin still returns plain 404
+    const guestAdminWithCustom = evaluateAdminRouteAccess({
+      pathname: "/admin",
+      isLoggedIn: false,
+      isAdmin: false,
+      adminLoginPath: customAdminPath,
+    });
+    assert(guestAdminWithCustom.action === "404", "Guest on /admin returns 404 even with ADMIN_LOGIN_PATH set");
 
-    // Unauthenticated on /admin/login is allowed to view login page
-    const guestAdminLoginResult = proxyRoutingSimulation("/admin/login", false, false);
-    assert(guestAdminLoginResult.allow === true, "Guest on /admin/login is allowed to view login page");
+    // - Direct visit to /admin/login returns 404
+    const guestDirectLoginWithCustom = evaluateAdminRouteAccess({
+      pathname: "/admin/login",
+      isLoggedIn: false,
+      isAdmin: false,
+      adminLoginPath: customAdminPath,
+    });
+    assert(guestDirectLoginWithCustom.action === "404", "Direct /admin/login returns 404 when custom ADMIN_LOGIN_PATH is active");
 
-    // Already logged in admin visiting /admin/login redirects to /admin
-    const adminOnLoginResult = proxyRoutingSimulation("/admin/login", true, true);
-    assert(adminOnLoginResult.redirect === "/admin", "Logged-in admin visiting /admin/login is redirected to /admin");
+    // - Guest visiting configured ADMIN_LOGIN_PATH rewrites to /admin/login (serves login page)
+    const guestOnSecretPortal = evaluateAdminRouteAccess({
+      pathname: customAdminPath,
+      isLoggedIn: false,
+      isAdmin: false,
+      adminLoginPath: customAdminPath,
+    });
+    assert(
+      guestOnSecretPortal.action === "rewrite" && (guestOnSecretPortal as any).target === "/admin/login",
+      "Guest on configured ADMIN_LOGIN_PATH rewrites to /admin/login"
+    );
 
-    // Authenticated non-admin on /admin is blocked
-    const customerAdminResult = proxyRoutingSimulation("/admin", true, false);
-    assert(customerAdminResult.redirect === "/?error=AccessDenied", "Normal customer on /admin is blocked with redirect to /?error=AccessDenied");
-
-    // Authenticated admin on /admin is granted access
-    const adminAdminResult = proxyRoutingSimulation("/admin", true, true);
-    assert(adminAdminResult.access === true, "Authenticated admin on /admin has access");
+    // - Logged-in admin visiting ADMIN_LOGIN_PATH is redirected to /admin
+    const adminOnSecretPortal = evaluateAdminRouteAccess({
+      pathname: customAdminPath,
+      isLoggedIn: true,
+      isAdmin: true,
+      adminLoginPath: customAdminPath,
+    });
+    assert(
+      adminOnSecretPortal.action === "redirect" && (adminOnSecretPortal as any).target === "/admin",
+      "Logged-in admin visiting ADMIN_LOGIN_PATH is redirected to /admin"
+    );
 
   } finally {
     process.env.ADMIN_EMAIL = originalAdminEmail;

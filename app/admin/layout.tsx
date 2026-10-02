@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth/auth";
-import { isAdminSession } from "@/lib/auth/authorization";
+import { isAdminSession, evaluateAdminRouteAccess } from "@/lib/auth/authorization";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { headers } from "next/headers";
 
 export default async function AdminLayout({
@@ -11,34 +11,38 @@ export default async function AdminLayout({
 }) {
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") || "";
+  const isAllowedAdminLogin = headersList.get("x-admin-login-allowed") === "true";
 
   const session = await auth();
   const isAdmin = isAdminSession(session);
+  const isLoggedIn = !!session?.user;
 
-  // /admin/login is the public route under /admin
-  if (pathname === "/admin/login") {
-    if (isAdmin) {
-      redirect("/admin");
-    }
+  const decision = evaluateAdminRouteAccess({
+    pathname: isAllowedAdminLogin ? (process.env.ADMIN_LOGIN_PATH || "") : pathname,
+    isLoggedIn,
+    isAdmin,
+    adminLoginPath: process.env.ADMIN_LOGIN_PATH,
+  });
+
+  if (decision.action === "404") {
+    notFound();
+  }
+
+  if (decision.action === "redirect") {
+    redirect(decision.target as any);
+  }
+
+  // /admin/login is served without sidebar
+  if (pathname === "/admin/login" || isAllowedAdminLogin) {
     return <>{children}</>;
-  }
-
-  // Unauthenticated guests must go to /admin/login
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
-
-  // Authenticated non-admins must be blocked
-  if (!isAdmin) {
-    redirect("/?error=AccessDenied");
   }
 
   return (
     <div className="min-h-screen bg-[var(--color-cream)]">
       <AdminSidebar
         user={{
-          name: session.user?.name ?? null,
-          email: session.user?.email ?? null,
+          name: session?.user?.name ?? null,
+          email: session?.user?.email ?? null,
         }}
       />
       <div className="flex flex-col lg:pl-64 min-h-screen transition-all duration-200">

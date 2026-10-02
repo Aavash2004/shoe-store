@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/auth.config";
-import { sanitizeCallbackUrl } from "@/lib/auth/authorization";
+import { sanitizeCallbackUrl, evaluateAdminRouteAccess } from "@/lib/auth/authorization";
 
 const { auth } = NextAuth(authConfig);
 
@@ -64,32 +64,29 @@ const proxy = auth((req) => {
     }
   }
 
-  // Admin routes protection (/admin, /admin/*)
-  if (pathname.startsWith("/admin")) {
-    if (pathname === "/admin/login") {
-      if (isAdmin) {
-        return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
-          headers: requestHeaders,
-        });
-      }
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      });
-    }
+  // Admin routes & ADMIN_LOGIN_PATH protection
+  const adminDecision = evaluateAdminRouteAccess({
+    pathname,
+    isLoggedIn,
+    isAdmin,
+    adminLoginPath: process.env.ADMIN_LOGIN_PATH,
+  });
 
-    if (!isLoggedIn) {
-      // Unauthenticated requests to /admin redirect to /admin/login
-      const loginUrl = new URL("/admin/login", req.nextUrl.origin);
-      loginUrl.searchParams.set("callbackUrl", pathname);
-      return NextResponse.redirect(loginUrl, { headers: requestHeaders });
-    }
+  if (adminDecision.action === "404") {
+    return new NextResponse(null, { status: 404, headers: requestHeaders });
+  }
 
-    if (!isAdmin) {
-      // Normal authenticated users visiting /admin must be blocked
-      const blockedUrl = new URL("/", req.nextUrl.origin);
-      blockedUrl.searchParams.set("error", "AccessDenied");
-      return NextResponse.redirect(blockedUrl, { headers: requestHeaders });
-    }
+  if (adminDecision.action === "redirect") {
+    return NextResponse.redirect(new URL(adminDecision.target, req.nextUrl.origin), {
+      headers: requestHeaders,
+    });
+  }
+
+  if (adminDecision.action === "rewrite") {
+    requestHeaders.set("x-admin-login-allowed", "true");
+    return NextResponse.rewrite(new URL(adminDecision.target, req.nextUrl.origin), {
+      headers: requestHeaders,
+    });
   }
 
   return NextResponse.next({

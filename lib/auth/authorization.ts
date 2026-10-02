@@ -144,3 +144,70 @@ export async function requireAdminApi() {
     session,
   };
 }
+
+export type AdminRouteDecision =
+  | { action: "allow" }
+  | { action: "redirect"; target: string }
+  | { action: "rewrite"; target: string }
+  | { action: "404" };
+
+/**
+ * Evaluates access rules for admin routes and configured ADMIN_LOGIN_PATH:
+ * - A missing ADMIN_LOGIN_PATH env var disables the admin login route with a 404 (no fallback to /admin/login).
+ * - Direct requests to /admin/login return a 404 unless ADMIN_LOGIN_PATH is explicitly set to /admin/login.
+ * - Guests and non-admins accessing /admin or /admin/* receive a plain 404 (not a redirect).
+ * - Requests matching ADMIN_LOGIN_PATH redirect to /admin if already authenticated as admin,
+ *   or allow/rewrite to /admin/login for guests.
+ */
+export function evaluateAdminRouteAccess(params: {
+  pathname: string;
+  isLoggedIn: boolean;
+  isAdmin: boolean;
+  adminLoginPath?: string | null;
+}): AdminRouteDecision {
+  const { pathname, isLoggedIn, isAdmin } = params;
+  const rawAdminLoginPath = params.adminLoginPath?.trim();
+  const adminLoginPath =
+    rawAdminLoginPath && rawAdminLoginPath.startsWith("/")
+      ? rawAdminLoginPath
+      : rawAdminLoginPath
+      ? `/${rawAdminLoginPath}`
+      : undefined;
+
+  // 1. If path matches configured ADMIN_LOGIN_PATH
+  if (adminLoginPath && pathname === adminLoginPath) {
+    if (isAdmin) {
+      return { action: "redirect", target: "/admin" };
+    }
+    if (pathname === "/admin/login") {
+      return { action: "allow" };
+    }
+    return { action: "rewrite", target: "/admin/login" };
+  }
+
+  // 2. Admin routes protection (/admin, /admin/*)
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    if (pathname === "/admin/login") {
+      if (adminLoginPath === "/admin/login") {
+        if (isAdmin) return { action: "redirect", target: "/admin" };
+        return { action: "allow" };
+      }
+      return { action: "404" };
+    }
+
+    // Unauthenticated guests on /admin and /admin/* receive a plain 404
+    if (!isLoggedIn) {
+      return { action: "404" };
+    }
+
+    // Non-admin authenticated users on /admin and /admin/* receive a plain 404
+    if (!isAdmin) {
+      return { action: "404" };
+    }
+
+    return { action: "allow" };
+  }
+
+  return { action: "allow" };
+}
+
