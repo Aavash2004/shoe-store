@@ -3,6 +3,7 @@ import Image from "next/image";
 import type { PlaceholderProduct } from "@/types";
 import { WishlistButton } from "@/components/product/WishlistButton";
 import { Price } from "@/components/ui/Price";
+import { getSafeImageUrl } from "@/lib/utils";
 
 export function ProductCard({ product }: { product: PlaceholderProduct }) {
   const hasValidBrand =
@@ -23,7 +24,7 @@ export function ProductCard({ product }: { product: PlaceholderProduct }) {
       {/* Image Container */}
       <div className="relative aspect-square overflow-hidden bg-stone-200/60">
         <Image
-          src={product.image || "/images/Shoes/s05.avif"}
+          src={getSafeImageUrl(product.image)}
           alt={product.name}
           fill
           className="object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"

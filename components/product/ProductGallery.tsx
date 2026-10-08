@@ -16,6 +16,7 @@ import {
   filterGalleryImages,
   type GalleryImageItem,
 } from "@/lib/utils/gallery";
+import { getSafeImageUrl } from "@/lib/utils";
 
 const LENS_SIZE = 180; // Diameter of the magnifying glass loupe in px
 const ZOOM_FACTOR = 2.6; // Magnification power
@@ -33,9 +34,14 @@ export function ProductGallery({
 }: ProductGalleryProps) {
   // Filter and order images based on selected color (color-specific first, then shared, or fallback to all)
   const displayImages = filterGalleryImages(images, selectedColor);
-  const safeImages: GalleryImageItem[] = displayImages.length
+  const rawImages: GalleryImageItem[] = displayImages.length
     ? displayImages
-    : [{ url: "/images/Shoes/gmm.jpeg", altText: "Product view", isPrimary: true }];
+    : [{ url: "/images/Shoes/s05.avif", altText: "Product view", isPrimary: true }];
+
+  const safeImages: GalleryImageItem[] = rawImages.map((img) => ({
+    ...img,
+    url: getSafeImageUrl(img.url),
+  }));
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [showLightbox, setShowLightbox] = useState(false);
