@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 import { AlertCircle, RotateCcw, Home } from "lucide-react";
 
 export default function ErrorBoundary({
@@ -12,7 +13,7 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the error to console or telemetry
+    Sentry.captureException(error);
     console.error("[Application Error Boundary caught error]:", error);
   }, [error]);
 

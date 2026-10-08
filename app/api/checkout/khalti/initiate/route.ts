@@ -15,6 +15,7 @@ import {
     initiateKhaltiPayment,
     toKhaltiPaisa,
 } from "@/lib/services/khalti";
+import { checkCheckoutRateLimit, getClientIp } from "@/lib/security/rateLimit";
 
 function generateOrderNumber(): string {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -23,6 +24,23 @@ function generateOrderNumber(): string {
 }
 
 export async function POST(request: NextRequest) {
+    const clientIp = getClientIp(request);
+    const rateLimit = await checkCheckoutRateLimit(clientIp);
+    if (!rateLimit.success) {
+        return NextResponse.json(
+            {
+                error: "Too many payment initiation attempts. Please wait a moment.",
+                code: "RATE_LIMIT_EXCEEDED",
+            },
+            {
+                status: 429,
+                headers: {
+                    "Retry-After": Math.ceil((rateLimit.reset - Date.now()) / 1000).toString(),
+                },
+            }
+        );
+    }
+
     let body: any;
     try {
         body = await request.json();
