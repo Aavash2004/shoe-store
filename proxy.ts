@@ -69,7 +69,7 @@ const proxy = auth((req) => {
     pathname,
     isLoggedIn,
     isAdmin,
-    adminLoginPath: process.env.ADMIN_LOGIN_PATH,
+    adminLoginPath: process.env.ADMIN_LOGIN_PATH || "/admin/login",
   });
 
   if (adminDecision.action === "404") {

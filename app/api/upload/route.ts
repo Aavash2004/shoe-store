@@ -230,12 +230,11 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ url: result.secure_url });
     } catch (cloudinaryError: any) {
-      console.warn(
-        "[Cloudinary Upload Failed - Falling back to local storage in development]:",
-        cloudinaryError?.message || cloudinaryError
+      console.error("[Cloudinary Upload Failed]:", cloudinaryError);
+      return NextResponse.json(
+        { error: `Cloud storage upload failed: ${cloudinaryError?.message || "Unknown error"}` },
+        { status: 500 }
       );
-      const localUrl = await saveFileLocally(file, buffer);
-      return NextResponse.json({ url: localUrl, fallback: true });
     }
   } catch (error: any) {
     console.error("[Upload API Handler Error]:", error);

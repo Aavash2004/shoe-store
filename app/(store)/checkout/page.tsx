@@ -11,6 +11,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 import { Button } from "@/components/ui/button";
 import { getImagesForColor } from "@/lib/utils/gallery";
+import { getSafeImageUrl } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   Lock,
@@ -875,7 +876,7 @@ export default function CheckoutPage() {
                   >
                     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[var(--color-sand)] bg-white">
                       <Image
-                        src={item.image}
+                        src={getSafeImageUrl(item.image)}
                         alt={item.productName}
                         fill
                         className="object-cover"

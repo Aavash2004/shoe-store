@@ -18,6 +18,7 @@ import {
 import { formatCurrency, convertCurrency } from "@/lib/constants/currencies";
 import { FlagIcon } from "@/components/ui/FlagIcon";
 import { restockVariantQuantity } from "@/app/admin/inventory/actions";
+import { getSafeImageUrl } from "@/lib/utils";
 
 export type AdminDashboardOrder = {
   id: string;
@@ -542,7 +543,7 @@ export function AdminDashboardClient({
                     >
                       <div className="flex items-center gap-2.5">
                         <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[var(--color-cream-alt)] border border-[var(--color-sand)]">
-                          <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
+                          <Image src={getSafeImageUrl(item.imageUrl)} alt={item.name} fill className="object-cover" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-[var(--color-navy)] truncate">
@@ -821,7 +822,7 @@ export function AdminDashboardClient({
                       className="flex items-center gap-3 sm:gap-4 px-3.5 sm:px-5 py-3 sm:py-3.5 hover:bg-[var(--color-sand)]/20 transition-colors"
                     >
                       <div className="relative h-11 w-11 sm:h-12 sm:w-12 shrink-0 overflow-hidden rounded-xl bg-[var(--color-cream)] border border-[var(--color-sand)]">
-                        <Image src={prod.imageUrl} alt={prod.name} fill className="object-cover" />
+                        <Image src={getSafeImageUrl(prod.imageUrl)} alt={prod.name} fill className="object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-[family-name:var(--font-display)] font-semibold text-xs sm:text-sm text-[var(--color-navy)] truncate">

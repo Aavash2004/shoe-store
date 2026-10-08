@@ -18,10 +18,10 @@ export default async function AdminLayout({
   const isLoggedIn = !!session?.user;
 
   const decision = evaluateAdminRouteAccess({
-    pathname: isAllowedAdminLogin ? (process.env.ADMIN_LOGIN_PATH || "") : pathname,
+    pathname: isAllowedAdminLogin ? (process.env.ADMIN_LOGIN_PATH || "/admin/login") : pathname,
     isLoggedIn,
     isAdmin,
-    adminLoginPath: process.env.ADMIN_LOGIN_PATH,
+    adminLoginPath: process.env.ADMIN_LOGIN_PATH || "/admin/login",
   });
 
   if (decision.action === "404") {

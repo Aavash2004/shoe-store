@@ -23,6 +23,7 @@ import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/button";
 import { debounce, type DebouncedFunction } from "@/lib/utils/debounce";
 import { getImagesForColor } from "@/lib/utils/gallery";
+import { getSafeImageUrl } from "@/lib/utils";
 
 type RecommendedProduct = {
   id: string;
@@ -468,7 +469,7 @@ export function CartDrawer() {
                         aria-label={`View ${item.productName}`}
                       >
                         <Image
-                          src={item.image}
+                          src={getSafeImageUrl(item.image)}
                           alt={item.productName}
                           fill
                           className="object-cover object-center"
@@ -595,7 +596,7 @@ export function CartDrawer() {
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xs border border-[var(--color-sand)] bg-white">
                             <Image
-                              src={rec.image}
+                              src={getSafeImageUrl(rec.image)}
                               alt={rec.name}
                               fill
                               className="object-cover group-hover:scale-105 transition-transform duration-200"

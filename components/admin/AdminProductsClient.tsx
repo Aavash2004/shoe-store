@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounce";
 import { formatCurrency } from "@/lib/constants/currencies";
+import { getSafeImageUrl } from "@/lib/utils";
 
 export type AdminProductItem = {
   id: string;
@@ -288,7 +289,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
               </thead>
               <tbody className="divide-y divide-[var(--color-sand)]/60">
                 {filteredProducts.map((product) => {
-                  const imageUrl = product.images[0]?.url || "/images/Shoes/gmm.jpeg";
+                  const imageUrl = getSafeImageUrl(product.images[0]?.url);
                   const prices = product.variants.map((v) => Number(v.price) || 0);
                   const minPrice = prices.length ? Math.min(...prices) : 0;
                   const maxPrice = prices.length ? Math.max(...prices) : 0;
@@ -419,7 +420,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
           {/* Mobile Card Grid View */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {filteredProducts.map((product) => {
-              const imageUrl = product.images[0]?.url || "/images/Shoes/gmm.jpeg";
+              const imageUrl = getSafeImageUrl(product.images[0]?.url);
               const prices = product.variants.map((v) => Number(v.price) || 0);
               const minPrice = prices.length ? Math.min(...prices) : 0;
               const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0);

@@ -12,17 +12,11 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminLoginPage() {
-  const rawAdminLoginPath = process.env.ADMIN_LOGIN_PATH?.trim();
+  const rawAdminLoginPath = process.env.ADMIN_LOGIN_PATH?.trim() || "/admin/login";
   const adminLoginPath =
     rawAdminLoginPath && rawAdminLoginPath.startsWith("/")
       ? rawAdminLoginPath
-      : rawAdminLoginPath
-      ? `/${rawAdminLoginPath}`
-      : undefined;
-
-  if (!adminLoginPath) {
-    notFound();
-  }
+      : `/${rawAdminLoginPath}`;
 
   const headersList = await headers();
   const isAllowed =

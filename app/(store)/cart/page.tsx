@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
 import { debounce, type DebouncedFunction } from "@/lib/utils/debounce";
 import { Price } from "@/components/ui/Price";
+import { getSafeImageUrl } from "@/lib/utils";
 
 type DbCartItem = {
   variant: {
@@ -206,9 +207,12 @@ export default function CartPage() {
             className="flex items-center gap-4 border-b border-[var(--color-sand)] pb-4"
           >
             <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-[var(--color-cream-alt)] border border-[var(--color-sand)]">
-              {item.image && (
-                <Image src={item.image} alt={item.productName} fill className="object-cover" />
-              )}
+              <Image
+                src={getSafeImageUrl(item.image)}
+                alt={item.productName}
+                fill
+                className="object-cover"
+              />
             </div>
 
             <div className="flex-1 min-w-0">
