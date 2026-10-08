@@ -51,7 +51,16 @@ export default function PrivacyPolicyPage() {
 
           <div>
             <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)] mb-2">
-              4. Your Rights
+              4. Error Telemetry &amp; Security Diagnostics
+            </h2>
+            <p>
+              To maintain system uptime, detect bot attacks, and fix technical bugs, our platform uses telemetry and security diagnostics services (including Sentry for application crash monitoring and Upstash for distributed rate limiting). These diagnostics capture technical error traces while stripping sensitive personal identifiers, passwords, and payment card numbers.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)] mb-2">
+              5. Your Rights
             </h2>
             <p>
               You have the right to request access to, correction of, or deletion of your personal account information at any time by contacting our data protection officer at <a href="mailto:privacy@abxv.com" className="font-semibold underline">privacy@abxv.com</a>.

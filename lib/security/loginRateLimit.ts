@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import * as Sentry from "@sentry/nextjs";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_SECONDS = 15 * 60; // 15 minutes
@@ -18,6 +19,7 @@ if (hasUpstashConfig) {
     });
   } catch (err) {
     console.warn("[RateLimit] Failed to initialize Upstash Redis:", err);
+    Sentry.captureException(err, { tags: { component: "login_ratelimit_init" } });
   }
 }
 

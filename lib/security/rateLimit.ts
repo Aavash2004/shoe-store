@@ -1,5 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import * as Sentry from "@sentry/nextjs";
 import type { NextRequest } from "next/server";
 
 // Check if Upstash Redis credentials are provided in the environment
@@ -16,10 +17,12 @@ if (hasUpstashConfig) {
     });
   } catch (err) {
     console.warn("[RateLimit] Failed to initialize Upstash Redis:", err);
+    Sentry.captureException(err, { tags: { component: "ratelimit_init" } });
   }
 }
 
 // Dedicated Upstash rate limiters
+// 1. General API & order tracking limiter: 20 req / 60s
 const generalLimiter = redis
   ? new Ratelimit({
       redis,
@@ -29,15 +32,18 @@ const generalLimiter = redis
     })
   : null;
 
+// 2. Checkout & payment initiation: 12 req / 60s
+// Generous enough for shared CGNAT IPs in Nepal while completely stopping card-testing bot attacks
 const checkoutLimiter = redis
   ? new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(6, "60 s"),
+      limiter: Ratelimit.slidingWindow(12, "60 s"),
       analytics: true,
       prefix: "shoe_store:ratelimit:checkout",
     })
   : null;
 
+// 3. Sensitive auth / forgot-password: 5 req / 60s
 const authLimiter = redis
   ? new Ratelimit({
       redis,
@@ -47,7 +53,7 @@ const authLimiter = redis
     })
   : null;
 
-// In-memory sliding window fallback for local development / testing
+// In-memory sliding window fallback for local development / testing and fail-open mode
 const inMemoryCache = new Map<string, { count: number; resetTime: number }>();
 
 function fallbackRateLimit(
@@ -101,7 +107,7 @@ export type RateLimitResult = {
 };
 
 /**
- * Extracts client IP safely from request headers.
+ * Extracts client IP safely from request headers (first entry of x-forwarded-for or x-real-ip).
  */
 export function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -116,7 +122,7 @@ export function getClientIp(request: NextRequest): string {
 }
 
 /**
- * General endpoint rate limit (20 req / 60s).
+ * General endpoint rate limit (20 req / 60s). Fails open to memory with Sentry alert on Redis outage.
  */
 export async function checkRateLimit(identifier: string): Promise<RateLimitResult> {
   if (identifier === "test-bypass") {
@@ -128,7 +134,8 @@ export async function checkRateLimit(identifier: string): Promise<RateLimitResul
       const res = await generalLimiter.limit(identifier);
       return { success: res.success, limit: res.limit, remaining: res.remaining, reset: res.reset };
     } catch (err) {
-      console.warn("[RateLimit] Upstash error, falling back to memory:", err);
+      console.warn("[RateLimit] Upstash error, failing open to memory fallback:", err);
+      Sentry.captureException(err, { tags: { component: "rate_limiter_general" } });
     }
   }
 
@@ -136,11 +143,13 @@ export async function checkRateLimit(identifier: string): Promise<RateLimitResul
 }
 
 /**
- * Checkout & payment initiation rate limit (6 req / 60s) to block card testing attacks.
+ * Checkout & payment initiation rate limit (12 req / 60s).
+ * Accommodates shared CGNAT IPs while preventing card-testing scripts.
+ * Fails open to memory with Sentry alert on Redis outage so sales are never blocked.
  */
 export async function checkCheckoutRateLimit(identifier: string): Promise<RateLimitResult> {
   if (identifier === "test-bypass") {
-    return { success: true, limit: 6, remaining: 6, reset: Date.now() + 60_000 };
+    return { success: true, limit: 12, remaining: 12, reset: Date.now() + 60_000 };
   }
 
   if (checkoutLimiter) {
@@ -148,11 +157,12 @@ export async function checkCheckoutRateLimit(identifier: string): Promise<RateLi
       const res = await checkoutLimiter.limit(identifier);
       return { success: res.success, limit: res.limit, remaining: res.remaining, reset: res.reset };
     } catch (err) {
-      console.warn("[RateLimit] Upstash checkout error, falling back to memory:", err);
+      console.warn("[RateLimit] Upstash checkout error, failing open to memory fallback:", err);
+      Sentry.captureException(err, { tags: { component: "rate_limiter_checkout" } });
     }
   }
 
-  return fallbackRateLimit(`chk:${identifier}`, 6, 60_000);
+  return fallbackRateLimit(`chk:${identifier}`, 12, 60_000);
 }
 
 /**
@@ -168,7 +178,8 @@ export async function checkAuthRateLimit(identifier: string): Promise<RateLimitR
       const res = await authLimiter.limit(identifier);
       return { success: res.success, limit: res.limit, remaining: res.remaining, reset: res.reset };
     } catch (err) {
-      console.warn("[RateLimit] Upstash auth error, falling back to memory:", err);
+      console.warn("[RateLimit] Upstash auth error, failing open to memory fallback:", err);
+      Sentry.captureException(err, { tags: { component: "rate_limiter_auth" } });
     }
   }
 

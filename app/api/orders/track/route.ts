@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
-import { checkRateLimit } from "@/lib/security/rateLimit";
+import { checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 
 export async function GET(request: NextRequest) {
   // 1. IP Rate Limiting to prevent brute-force order number enumeration
-  const clientIp =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "127.0.0.1";
-
+  const clientIp = getClientIp(request);
   const rateLimitResult = await checkRateLimit(clientIp);
   if (!rateLimitResult.success) {
     const retryAfterSeconds = Math.max(
