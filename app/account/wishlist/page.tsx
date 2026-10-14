@@ -63,31 +63,9 @@ export default function WishlistPage() {
     }
   };
 
-  const handleAddToCart = async (product: WishlistProduct) => {
+  const handleAddToCart = (product: WishlistProduct) => {
     const firstVariant = product.variants?.[0];
     const variantId = firstVariant?.id || product.productId;
-
-    try {
-      const res = await fetch("/api/cart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variantId, quantity: 1 }),
-      });
-      if (res.ok) {
-        window.dispatchEvent(new Event("cart-updated"));
-        window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
-        return;
-      }
-      if (res.status === 400) {
-        const err = await res.json().catch(() => ({}));
-        window.dispatchEvent(
-          new CustomEvent("show-toast", { detail: err.error || "Could not add to cart" })
-        );
-        return;
-      }
-    } catch {
-      // Fallback to local cart if unauthenticated or network failure
-    }
 
     addItemToCart({
       variantId,

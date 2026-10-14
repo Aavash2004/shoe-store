@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
 import Link from "next/link";
-import { useCartStore } from "@/stores/cart-store";
+import { useCartStore, flushPendingSync } from "@/stores/cart-store";
 import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 import { Button } from "@/components/ui/button";
 import { StoreContainer } from "@/components/layout/PageContainer";
@@ -63,7 +63,7 @@ export default function CheckoutPage() {
   const clearCart = useCartStore((state) => state.clearCart);
   const fetchCart = useCartStore((state) => state.fetchCart);
   const hasHydrated = useCartStore((state) => state.hasHydrated);
-  const isFetching = useCartStore((state) => state.isFetching);
+  const hasFetchedInitial = useCartStore((state) => state.hasFetchedInitial);
 
   // Client session-stable idempotency key (persists across re-renders and form edits)
   const idempotencyKeyRef = useRef<string>("");
@@ -167,19 +167,19 @@ export default function CheckoutPage() {
     }
   }, [selectedCountryCode, selectedCountry, currentPaymentMethod, setValue]);
 
-  // Load cart from DB if logged in and synchronize with cart-updated events
+  // Load cart from DB once on mount if logged in and not yet fetched
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && !hasFetchedInitial) {
       fetchCart();
     }
-    const handleCartUpdated = () => {
-      if (isLoggedIn) {
-        fetchCart();
-      }
-    };
-    window.addEventListener("cart-updated", handleCartUpdated);
-    return () => window.removeEventListener("cart-updated", handleCartUpdated);
-  }, [isLoggedIn, fetchCart]);
+  }, [isLoggedIn, hasFetchedInitial, fetchCart]);
+
+  // Reset Stripe payment intent if items in cart change so total amount matches
+  useEffect(() => {
+    if (stripeData) {
+      setStripeData(null);
+    }
+  }, [cartItems]);
 
   const handleCheckoutQuantity = (variantId: string, newQty: number, maxStock: number) => {
     if (newQty < 1) return; // Minimum-1 rule
@@ -226,6 +226,7 @@ export default function CheckoutPage() {
   const total = Math.max(0, subtotal + shipping - discountAmount);
 
   async function onSubmit(data: FormData) {
+    flushPendingSync();
     setError("");
     setLoading(true);
 
@@ -360,7 +361,7 @@ export default function CheckoutPage() {
     !mounted ||
     status === "loading" ||
     !hasHydrated ||
-    (isLoggedIn && isFetching);
+    (isLoggedIn && !hasFetchedInitial && cartItems.length === 0);
 
   if (isCheckoutLoading) {
     return (

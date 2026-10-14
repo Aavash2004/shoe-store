@@ -177,8 +177,6 @@ export function ProductDetailInteractive({
           stock: matchedVariant.stock,
         });
       }
-
-      window.dispatchEvent(new Event("cart-updated"));
       openDrawer();
     } finally {
       setIsSubmitting(false);

@@ -43,7 +43,7 @@ export function CartDrawer() {
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const fetchCart = useCartStore((state) => state.fetchCart);
   const hasHydrated = useCartStore((state) => state.hasHydrated);
-  const isFetching = useCartStore((state) => state.isFetching);
+  const hasFetchedInitial = useCartStore((state) => state.hasFetchedInitial);
 
   const [mounted, setMounted] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
@@ -59,20 +59,10 @@ export function CartDrawer() {
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && !hasFetchedInitial) {
       fetchCart();
     }
-  }, [isLoggedIn, isDrawerOpen, fetchCart]);
-
-  useEffect(() => {
-    const handleCartUpdated = () => {
-      if (isLoggedIn) {
-        fetchCart();
-      }
-    };
-    window.addEventListener("cart-updated", handleCartUpdated);
-    return () => window.removeEventListener("cart-updated", handleCartUpdated);
-  }, [isLoggedIn, fetchCart]);
+  }, [isLoggedIn, hasFetchedInitial, fetchCart]);
 
   // Fetch store catalog recommendations when drawer opens
   useEffect(() => {
@@ -254,7 +244,7 @@ export function CartDrawer() {
 
         {/* ── 2. Scrollable Items Area ── */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {!mounted || !hasHydrated || (isLoggedIn && isFetching) ? (
+          {!mounted || !hasHydrated || (isLoggedIn && !hasFetchedInitial && cartItems.length === 0) ? (
             <div className="space-y-4 animate-pulse">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="flex gap-3.5 py-4 border-b border-[var(--color-sand)]/60">

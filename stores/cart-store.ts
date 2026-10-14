@@ -23,8 +23,10 @@ type CartState = {
   setHasHydrated: (val: boolean) => void;
   isFetching: boolean;
   setIsFetching: (val: boolean) => void;
+  hasFetchedInitial: boolean;
+  setHasFetchedInitial: (val: boolean) => void;
   setItems: (items: CartItem[]) => void;
-  fetchCart: () => Promise<void>;
+  fetchCart: (force?: boolean) => Promise<void>;
   addItem: (item: CartItem) => void;
   removeItem: (variantId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
@@ -54,6 +56,10 @@ const showStockToast = (stock: number) => {
 
 const debouncedSyncMap = new Map<string, DebouncedFunction<(quantity: number) => void>>();
 
+export function flushPendingSync() {
+  debouncedSyncMap.forEach((debounced) => debounced.flush());
+}
+
 function syncQuantityToServer(variantId: string, quantity: number) {
   if (typeof window === "undefined") return;
   let debounced = debouncedSyncMap.get(variantId);
@@ -72,7 +78,7 @@ function syncQuantityToServer(variantId: string, quantity: number) {
               new CustomEvent("show-toast", { detail: data.error })
             );
           }
-          useCartStore.getState().fetchCart();
+          useCartStore.getState().fetchCart(true);
         }
       } catch {}
     }, 400);
@@ -81,25 +87,41 @@ function syncQuantityToServer(variantId: string, quantity: number) {
   debounced(quantity);
 }
 
-function syncRemoveToServer(variantId: string) {
+async function syncRemoveToServer(variantId: string) {
   if (typeof window === "undefined") return;
   const debounced = debouncedSyncMap.get(variantId);
   if (debounced) {
     debounced.cancel();
     debouncedSyncMap.delete(variantId);
   }
-  fetch(`/api/cart?variantId=${encodeURIComponent(variantId)}`, {
-    method: "DELETE",
-  }).catch(() => {});
+  try {
+    const res = await fetch(`/api/cart?variantId=${encodeURIComponent(variantId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok && res.status !== 401) {
+      useCartStore.getState().fetchCart(true);
+    }
+  } catch {}
 }
 
-function syncAddToServer(variantId: string, quantity: number) {
+async function syncAddToServer(variantId: string, quantity: number) {
   if (typeof window === "undefined") return;
-  fetch("/api/cart", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ variantId, quantity }),
-  }).catch(() => {});
+  try {
+    const res = await fetch("/api/cart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variantId, quantity }),
+    });
+    if (!res.ok && res.status !== 401) {
+      const data = await res.json().catch(() => ({}));
+      if (data.error) {
+        window.dispatchEvent(
+          new CustomEvent("show-toast", { detail: data.error })
+        );
+      }
+      useCartStore.getState().fetchCart(true);
+    }
+  } catch {}
 }
 
 function syncClearToServer() {
@@ -119,11 +141,22 @@ export const useCartStore = create<CartState>()(
       setHasHydrated: (val) => set({ hasHydrated: val }),
       isFetching: false,
       setIsFetching: (val) => set({ isFetching: val }),
+      hasFetchedInitial: false,
+      setHasFetchedInitial: (val) => set({ hasFetchedInitial: val }),
       setItems: (items) => {
         set({ items });
         notifyCartUpdated();
       },
-      fetchCart: async () => {
+      fetchCart: async (force = false) => {
+        if (get().isFetching && !force) return;
+        if (!force) {
+          let hasPending = false;
+          debouncedSyncMap.forEach((d) => {
+            if (d.isPending()) hasPending = true;
+          });
+          if (hasPending) return;
+        }
+
         try {
           set({ isFetching: true });
           const res = await fetch("/api/cart");
@@ -147,12 +180,12 @@ export const useCartStore = create<CartState>()(
                 quantity: Math.max(1, i.quantity),
                 stock: i.variant?.stock ?? i.stock ?? 999,
               }));
-              set({ items: mapped });
+              set({ items: mapped, hasFetchedInitial: true });
             }
           }
         } catch {
         } finally {
-          set({ isFetching: false });
+          set({ isFetching: false, hasFetchedInitial: true });
         }
       },
       addItem: (item) => {
@@ -286,6 +319,7 @@ export function useCartHydrated() {
 
 export function useCartLoading(isLoggedIn: boolean = false) {
   const hasHydrated = useCartStore((state) => state.hasHydrated);
-  const isFetching = useCartStore((state) => state.isFetching);
-  return !hasHydrated || (isLoggedIn && isFetching);
+  const hasFetchedInitial = useCartStore((state) => state.hasFetchedInitial);
+  const items = useCartStore((state) => state.items);
+  return !hasHydrated || (isLoggedIn && !hasFetchedInitial && items.length === 0);
 }

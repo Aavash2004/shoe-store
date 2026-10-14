@@ -20,7 +20,7 @@ export default function CartPage() {
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const fetchCart = useCartStore((state) => state.fetchCart);
   const hasHydrated = useCartStore((state) => state.hasHydrated);
-  const isFetching = useCartStore((state) => state.isFetching);
+  const hasFetchedInitial = useCartStore((state) => state.hasFetchedInitial);
 
   const [mounted, setMounted] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
@@ -30,20 +30,10 @@ export default function CartPage() {
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && !hasFetchedInitial) {
       fetchCart();
     }
-  }, [isLoggedIn, fetchCart]);
-
-  useEffect(() => {
-    const handleCartUpdated = () => {
-      if (isLoggedIn) {
-        fetchCart();
-      }
-    };
-    window.addEventListener("cart-updated", handleCartUpdated);
-    return () => window.removeEventListener("cart-updated", handleCartUpdated);
-  }, [isLoggedIn, fetchCart]);
+  }, [isLoggedIn, hasFetchedInitial, fetchCart]);
 
   function handleQuantityChange(variantId: string, newQty: number, maxStock: number) {
     if (newQty < 1) return;
@@ -60,7 +50,11 @@ export default function CartPage() {
     updateQuantity(variantId, newQty);
   }
 
-  const isCartLoading = !mounted || status === "loading" || !hasHydrated || (isLoggedIn && isFetching);
+  const isCartLoading =
+    !mounted ||
+    status === "loading" ||
+    !hasHydrated ||
+    (isLoggedIn && !hasFetchedInitial && items.length === 0);
 
   if (isCartLoading) {
     return (
@@ -179,6 +173,7 @@ export default function CartPage() {
             </div>
 
             <button
+              type="button"
               onClick={() => removeItem(item.variantId)}
               className="text-xs text-[var(--color-navy)]/50 hover:text-rose-600 transition-colors ml-2 cursor-pointer"
             >
