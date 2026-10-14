@@ -28,9 +28,16 @@ interface OrderItemData {
   color: string;
   quantity: number;
   price: number;
+  image?: string | null;
   product?: {
     slug: string;
     images: { url: string }[];
+  } | null;
+  variant?: {
+    product?: {
+      slug: string;
+      images: { url: string }[];
+    } | null;
   } | null;
 }
 
@@ -80,7 +87,7 @@ export default function OrderConfirmationPage({
     if (order && (order.paymentStatus === "PAID" || order.paymentMethod === "COD")) {
       useCartStore.getState().clearCart();
     }
-  }, [order?.paymentStatus, order?.paymentMethod]);
+  }, [order]);
 
   // Register confirmed order with real-time notification store
   useEffect(() => {
@@ -120,9 +127,10 @@ export default function OrderConfirmationPage({
             if (intervalId) clearInterval(intervalId);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isCancelled) {
-          setError(err.message || "Failed to query status");
+          const message = err instanceof Error ? err.message : "Failed to query status";
+          setError(message);
           setLoading(false);
         }
       }
@@ -230,8 +238,10 @@ export default function OrderConfirmationPage({
       quantity: i.quantity,
       price: i.price,
       size: i.size,
-      color: i.color,
-      image: i.product?.images?.[0]?.url,
+      image:
+        i.variant?.product?.images?.[0]?.url ||
+        i.product?.images?.[0]?.url ||
+        i.image,
     })),
   };
 

@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { formatCurrency } from "@/lib/constants/currencies";
 import { getSafeImageUrl } from "@/lib/utils";
 
@@ -62,7 +61,7 @@ export function PrintInvoice({ order, className = "" }: PrintInvoiceProps) {
     order.user?.email ||
     "Valued Customer";
 
-  const customerPhone = order.address?.phone || "+977-9800000000";
+  const customerPhone = order.address?.phone || "";
 
   const addressLines = [
     order.address?.addressLine1,
@@ -77,15 +76,49 @@ export function PrintInvoice({ order, className = "" }: PrintInvoiceProps) {
 
   const items = order.items || [];
   const calculatedSubtotal =
-    order.subtotal ??
-    items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
-  const discount = order.discount ?? 0;
-  const tax =
-    order.tax ??
-    (currency === "NPR"
-      ? Math.round(calculatedSubtotal - calculatedSubtotal / 1.13)
-      : Math.round(calculatedSubtotal * 0.13 * 100) / 100);
-  const total = Number(order.total) || calculatedSubtotal - discount + tax;
+    order.subtotal !== undefined && order.subtotal !== null
+      ? Number(order.subtotal)
+      : items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
+
+  const discount = order.discount ? Number(order.discount) : 0;
+
+  // Tax calculation & display:
+  // - If order.tax has an explicit value > 0, display "Tax (13%)".
+  // - If currency is NPR (where 13% VAT is included in domestic retail price),
+  //   calculate the 13% VAT portion and display "Tax (13% VAT Included)".
+  // - If tax is $0.00 / 0, display "Tax (0%)" so it never shows "Tax (13%)" alongside $0.00.
+  const rawTax =
+    order.tax !== undefined && order.tax !== null ? Number(order.tax) : null;
+
+  let taxLabel = "Tax (13%)";
+  let taxAmount = 0;
+
+  if (rawTax !== null && rawTax > 0) {
+    taxAmount = rawTax;
+    taxLabel = "Tax (13%)";
+  } else if (currency === "NPR") {
+    taxAmount = Math.round(calculatedSubtotal - calculatedSubtotal / 1.13);
+    taxLabel = "Tax (13% VAT Included)";
+  } else {
+    taxAmount = 0;
+    taxLabel = "Tax (0%)";
+  }
+
+  const total =
+    Number(order.total) ||
+    Math.max(
+      0,
+      calculatedSubtotal - discount + (currency === "NPR" ? 0 : taxAmount)
+    );
+
+  const isStripe =
+    order.paymentMethod === "STRIPE" || order.paymentMethod === "CARD";
+  const isKhalti = order.paymentMethod === "KHALTI";
+  const isCod = order.paymentMethod === "COD";
+  const isBankTransfer =
+    order.paymentMethod === "BANK_TRANSFER" ||
+    order.paymentMethod === "WIRE" ||
+    order.paymentMethod === "BANK";
 
   const paymentMethodLabel = (() => {
     switch (order.paymentMethod) {
@@ -96,17 +129,23 @@ export function PrintInvoice({ order, className = "" }: PrintInvoiceProps) {
         return "Khalti Digital Wallet";
       case "COD":
         return "Cash on Delivery (COD)";
+      case "BANK_TRANSFER":
+      case "WIRE":
+      case "BANK":
+        return "Bank Transfer";
       default:
-        return order.paymentMethod || "Bank Transfer / UPI";
+        return order.paymentMethod || "Direct Payment";
     }
   })();
 
   return (
     <div
-      className={`print-invoice-sheet hidden print:block bg-[#FAF8F5] text-stone-900 font-sans p-8 sm:p-12 mx-auto max-w-[800px] leading-normal ${className}`}
+      className={`print-invoice-sheet hidden print:block bg-[#FAF8F5] text-stone-900 font-sans p-8 sm:p-10 mx-auto w-full max-w-full box-border leading-normal ${className}`}
       style={{
         backgroundColor: "#FAF8F5",
         color: "#1c1917",
+        WebkitPrintColorAdjust: "exact",
+        printColorAdjust: "exact",
       }}
     >
       {/* ── TOP HEADER: Logo & Invoice Meta ── */}
@@ -146,9 +185,9 @@ export function PrintInvoice({ order, className = "" }: PrintInvoiceProps) {
           BILLED TO:
         </p>
         <p className="text-base font-bold text-black">{customerName}</p>
-        {customerPhone && (
+        {customerPhone ? (
           <p className="text-xs text-stone-700 mt-0.5 font-medium">{customerPhone}</p>
-        )}
+        ) : null}
         {addressLines ? (
           <p className="text-xs text-stone-700 mt-0.5 font-medium max-w-md">
             {addressLines}
@@ -175,21 +214,27 @@ export function PrintInvoice({ order, className = "" }: PrintInvoiceProps) {
           <tbody className="divide-y divide-stone-300">
             {items.map((item, idx) => {
               const itemTotal = Number(item.price) * item.quantity;
+              const safeImg = item.image ? getSafeImageUrl(item.image) : "";
+              const hasValidImage =
+                Boolean(safeImg) && safeImg !== "/placeholder-shoe.png";
+
               return (
                 <tr key={item.id || idx} className="py-4">
                   <td className="py-4 pr-4">
                     <div className="flex items-center gap-4">
-                      {item.image && (
-                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-white">
-                          <Image
-                            src={getSafeImageUrl(item.image)}
+                      {hasValidImage ? (
+                        <div className="relative h-14 w-14 sm:h-16 sm:w-16 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-white">
+                          {/* Standard eager img tag guarantees image loads immediately for print preview */}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={safeImg}
                             alt={item.productName}
-                            fill
-                            className="object-cover object-center"
-                            sizes="64px"
+                            className="h-full w-full object-cover object-center"
+                            loading="eager"
+                            crossOrigin="anonymous"
                           />
                         </div>
-                      )}
+                      ) : null}
                       <div>
                         <p className="font-bold text-sm text-black">
                           {item.productName}
@@ -238,9 +283,9 @@ export function PrintInvoice({ order, className = "" }: PrintInvoiceProps) {
             </div>
           )}
           <div className="flex justify-between text-stone-700 font-medium">
-            <span>Tax (13%)</span>
+            <span>{taxLabel}</span>
             <span className="font-semibold text-black">
-              {formatCurrency(tax, currency)}
+              {formatCurrency(taxAmount, currency)}
             </span>
           </div>
 
@@ -258,32 +303,97 @@ export function PrintInvoice({ order, className = "" }: PrintInvoiceProps) {
       {/* Full Width Horizontal Divider */}
       <div className="w-full border-t border-stone-800" />
 
-      {/* ── BOTTOM TWO COLUMNS: Payment & Shipping Info ── */}
+      {/* ── BOTTOM TWO COLUMNS: Payment & Merchant Info ── */}
       <div className="grid grid-cols-2 gap-8 py-6 text-xs text-stone-800">
         {/* Left Column: Payment Information */}
         <div className="space-y-1.5 pr-4 border-r border-stone-300">
           <p className="text-[11px] font-extrabold tracking-[0.18em] uppercase text-stone-900 mb-2.5">
             PAYMENT INFORMATION
           </p>
+
           <p>
             <span className="font-semibold text-black">Payment Method:</span>{" "}
             {paymentMethodLabel}
           </p>
-          <p>
-            <span className="font-semibold text-black">Bank:</span> Really Great Bank
-          </p>
-          <p>
-            <span className="font-semibold text-black">Account No:</span> 0123 4567 8901
-          </p>
-          <p>
-            <span className="font-semibold text-black">Account Name:</span> ABXV Store
-          </p>
+
+          {isStripe ? (
+            <>
+              <p>
+                <span className="font-semibold text-black">Payment Status:</span>{" "}
+                <span className="text-emerald-800 font-semibold">
+                  {order.paymentStatus === "PAID"
+                    ? "Paid"
+                    : order.paymentStatus || "Paid"}
+                </span>
+              </p>
+              {order.stripePaymentIntentId && (
+                <p className="font-mono text-[11px] text-stone-600 truncate">
+                  <span className="font-sans font-semibold text-black">Ref ID:</span>{" "}
+                  {order.stripePaymentIntentId}
+                </p>
+              )}
+            </>
+          ) : isKhalti ? (
+            <>
+              <p>
+                <span className="font-semibold text-black">Payment Status:</span>{" "}
+                <span className="text-emerald-800 font-semibold">
+                  {order.paymentStatus === "PAID"
+                    ? "Paid"
+                    : order.paymentStatus || "Paid"}
+                </span>
+              </p>
+              <p className="font-mono text-[11px] text-stone-600 truncate">
+                <span className="font-sans font-semibold text-black">Order Ref:</span>{" "}
+                {order.orderNumber}
+              </p>
+            </>
+          ) : isCod ? (
+            <>
+              <p>
+                <span className="font-semibold text-black">Payment Status:</span>{" "}
+                <span className="text-amber-800 font-semibold">
+                  Payable on Delivery
+                </span>
+              </p>
+              <p className="text-stone-600 text-[11px]">
+                Please prepare cash or local QR payment upon courier arrival.
+              </p>
+            </>
+          ) : isBankTransfer ? (
+            <>
+              <p>
+                <span className="font-semibold text-black">Bank:</span> Really Great Bank
+              </p>
+              <p>
+                <span className="font-semibold text-black">Account No:</span> 0123 4567 8901
+              </p>
+              <p>
+                <span className="font-semibold text-black">Account Name:</span> ABXV Store
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                <span className="font-semibold text-black">Payment Status:</span>{" "}
+                <span className="font-semibold text-stone-900">
+                  {order.paymentStatus || "Confirmed"}
+                </span>
+              </p>
+              {order.stripePaymentIntentId && (
+                <p className="font-mono text-[11px] text-stone-600 truncate">
+                  <span className="font-sans font-semibold text-black">Ref ID:</span>{" "}
+                  {order.stripePaymentIntentId}
+                </p>
+              )}
+            </>
+          )}
         </div>
 
-        {/* Right Column: Shipping Information */}
+        {/* Right Column: Merchant Information */}
         <div className="space-y-1.5 pl-4">
           <p className="text-[11px] font-extrabold tracking-[0.18em] uppercase text-stone-900 mb-2.5">
-            SHIPPING INFORMATION
+            MERCHANT INFORMATION
           </p>
           <p className="font-bold text-black">ABXV</p>
           <p>123 Fashion Street, Kathmandu,</p>
