@@ -7,10 +7,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ShoppingBag, Heart, User, Menu, X, Search, Loader2, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
-import { useCartStore } from "@/stores/cart-store";
+import { useCartStore, useCartHydrated } from "@/stores/cart-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
 import { useDebouncedValue } from "@/hooks/use-debounce";
-import { debounce } from "@/lib/utils/debounce";
 import { CurrencySwitcher } from "@/components/layout/CurrencySwitcher";
 import { Price } from "@/components/ui/Price";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -186,44 +185,27 @@ function HeaderInner() {
     });
   }
 
-  const localCount = useCartStore((state) =>
-    state.items.reduce((sum, item) => sum + item.quantity, 0)
-  );
+  const isHydrated = useCartHydrated();
+  const cartItems = useCartStore((state) => state.items);
   const openDrawer = useCartStore((state) => state.openDrawer);
+  const fetchCart = useCartStore((state) => state.fetchCart);
 
-  const [dbCount, setDbCount] = useState(0);
+  const [headerMounted, setHeaderMounted] = useState(false);
   const wishlistCount = useWishlistStore((state) => state.wishlistIds.length);
+
+  useEffect(() => {
+    setHeaderMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!isLoggedIn) return;
 
     // Fetch initial wishlist state
     useWishlistStore.getState().fetchWishlist();
+    fetchCart();
+  }, [isLoggedIn, fetchCart]);
 
-    function queryCount() {
-      fetch("/api/cart")
-        .then((res) => res.json())
-        .then((data) => {
-          const count = (data.items ?? []).reduce(
-            (sum: number, item: { quantity: number }) => sum + item.quantity,
-            0
-          );
-          setDbCount(count);
-        })
-        .catch(() => {});
-    }
-
-    const debouncedQueryCount = debounce(queryCount, 300);
-
-    queryCount();
-    window.addEventListener("cart-updated", debouncedQueryCount);
-    return () => {
-      debouncedQueryCount.cancel();
-      window.removeEventListener("cart-updated", debouncedQueryCount);
-    };
-  }, [isLoggedIn]);
-
-  const cartCount = isLoggedIn ? dbCount : localCount;
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   // Close menus on route change
   useEffect(() => {
@@ -559,11 +541,17 @@ function HeaderInner() {
             aria-label={`Open Cart Drawer${cartCount ? `, ${cartCount} items` : ""}`}
           >
             <ShoppingBag className="h-5 w-5" strokeWidth={1.5} />
-            {cartCount > 0 && (
+            {!headerMounted || !isHydrated ? (
+              <span
+                data-testid="cart-badge-placeholder"
+                className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full bg-stone-300 animate-pulse border-2 border-[var(--color-cream)] shadow-xs"
+                aria-hidden="true"
+              />
+            ) : cartCount > 0 ? (
               <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs">
                 {cartCount > 99 ? "99+" : cartCount}
               </span>
-            )}
+            ) : null}
           </Button>
 
           {/* Mobile menu toggle */}

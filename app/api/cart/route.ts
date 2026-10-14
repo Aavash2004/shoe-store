@@ -10,7 +10,7 @@ const addItemSchema = z.object({
 
 const updateSchema = z.object({
   variantId: z.string(),
-  quantity: z.number().min(0),
+  quantity: z.number().int().min(1, "Quantity must be at least 1"),
 });
 
 async function getOrCreateCart(userId: string) {
@@ -101,17 +101,12 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
   }
 
   const userId = (session.user as any).id;
   const cart = await getOrCreateCart(userId);
   const { variantId, quantity } = parsed.data;
-
-  if (quantity === 0) {
-    await prisma.cartItem.deleteMany({ where: { cartId: cart.id, variantId } });
-    return NextResponse.json({ success: true });
-  }
 
   // Check variant stock
   const variant = await prisma.productVariant.findUnique({
@@ -151,11 +146,24 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   let variantId = searchParams.get("variantId");
+  const isClear = searchParams.get("clear") === "true";
+
+  const userId = (session.user as any).id;
+  const cart = await getOrCreateCart(userId);
+
+  if (isClear) {
+    await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+    return NextResponse.json({ success: true });
+  }
 
   if (!variantId) {
     try {
       const body = await request.json();
       variantId = body?.variantId;
+      if (body?.clear) {
+        await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+        return NextResponse.json({ success: true });
+      }
     } catch {
       // Body may be empty if called without json payload
     }
@@ -164,9 +172,6 @@ export async function DELETE(request: NextRequest) {
   if (!variantId) {
     return NextResponse.json({ error: "variantId required" }, { status: 400 });
   }
-
-  const userId = (session.user as any).id;
-  const cart = await getOrCreateCart(userId);
 
   await prisma.cartItem.deleteMany({ where: { cartId: cart.id, variantId } });
 

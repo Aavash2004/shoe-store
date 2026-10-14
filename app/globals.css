@@ -103,3 +103,52 @@
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* ========================================
+   Admin Typography Adjustments
+   Elevate all 12px (text-xs) fonts in admin to 14px (text-sm)
+======================================== */
+.admin-portal .text-xs,
+.admin-portal [class*="text-[10px]"],
+.admin-portal [class*="text-[11px]"],
+.admin-portal [class*="text-[12px]"],
+.admin-portal [class*="text-[13px]"] {
+  font-size: 0.875rem !important; /* 14px */
+  line-height: 1.25rem !important;
+}
+
+/* ========================================
+   Print Invoice Styles
+======================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  body {
+    background-color: #FAF8F5 !important;
+    color: #1c1917 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  header,
+  footer,
+  nav,
+  aside,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print-invoice-sheet {
+    display: block !important;
+    background-color: #FAF8F5 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}

@@ -33,6 +33,7 @@ import {
   ORDER_STATUS_LABELS,
   type OrderStatus,
 } from "@/lib/order-status";
+import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 
 export type AdminOrderRow = {
   id: string;
@@ -71,7 +72,11 @@ type FilterTab = "ALL" | "UNFULFILLED" | "PROCESSING" | "SHIPPED" | "DELIVERED" 
 
 export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersClientProps) {
   const router = useRouter();
-  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("USD");
+  const storeCurrency = useCurrencyStore((state) => state.currency);
+  const setStoreCurrency = useCurrencyStore((state) => state.setCurrency);
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>(
+    () => ((SUPPORTED_CURRENCIES as readonly string[]).includes(storeCurrency) ? (storeCurrency as CurrencyCode) : "USD")
+  );
   const [rates, setRates] = useState<Record<string, number>>(
     exchangeRates || {
       USD: 1.0,
@@ -91,38 +96,14 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
   }, []);
 
   useEffect(() => {
-    const syncCurrency = () => {
-      const saved = localStorage.getItem("admin_selected_currency");
-      if (saved && (SUPPORTED_CURRENCIES as readonly string[]).includes(saved)) {
-        setSelectedCurrency(saved as CurrencyCode);
-      }
-    };
-
-    syncCurrency();
-
-    const handleStorage = (e: StorageEvent) => {
-      if (
-        e.key === "admin_selected_currency" &&
-        e.newValue &&
-        (SUPPORTED_CURRENCIES as readonly string[]).includes(e.newValue)
-      ) {
-        setSelectedCurrency(e.newValue as CurrencyCode);
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("admin_currency_change", syncCurrency);
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("admin_currency_change", syncCurrency);
-    };
-  }, []);
+    if (storeCurrency && (SUPPORTED_CURRENCIES as readonly string[]).includes(storeCurrency)) {
+      setSelectedCurrency(storeCurrency as CurrencyCode);
+    }
+  }, [storeCurrency]);
 
   const handleCurrencyChange = (code: CurrencyCode) => {
     setSelectedCurrency(code);
-    try {
-      localStorage.setItem("admin_selected_currency", code);
-      window.dispatchEvent(new Event("admin_currency_change"));
-    } catch {}
+    setStoreCurrency(code as SupportedCurrency);
   };
 
   const [orders, setOrders] = useState<AdminOrderRow[]>(initialOrders);
@@ -338,7 +319,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
           <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-bold text-[var(--color-navy)]">
             Order Queue
           </h1>
-          <p className="text-xs text-[var(--color-navy)]/65 mt-0.5">
+          <p className="text-sm text-[var(--color-navy)]/65 mt-0.5">
             Triage customer purchases, manage packaging, dispatch status, and fulfillment.
           </p>
         </div>
@@ -354,7 +335,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
                   key={code}
                   type="button"
                   onClick={() => handleCurrencyChange(code)}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all duration-150 ${
+                  className={`rounded-lg px-2.5 py-1 text-sm font-bold transition-all duration-150 ${
                     active
                       ? "bg-[var(--color-navy)] text-white shadow-xs scale-100"
                       : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-white/60"
@@ -373,7 +354,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
             type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-sand)] bg-white px-3 py-2 text-xs font-semibold text-[var(--color-navy)] shadow-2xs hover:bg-[var(--color-sand)]/30 transition-all"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-sand)] bg-white px-3 py-2 text-sm font-semibold text-[var(--color-navy)] shadow-2xs hover:bg-[var(--color-sand)]/30 transition-all"
             title="Refresh Orders"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -383,7 +364,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
           <button
             type="button"
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-sand)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-navy)] shadow-2xs hover:bg-[var(--color-sand)]/30 transition-all"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-sand)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--color-navy)] shadow-2xs hover:bg-[var(--color-sand)]/30 transition-all"
             title="Export CSV"
           >
             <Download className="h-3.5 w-3.5" />
@@ -623,7 +604,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
               placeholder="Search order #, customer, shoe..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 w-full rounded-xl border border-[var(--color-sand)] bg-white pl-9 pr-8 text-xs text-[var(--color-navy)] placeholder:text-[var(--color-navy)]/40 focus:border-[var(--color-navy)] focus:outline-none focus:ring-1 focus:ring-[var(--color-navy)] shadow-2xs"
+              className="h-9 w-full rounded-xl border border-[var(--color-sand)] bg-white pl-9 pr-8 text-sm text-[var(--color-navy)] placeholder:text-[var(--color-navy)]/40 focus:border-[var(--color-navy)] focus:outline-none focus:ring-1 focus:ring-[var(--color-navy)] shadow-2xs"
             />
             {searchQuery && (
               <button
@@ -639,7 +620,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
 
         {/* Data Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--color-sand)]/70 bg-[var(--color-cream-alt)]/60 text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-navy)]/60">
                 <th className="px-5 py-3.5">Order</th>

@@ -81,7 +81,7 @@ export function AdminReviewsClient({
           <h1 className="mt-0.5 font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)]">
             Product Reviews
           </h1>
-          <p className="mt-1 text-xs text-[var(--color-navy)]/60">
+          <p className="mt-1 text-sm text-[var(--color-navy)]/60">
             {reviews.length} customer reviews across catalog
           </p>
         </div>
@@ -95,14 +95,14 @@ export function AdminReviewsClient({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search reviews by product, customer, or keywords..."
-            className="h-10 pl-9 pr-4 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 text-xs text-[var(--color-navy)] focus:bg-white"
+            className="h-10 pl-9 pr-4 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 text-sm text-[var(--color-navy)] focus:bg-white"
           />
         </div>
 
         <select
           value={selectedRating}
           onChange={(e) => setSelectedRating(e.target.value)}
-          className="h-10 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 px-3 text-xs font-semibold text-[var(--color-navy)] cursor-pointer focus:bg-white"
+          className="h-10 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 px-3 text-sm font-semibold text-[var(--color-navy)] cursor-pointer focus:bg-white"
         >
           <option value="ALL">All Ratings</option>
           <option value="5">5 Stars</option>

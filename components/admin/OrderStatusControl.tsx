@@ -36,7 +36,7 @@ export function OrderStatusControl({
   if (isTerminal) {
     const isCancelled = currentStatus === "CANCELLED";
     return (
-      <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold tracking-wide border border-sand bg-cream-alt text-navy">
+      <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold tracking-wide border border-sand bg-cream-alt text-navy">
         <span
           className={`h-2 w-2 rounded-full ${
             isCancelled ? "bg-rose-500" : "bg-emerald-500"

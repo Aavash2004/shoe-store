@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StoreContainer } from "@/components/layout/PageContainer";
 import {
   Truck,
   CheckCircle2,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatCurrency } from "@/lib/constants/currencies";
+import { PrintInvoice, type InvoiceOrder } from "@/components/invoice/PrintInvoice";
 
 function formatDate(dateString?: string | null) {
   if (!dateString) return "";
@@ -202,9 +204,55 @@ function TrackOrderInner() {
 
   const isCancelled = result?.status === "CANCELLED";
 
+  const invoiceOrder: InvoiceOrder | null = result
+    ? {
+        id: result.id,
+        orderNumber: result.orderNumber,
+        createdAt: result.createdAt,
+        currency: result.currency,
+        subtotal: result.subtotal ? Number(result.subtotal) : undefined,
+        shipping: result.shipping ? Number(result.shipping) : undefined,
+        discount: result.discount ? Number(result.discount) : undefined,
+        tax: result.tax ? Number(result.tax) : undefined,
+        total: Number(result.total),
+        paymentMethod: result.paymentMethod,
+        paymentStatus: result.paymentStatus,
+        address: result.address
+          ? {
+              fullName: result.address.fullName,
+              phone: result.address.phone,
+              addressLine1: result.address.addressLine1 || result.address.line1,
+              addressLine2: result.address.addressLine2 || result.address.line2,
+              city: result.address.city,
+              state: result.address.state,
+              postalCode: result.address.postalCode,
+              country: result.address.country,
+            }
+          : null,
+        items: (result.items || []).map((i: any) => ({
+          id: i.id,
+          productName: i.productName,
+          quantity: i.quantity,
+          price: Number(i.price),
+          size: i.size,
+          color: i.color,
+          image: i.image || i.variant?.product?.images?.[0]?.url,
+        })),
+      }
+    : null;
+
+  if (loading && initialOrderNumber && !result) {
+    return (
+      <div className="min-h-screen bg-[var(--color-cream)]">
+        <TrackOrderSkeleton />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[var(--color-cream)] py-10 md:py-16">
-      <div className="mx-auto max-w-4xl px-4 sm:px-6">
+    <>
+      <div className="min-h-screen bg-[var(--color-cream)] py-10 md:py-16 print:hidden">
+        <StoreContainer>
         {/* Search View: When No Order is Loaded */}
         {!result && (
           <div className="mx-auto max-w-xl">
@@ -712,8 +760,46 @@ function TrackOrderInner() {
             </div>
           </div>
         )}
+        </StoreContainer>
       </div>
-    </div>
+      {invoiceOrder && <PrintInvoice order={invoiceOrder} />}
+    </>
+  );
+}
+
+function TrackOrderSkeleton() {
+  return (
+    <StoreContainer className="py-10 md:py-16 animate-pulse space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="h-6 w-40 rounded-lg bg-[var(--color-sand)]/60" />
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-28 rounded-xl bg-[var(--color-sand)]/60" />
+          <div className="h-9 w-28 rounded-xl bg-[var(--color-sand)]/60" />
+        </div>
+      </div>
+      <div className="h-44 rounded-3xl border border-[var(--color-sand)] bg-white/70 p-6 sm:p-8 space-y-4">
+        <div className="h-5 w-48 rounded bg-[var(--color-sand)]/60" />
+        <div className="h-4 w-full rounded bg-[var(--color-sand)]/40" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="space-y-6">
+          <div className="h-60 rounded-3xl border border-[var(--color-sand)] bg-white/70 p-6 space-y-3">
+            <div className="h-5 w-32 rounded bg-[var(--color-sand)]/60" />
+            <div className="h-4 w-52 rounded bg-[var(--color-sand)]/40" />
+          </div>
+          <div className="h-64 rounded-3xl border border-[var(--color-sand)] bg-white/70 p-6 space-y-3">
+            <div className="h-5 w-28 rounded bg-[var(--color-sand)]/60" />
+            <div className="h-16 w-full rounded-2xl bg-[var(--color-sand)]/40" />
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="h-72 rounded-3xl border border-[var(--color-sand)] bg-white/70 p-6 space-y-4">
+            <div className="h-5 w-36 rounded bg-[var(--color-sand)]/60" />
+            <div className="h-4 w-full rounded bg-[var(--color-sand)]/40" />
+          </div>
+        </div>
+      </div>
+    </StoreContainer>
   );
 }
 
@@ -721,11 +807,8 @@ export default function TrackOrderPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[var(--color-cream)] flex items-center justify-center py-24">
-          <div className="flex items-center gap-3 text-sm font-semibold text-[var(--color-navy)]/60">
-            <Clock className="h-5 w-5 animate-spin text-[var(--color-navy)]" />
-            Loading tracking portal...
-          </div>
+        <div className="min-h-screen bg-[var(--color-cream)]">
+          <TrackOrderSkeleton />
         </div>
       }
     >

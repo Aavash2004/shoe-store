@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db/prisma";
 import { OrderStatusControl } from "@/components/admin/OrderStatusControl";
 import { AdminOrderRefundControl } from "@/components/admin/AdminOrderRefundControl";
 import { formatCurrency } from "@/lib/constants/currencies";
+import { PrintInvoice, type InvoiceOrder } from "@/components/invoice/PrintInvoice";
+import { PrintInvoiceButton } from "@/components/admin/PrintInvoiceButton";
 
 export default async function AdminOrderDetailPage({
     params,
@@ -47,38 +49,79 @@ export default async function AdminOrderDetailPage({
     const customerName = order.user?.name || order.user?.email || order.guestName || "Guest";
     const customerEmail = order.user?.email || order.guestEmail;
 
+    const invoiceOrder: InvoiceOrder = {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        createdAt: order.createdAt,
+        currency: order.currency,
+        subtotal: order.subtotal ? Number(order.subtotal) : undefined,
+        shipping: order.shipping ? Number(order.shipping) : undefined,
+        discount: order.discount ? Number(order.discount) : undefined,
+        tax: order.tax ? Number(order.tax) : undefined,
+        total: Number(order.total),
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        stripePaymentIntentId: order.stripePaymentIntentId,
+        guestName: order.guestName,
+        guestEmail: order.guestEmail,
+        user: order.user,
+        address: order.address
+            ? {
+                fullName: order.address.fullName,
+                phone: order.address.phone,
+                addressLine1: order.address.line1,
+                addressLine2: order.address.line2,
+                city: order.address.city,
+                state: order.address.state,
+                postalCode: order.address.postalCode,
+                country: order.address.country,
+            }
+            : null,
+        items: order.items.map((i) => ({
+            id: i.id,
+            productName: i.productName,
+            quantity: i.quantity,
+            price: Number(i.price),
+            size: i.size,
+            color: i.color,
+            image: i.variant?.product?.images?.[0]?.url,
+        })),
+    };
+
     return (
-        <div className="mx-auto max-w-4xl">
-            <Link
-                href="/admin/orders"
-                className="mb-6 inline-flex items-center gap-1.5 text-sm text-navy/50 hover:text-navy"
-            >
-                <ArrowLeft className="h-4 w-4" />
-                Orders
-            </Link>
+        <>
+            <div className="w-full print:hidden">
+                <Link
+                    href="/admin/orders"
+                    className="mb-6 inline-flex items-center gap-1.5 text-sm text-navy/50 hover:text-navy"
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                    Orders
+                </Link>
 
-            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                <div>
-                    <p className="text-xs uppercase tracking-[0.15em] text-navy/50">Order</p>
-                    <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-navy">
-                        #{order.orderNumber}
-                    </h1>
-                    <p className="mt-1 text-sm text-navy/60">
-                        Placed {new Date(order.createdAt).toLocaleDateString()}
-                    </p>
-                </div>
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                    <div>
+                        <p className="text-xs uppercase tracking-[0.15em] text-navy/50">Order</p>
+                        <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl text-navy">
+                            #{order.orderNumber}
+                        </h1>
+                        <p className="mt-1 text-sm text-navy/60">
+                            Placed {new Date(order.createdAt).toLocaleDateString()}
+                        </p>
+                    </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                    <AdminOrderRefundControl
-                        orderId={order.id}
-                        paymentStatus={order.paymentStatus}
-                        paymentMethod={order.paymentMethod}
-                        stripePaymentIntentId={order.stripePaymentIntentId}
-                        totalFormatted={formatCurrency(Number(order.total), order.currency)}
-                    />
-                    <OrderStatusControl orderId={order.id} currentStatus={order.status} />
+                    <div className="flex flex-wrap items-center gap-3">
+                        <PrintInvoiceButton />
+                        <AdminOrderRefundControl
+                            orderId={order.id}
+                            paymentStatus={order.paymentStatus}
+                            paymentMethod={order.paymentMethod}
+                            stripePaymentIntentId={order.stripePaymentIntentId}
+                            totalFormatted={formatCurrency(Number(order.total), order.currency)}
+                        />
+                        <OrderStatusControl orderId={order.id} currentStatus={order.status} />
+                    </div>
                 </div>
-            </div>
 
             <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-3">
                 <div className="lg:col-span-2 space-y-8">
@@ -281,5 +324,7 @@ export default async function AdminOrderDetailPage({
                 </div>
             </div>
         </div>
+        <PrintInvoice order={invoiceOrder} />
+    </>
     );
 }

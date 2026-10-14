@@ -149,7 +149,7 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
           <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-navy)]">
             Inventory Management
           </h1>
-          <p className="mt-1 text-xs text-[var(--color-navy)]/65">
+          <p className="mt-1 text-sm text-[var(--color-navy)]/65">
             Monitor real-time shoe variant quantities, track out-of-stock sizes, and manage fulfillment.
           </p>
         </div>

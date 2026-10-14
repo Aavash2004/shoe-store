@@ -38,7 +38,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-cream)]">
+    <div className="admin-portal min-h-screen bg-[var(--color-cream)]">
       <AdminSidebar
         user={{
           name: session?.user?.name ?? null,
@@ -46,10 +46,10 @@ export default async function AdminLayout({
         }}
       />
       <div className="flex flex-col lg:pl-64 min-h-screen transition-all duration-200">
-        <main className="flex-1 mx-auto w-full max-w-7xl px-3.5 sm:px-6 py-6 sm:py-8">
+        <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           {children}
         </main>
-        <footer className="border-t border-[var(--color-sand)] py-6 text-center text-xs text-[var(--color-navy)]/45">
+        <footer className="border-t border-[var(--color-sand)] py-6 text-center text-sm text-[var(--color-navy)]/45">
           © {new Date().getFullYear()} ABXV Footwear Inc. All rights reserved.
         </footer>
       </div>

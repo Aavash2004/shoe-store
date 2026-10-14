@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/constants/currencies";
 import { useCartStore } from "@/stores/cart-store";
 import { useNotificationStore } from "@/stores/notification-store";
+import { PrintInvoice, type InvoiceOrder } from "@/components/invoice/PrintInvoice";
 
 interface OrderItemData {
   id: string;
@@ -199,11 +200,47 @@ export default function OrderConfirmationPage({
       ? "Khalti ePayment (v2)"
       : "Cash on Delivery (COD)";
 
+  const invoiceOrder: InvoiceOrder = {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt,
+    currency: order.currency,
+    subtotal: order.subtotal,
+    shipping: order.shipping,
+    discount: order.discount,
+    tax: order.tax,
+    total: order.total,
+    paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus,
+    address: order.address
+      ? {
+          fullName: order.address.fullName,
+          phone: order.address.phone,
+          addressLine1: order.address.line1,
+          addressLine2: order.address.line2,
+          city: order.address.city,
+          state: order.address.state,
+          postalCode: order.address.postalCode,
+          country: order.address.country,
+        }
+      : null,
+    items: (order.items || []).map((i) => ({
+      id: i.id,
+      productName: i.productName,
+      quantity: i.quantity,
+      price: i.price,
+      size: i.size,
+      color: i.color,
+      image: i.product?.images?.[0]?.url,
+    })),
+  };
+
   return (
-    <div className="min-h-screen bg-[var(--color-cream)] py-12 px-4 md:px-8">
-      <div className="mx-auto max-w-2xl">
-        {/* Status Card */}
-        <div className="rounded-3xl border border-[var(--color-sand)] bg-white p-6 md:p-10 shadow-sm text-center">
+    <>
+      <div className="print:hidden min-h-screen bg-[var(--color-cream)] py-12 px-4 md:px-8">
+        <div className="mx-auto max-w-2xl">
+          {/* Status Card */}
+          <div className="rounded-3xl border border-[var(--color-sand)] bg-white p-6 md:p-10 shadow-sm text-center">
           {/* Header Icon */}
           <div className="mb-6 flex justify-center">
             {isPaid || isCod ? (
@@ -433,6 +470,8 @@ export default function OrderConfirmationPage({
         </div>
       </div>
     </div>
-  );
+    <PrintInvoice order={invoiceOrder} />
+  </>
+);
 }
 

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createCategory } from "@/app/admin/categories/new/actions";
 import { updateCategory, deleteCategory } from "@/app/admin/categories/[id]/actions";
+import { AdminContainer } from "@/components/layout/PageContainer";
 import {
   Dialog,
   DialogContent,
@@ -103,7 +104,7 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    <AdminContainer size="narrow" className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -152,7 +153,7 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
 
           {/* Category Name */}
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
+            <label className="text-sm font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
               Category Name <span className="text-rose-500">*</span>
             </label>
             <Input
@@ -168,7 +169,7 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
           {/* Slug */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
+              <label className="text-sm font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
                 URL Slug
               </label>
               {isCustomSlug && (
@@ -216,7 +217,7 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[var(--color-navy)]/60 mt-0.5">
+              <p className="text-sm text-[var(--color-navy)]/60 mt-0.5">
                 Inactive categories and their shoes will be hidden from the storefront.
               </p>
             </div>
@@ -307,6 +308,6 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </AdminContainer>
   );
 }

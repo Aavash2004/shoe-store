@@ -25,7 +25,16 @@ export function Price({ amount, className, currency }: PriceProps) {
     }
   }, [ratesLoaded, syncRates]);
 
-  const targetCurrency = currency || (mounted ? activeCurrency : "USD");
+  if (!mounted && !currency) {
+    return (
+      <span
+        className={`inline-block animate-pulse bg-stone-200/70 rounded h-[1em] w-12 align-middle ${className || ""}`}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  const targetCurrency = currency || activeCurrency || "USD";
   const convertedAmount = convertCurrency(amount, "USD", targetCurrency, rates);
   const formatted = formatCurrency(convertedAmount, targetCurrency);
 

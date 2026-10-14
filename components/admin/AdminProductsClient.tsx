@@ -110,14 +110,14 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-[var(--color-sand)] pb-6">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[var(--color-navy)]/5 text-[var(--color-navy)]">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-[var(--color-navy)]/5 text-[var(--color-navy)]">
               Store Catalog
             </span>
           </div>
           <h1 className="mt-1 font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-navy)]">
             Products
           </h1>
-          <p className="mt-1 text-xs text-[var(--color-navy)]/65">
+          <p className="mt-1 text-sm text-[var(--color-navy)]/65">
             Manage your shoe catalog, inventory status, and variants.
           </p>
         </div>
@@ -223,7 +223,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name, brand, category, or slug..."
-            className="h-10 pl-9 pr-4 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 text-xs text-[var(--color-navy)] placeholder:text-[var(--color-navy)]/40 focus:bg-white"
+            className="h-10 pl-9 pr-4 rounded-xl border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 text-sm text-[var(--color-navy)] placeholder:text-[var(--color-navy)]/40 focus:bg-white"
           />
         </div>
 
@@ -234,7 +234,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="h-10 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 pl-8 pr-8 text-xs font-semibold text-[var(--color-navy)] cursor-pointer focus:bg-white focus:outline-none"
+              className="h-10 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 pl-8 pr-8 text-sm font-semibold text-[var(--color-navy)] cursor-pointer focus:bg-white focus:outline-none"
             >
               <option value="NEWEST">Newest First</option>
               <option value="PRICE_ASC">Price: Low to High</option>
@@ -252,7 +252,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
           <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)]">
             No products match your criteria
           </h3>
-          <p className="mt-1 text-xs text-[var(--color-navy)]/60 max-w-sm">
+          <p className="mt-1 text-sm text-[var(--color-navy)]/60 max-w-sm">
             {searchQuery
               ? `No results found for "${searchQuery}". Try adjusting your search or filters.`
               : "No products currently available in this category."}
@@ -265,7 +265,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
                 setSearchQuery("");
                 setStatusFilter("ALL");
               }}
-              className="mt-4 rounded-xl text-xs"
+              className="mt-4 rounded-xl text-sm"
             >
               Reset Filters
             </Button>
@@ -334,14 +334,14 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
 
                       {/* Category Badge */}
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200/60">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-semibold bg-stone-100 text-stone-700 border border-stone-200/60">
                           {product.category?.name || "Uncategorized"}
                         </span>
                       </td>
 
                       {/* Variants Count */}
                       <td className="px-6 py-4 text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
                           {product.variants.length} size{product.variants.length !== 1 ? "s" : ""}
                         </span>
                       </td>
@@ -358,17 +358,17 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
                       {/* Stock Health */}
                       <td className="px-6 py-4 text-center">
                         {totalStock === 0 ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/60">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold bg-rose-50 text-rose-700 border border-rose-200/60">
                             <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
                             Out of stock
                           </span>
                         ) : totalStock <= 5 ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200/60">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold bg-amber-50 text-amber-800 border border-amber-200/60">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
                             Low ({totalStock} left)
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                             {totalStock} in stock
                           </span>
@@ -378,12 +378,12 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
                       {/* Status */}
                       <td className="px-6 py-4 text-center">
                         {product.isActive ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600 border border-stone-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-sm font-medium bg-stone-100 text-stone-600 border border-stone-200">
                             <span className="h-1.5 w-1.5 rounded-full bg-stone-400" />
                             Draft
                           </span>
@@ -403,7 +403,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
                           </Link>
                           <Link
                             href={`/admin/products/${product.id}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--color-sand)] bg-white text-xs font-bold text-[var(--color-navy)] hover:bg-[var(--color-navy)] hover:text-white transition-all shadow-2xs"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--color-sand)] bg-white text-sm font-bold text-[var(--color-navy)] hover:bg-[var(--color-navy)] hover:text-white transition-all shadow-2xs"
                           >
                             <Edit3 className="h-3.5 w-3.5" />
                             Edit
@@ -452,13 +452,13 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
                       <h4 className="font-[family-name:var(--font-display)] font-bold text-sm text-[var(--color-navy)] line-clamp-1 mt-0.5">
                         {product.name}
                       </h4>
-                      <p className="text-xs font-bold text-[var(--color-navy)] mt-1">
+                      <p className="text-sm font-bold text-[var(--color-navy)] mt-1">
                         ${minPrice.toFixed(2)}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-[var(--color-sand)]/60 text-xs">
+                  <div className="flex items-center justify-between pt-2 border-t border-[var(--color-sand)]/60 text-sm">
                     <span
                       className={`font-semibold ${
                         totalStock <= 5 ? "text-rose-600" : "text-[var(--color-navy)]/70"
@@ -477,7 +477,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
                       </Link>
                       <Link
                         href={`/admin/products/${product.id}`}
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg border border-[var(--color-sand)] text-xs font-bold text-[var(--color-navy)] hover:bg-stone-100"
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg border border-[var(--color-sand)] text-sm font-bold text-[var(--color-navy)] hover:bg-stone-100"
                       >
                         <Edit3 className="h-3 w-3" />
                         Edit

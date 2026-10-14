@@ -19,6 +19,7 @@ import { formatCurrency, convertCurrency } from "@/lib/constants/currencies";
 import { FlagIcon } from "@/components/ui/FlagIcon";
 import { restockVariantQuantity } from "@/app/admin/inventory/actions";
 import { getSafeImageUrl } from "@/lib/utils";
+import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 
 export type AdminDashboardOrder = {
   id: string;
@@ -114,7 +115,11 @@ export function AdminDashboardClient({
   lowStockItems,
   exchangeRates,
 }: AdminDashboardClientProps) {
-  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>("USD");
+  const storeCurrency = useCurrencyStore((state) => state.currency);
+  const setStoreCurrency = useCurrencyStore((state) => state.setCurrency);
+  const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>(
+    () => ((SUPPORTED_CURRENCIES as readonly string[]).includes(storeCurrency) ? (storeCurrency as CurrencyCode) : "USD")
+  );
   const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
   const currencyMenuRef = useRef<HTMLDivElement>(null);
 
@@ -196,39 +201,15 @@ export function AdminDashboardClient({
   }, []);
 
   useEffect(() => {
-    const syncCurrency = () => {
-      const saved = localStorage.getItem("admin_selected_currency");
-      if (saved && (SUPPORTED_CURRENCIES as readonly string[]).includes(saved)) {
-        setSelectedCurrency(saved as CurrencyCode);
-      }
-    };
-
-    syncCurrency();
-
-    const handleStorage = (e: StorageEvent) => {
-      if (
-        e.key === "admin_selected_currency" &&
-        e.newValue &&
-        (SUPPORTED_CURRENCIES as readonly string[]).includes(e.newValue)
-      ) {
-        setSelectedCurrency(e.newValue as CurrencyCode);
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("admin_currency_change", syncCurrency);
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("admin_currency_change", syncCurrency);
-    };
-  }, []);
+    if (storeCurrency && (SUPPORTED_CURRENCIES as readonly string[]).includes(storeCurrency)) {
+      setSelectedCurrency(storeCurrency as CurrencyCode);
+    }
+  }, [storeCurrency]);
 
   const handleCurrencyChange = (code: CurrencyCode) => {
     setSelectedCurrency(code);
+    setStoreCurrency(code as SupportedCurrency);
     setCurrencyDropdownOpen(false);
-    try {
-      localStorage.setItem("admin_selected_currency", code);
-      window.dispatchEvent(new Event("admin_currency_change"));
-    } catch {}
   };
 
   // Inline Restock Handler (Atomic increment)
@@ -304,7 +285,7 @@ export function AdminDashboardClient({
           <h1 className="mt-0.5 font-[family-name:var(--font-display)] text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-[var(--color-navy)]">
             Welcome back, {adminName}
           </h1>
-          <p className="mt-1 text-xs text-[var(--color-navy)]/60">
+          <p className="mt-1 text-sm text-[var(--color-navy)]/60">
             Here&apos;s what&apos;s happening with your store today.
           </p>
         </div>

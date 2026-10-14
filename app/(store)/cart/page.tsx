@@ -1,126 +1,52 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { useCartStore } from "@/stores/cart-store";
 import { Button } from "@/components/ui/button";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
-import { debounce, type DebouncedFunction } from "@/lib/utils/debounce";
 import { Price } from "@/components/ui/Price";
 import { getSafeImageUrl } from "@/lib/utils";
-
-type DbCartItem = {
-  variant: {
-    id: string;
-    size: string;
-    color: string;
-    price: string;
-    stock: number;
-    product: {
-      name: string;
-      slug: string;
-      images: { url: string }[];
-    };
-  };
-  quantity: number;
-};
+import { StoreContainer } from "@/components/layout/PageContainer";
 
 export default function CartPage() {
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated";
 
-  const localItems = useCartStore((state) => state.items);
-  const localRemove = useCartStore((state) => state.removeItem);
-  const localUpdate = useCartStore((state) => state.updateQuantity);
+  const items = useCartStore((state) => state.items);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const fetchCart = useCartStore((state) => state.fetchCart);
+  const hasHydrated = useCartStore((state) => state.hasHydrated);
+  const isFetching = useCartStore((state) => state.isFetching);
 
-  const [dbItems, setDbItems] = useState<DbCartItem[]>([]);
-  const [loading, setLoading] = useState(isLoggedIn);
+  const [mounted, setMounted] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
-  // Per-variant debounce instance map guaranteeing independent timers per line item
-  const debouncedSyncMapRef = useRef<Map<string, DebouncedFunction<(quantity: number) => void>>>(
-    new Map()
-  );
-  const isMountedRef = useRef(true);
-
   useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      // Flush all pending debounced quantity updates on unmount so changes commit to DB
-      debouncedSyncMapRef.current.forEach((debouncedFn) => {
-        debouncedFn.flush();
-      });
-      debouncedSyncMapRef.current.clear();
-    };
+    setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) return;
-
-    fetch("/api/cart")
-      .then((res) => res.json())
-      .then((data) => setDbItems(data.items ?? []))
-      .finally(() => setLoading(false));
-  }, [isLoggedIn]);
-
-  function debouncedSyncQuantity(variantId: string, quantity: number) {
-    let debouncedFn = debouncedSyncMapRef.current.get(variantId);
-
-    if (!debouncedFn) {
-      debouncedFn = debounce(async (qty: number) => {
-        try {
-          const res = await fetch("/api/cart", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ variantId, quantity: qty }),
-          });
-
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            if (isMountedRef.current) {
-              window.dispatchEvent(
-                new CustomEvent("show-toast", {
-                  detail: data.error || "Could not update quantity",
-                })
-              );
-              fetch("/api/cart")
-                .then((r) => r.json())
-                .then((d) => {
-                  if (isMountedRef.current) {
-                    setDbItems(d.items ?? []);
-                  }
-                });
-            }
-          } else {
-            window.dispatchEvent(new Event("cart-updated"));
-          }
-        } catch {
-          if (isMountedRef.current) {
-            window.dispatchEvent(
-              new CustomEvent("show-toast", { detail: "Network error updating cart" })
-            );
-          }
-        }
-      }, 800);
-
-      debouncedSyncMapRef.current.set(variantId, debouncedFn);
+    if (isLoggedIn) {
+      fetchCart();
     }
+  }, [isLoggedIn, fetchCart]);
 
-    debouncedFn(quantity);
-  }
+  useEffect(() => {
+    const handleCartUpdated = () => {
+      if (isLoggedIn) {
+        fetchCart();
+      }
+    };
+    window.addEventListener("cart-updated", handleCartUpdated);
+    return () => window.removeEventListener("cart-updated", handleCartUpdated);
+  }, [isLoggedIn, fetchCart]);
 
   function handleQuantityChange(variantId: string, newQty: number, maxStock: number) {
-    if (newQty <= 0) {
-      if (isLoggedIn) {
-        handleDbRemove(variantId);
-      } else {
-        localRemove(variantId);
-      }
-      return;
-    }
+    if (newQty < 1) return;
 
     if (newQty > maxStock) {
       window.dispatchEvent(
@@ -131,50 +57,32 @@ export default function CartPage() {
       return;
     }
 
-    if (isLoggedIn) {
-      setDbItems((prev) =>
-        prev.map((i) =>
-          i.variant.id === variantId ? { ...i, quantity: newQty } : i
-        )
-      );
-      debouncedSyncQuantity(variantId, newQty);
-    } else {
-      localUpdate(variantId, newQty);
-    }
+    updateQuantity(variantId, newQty);
   }
 
-  async function handleDbRemove(variantId: string) {
-    const debouncedFn = debouncedSyncMapRef.current.get(variantId);
-    if (debouncedFn) {
-      debouncedFn.cancel();
-      debouncedSyncMapRef.current.delete(variantId);
-    }
+  const isCartLoading = !mounted || status === "loading" || !hasHydrated || (isLoggedIn && isFetching);
 
-    await fetch(`/api/cart?variantId=${variantId}`, { method: "DELETE" });
-    setDbItems((prev) => prev.filter((i) => i.variant.id !== variantId));
-    window.dispatchEvent(new Event("cart-updated"));
+  if (isCartLoading) {
+    return (
+      <StoreContainer className="py-12 animate-pulse">
+        <div className="h-8 w-44 rounded-lg bg-[var(--color-sand)]" />
+        <div className="mt-8 space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 border-b border-[var(--color-sand)] pb-4">
+              <div className="h-20 w-20 rounded-md bg-[var(--color-sand)]/50 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-48 rounded bg-[var(--color-sand)]" />
+                <div className="h-3 w-32 rounded bg-[var(--color-sand)]/60" />
+                <div className="h-4 w-20 rounded bg-[var(--color-sand)]/70" />
+              </div>
+              <div className="h-7 w-24 rounded-md bg-[var(--color-sand)]/40" />
+              <div className="h-4 w-14 rounded bg-[var(--color-sand)]/40 ml-2" />
+            </div>
+          ))}
+        </div>
+      </StoreContainer>
+    );
   }
-
-  if (status === "loading" || loading) {
-    return <div className="mx-auto max-w-4xl px-6 py-24 text-center text-navy/60">Loading cart...</div>;
-  }
-
-  const items = isLoggedIn
-    ? dbItems.map((i) => ({
-        variantId: i.variant.id,
-        productName: i.variant.product.name,
-        slug: i.variant.product.slug,
-        image: i.variant.product.images[0]?.url ?? "",
-        size: i.variant.size,
-        color: i.variant.color,
-        price: Number(i.variant.price),
-        quantity: i.quantity,
-        stock: i.variant.stock,
-      }))
-    : localItems.map((i) => ({
-        ...i,
-        stock: typeof i.stock === "number" ? i.stock : 999,
-      }));
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discount = appliedCoupon ? Math.min(appliedCoupon.discountAmount, subtotal) : 0;
@@ -182,7 +90,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-24 text-center">
+      <StoreContainer className="py-24 text-center">
         <h1 className="font-[family-name:var(--font-display)] text-3xl text-navy">
           Your cart is empty
         </h1>
@@ -190,12 +98,12 @@ export default function CartPage() {
         <Button className="mt-6" asChild>
           <Link href="/shop">Continue Shopping</Link>
         </Button>
-      </div>
+      </StoreContainer>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <StoreContainer className="py-12">
       <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)]">
         Your Cart
       </h1>
@@ -228,10 +136,16 @@ export default function CartPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                disabled={item.quantity <= 1}
+                aria-disabled={item.quantity <= 1}
                 onClick={() =>
                   handleQuantityChange(item.variantId, item.quantity - 1, item.stock)
                 }
-                className="h-7 w-7 rounded-md border border-[var(--color-sand)] text-xs text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30 transition-colors"
+                className={`h-7 w-7 rounded-md border border-[var(--color-sand)] text-xs text-[var(--color-navy)] transition-all ${
+                  item.quantity <= 1
+                    ? "opacity-30 cursor-not-allowed bg-black/5 hover:bg-black/5 pointer-events-none"
+                    : "hover:bg-[var(--color-sand)]/30 cursor-pointer"
+                }`}
                 aria-label="Decrease quantity"
               >
                 −
@@ -265,10 +179,8 @@ export default function CartPage() {
             </div>
 
             <button
-              onClick={() =>
-                isLoggedIn ? handleDbRemove(item.variantId) : localRemove(item.variantId)
-              }
-              className="text-xs text-[var(--color-navy)]/50 hover:text-rose-600 transition-colors ml-2"
+              onClick={() => removeItem(item.variantId)}
+              className="text-xs text-[var(--color-navy)]/50 hover:text-rose-600 transition-colors ml-2 cursor-pointer"
             >
               Remove
             </button>
@@ -312,6 +224,6 @@ export default function CartPage() {
           </Button>
         </div>
       </div>
-    </div>
+    </StoreContainer>
   );
 }

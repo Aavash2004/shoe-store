@@ -99,7 +99,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
           <Link
             key={item.href}
             href={item.href as Route}
-            className={`group flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold transition-all duration-150 ${
+            className={`group flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-150 ${
               active
                 ? "bg-[var(--color-navy)] text-white shadow-xs font-bold"
                 : "text-[var(--color-navy)]/70 hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)]"
@@ -120,14 +120,14 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         );
       })}
 
-      <div className="pt-4 px-3 pb-2 text-[10px] font-extrabold uppercase tracking-widest text-[var(--color-navy)]/40">
+      <div className="pt-4 px-3 pb-2 text-xs font-extrabold uppercase tracking-widest text-[var(--color-navy)]/40">
         Quick Links
       </div>
       <Link
         href="/"
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-[var(--color-navy)]/65 hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] transition-colors"
+        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-[var(--color-navy)]/65 hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] transition-colors"
       >
         <Store className="h-4 w-4 text-[var(--color-navy)]/55" />
         <span>View Live Storefront</span>
@@ -223,10 +223,10 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
             <div className="border-t border-[var(--color-sand)] p-3">
               <div className="flex items-center justify-between rounded-xl bg-[var(--color-cream-alt)] p-2.5 border border-[var(--color-sand)]">
                 <div className="min-w-0 pr-2">
-                  <p className="text-xs font-bold text-[var(--color-navy)] truncate">
+                  <p className="text-sm font-bold text-[var(--color-navy)] truncate">
                     {displayName}
                   </p>
-                  <p className="text-[10px] text-[var(--color-navy)]/50">
+                  <p className="text-xs text-[var(--color-navy)]/50">
                     Administrator
                   </p>
                 </div>
@@ -275,10 +275,10 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         <div className="border-t border-[var(--color-sand)] p-3.5">
           <div className="flex items-center justify-between rounded-xl bg-[var(--color-cream-alt)] p-2.5 border border-[var(--color-sand)] shadow-2xs">
             <div className="min-w-0 pr-2">
-              <p className="text-xs font-bold text-[var(--color-navy)] truncate">
+              <p className="text-sm font-bold text-[var(--color-navy)] truncate">
                 {displayName}
               </p>
-              <p className="text-[10px] font-medium text-[var(--color-navy)]/50">
+              <p className="text-xs font-medium text-[var(--color-navy)]/50">
                 Administrator
               </p>
             </div>
@@ -303,7 +303,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
             <DialogTitle className="font-[family-name:var(--font-display)] text-lg font-bold text-[var(--color-navy)]">
               Sign out of Admin Console?
             </DialogTitle>
-            <DialogDescription className="text-xs text-[var(--color-navy)]/70 mt-1">
+            <DialogDescription className="text-sm text-[var(--color-navy)]/70 mt-1">
               You will be returned to the admin login page. Unsaved modifications will be discarded.
             </DialogDescription>
           </DialogHeader>
@@ -311,7 +311,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
             <button
               type="button"
               onClick={() => setShowLogoutConfirm(false)}
-              className="rounded-xl border border-[var(--color-sand)] px-4 py-2 text-xs font-semibold text-[var(--color-navy)]/80 hover:bg-[var(--color-sand)]/30 transition-colors"
+              className="rounded-xl border border-[var(--color-sand)] px-4 py-2 text-sm font-semibold text-[var(--color-navy)]/80 hover:bg-[var(--color-sand)]/30 transition-colors"
             >
               Cancel
             </button>
@@ -319,7 +319,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
               type="button"
               onClick={handleLogout}
               disabled={loggingOut}
-              className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
             >
               {loggingOut ? "Signing out..." : "Sign Out"}
             </button>

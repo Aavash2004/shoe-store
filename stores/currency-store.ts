@@ -4,6 +4,33 @@ import { convertCurrency, formatCurrency, CURRENCIES } from "@/lib/constants/cur
 
 export type SupportedCurrency = "USD" | "NPR" | "EUR" | "GBP";
 
+const getInitialCurrency = (): SupportedCurrency => {
+  if (typeof window !== "undefined") {
+    try {
+      // Migrate legacy admin_selected_currency if present
+      const adminLegacy = localStorage.getItem("admin_selected_currency");
+      if (adminLegacy && ["USD", "NPR", "EUR", "GBP"].includes(adminLegacy)) {
+        localStorage.removeItem("admin_selected_currency");
+        return adminLegacy as SupportedCurrency;
+      }
+
+      const persisted = localStorage.getItem("shoe-store-currency");
+      if (persisted) {
+        const parsed = JSON.parse(persisted);
+        const cur = parsed?.state?.currency;
+        if (cur && ["USD", "NPR", "EUR", "GBP"].includes(cur)) {
+          return cur;
+        }
+      }
+      const match = document.cookie.match(/(?:^|;\s*)shoe_currency=([A-Z]{3})/);
+      if (match && ["USD", "NPR", "EUR", "GBP"].includes(match[1])) {
+        return match[1] as SupportedCurrency;
+      }
+    } catch {}
+  }
+  return "USD";
+};
+
 interface CurrencyState {
   currency: SupportedCurrency;
   rates: Record<string, number>;
@@ -20,7 +47,7 @@ interface CurrencyState {
 export const useCurrencyStore = create<CurrencyState>()(
   persist(
     (set, get) => ({
-      currency: "USD",
+      currency: getInitialCurrency(),
       rates: {
         USD: 1.0,
         NPR: CURRENCIES.NPR?.rateToBaseUSD ?? 135.0,
@@ -31,6 +58,10 @@ export const useCurrencyStore = create<CurrencyState>()(
       setCurrency: (currency) => {
         set({ currency });
         if (typeof window !== "undefined") {
+          try {
+            document.cookie = `shoe_currency=${currency}; path=/; max-age=31536000; SameSite=Lax`;
+            localStorage.removeItem("admin_selected_currency");
+          } catch {}
           window.dispatchEvent(new CustomEvent("currency-changed", { detail: currency }));
         }
       },

@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { FolderOpen, Loader2, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { FolderOpen, Loader2, AlertTriangle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toggleCategoryActive } from "@/app/admin/categories/[id]/actions";
+import { toggleCategoryActive, deleteCategory } from "@/app/admin/categories/[id]/actions";
 import {
   Dialog,
   DialogContent,
@@ -28,23 +28,61 @@ interface CategoryTableClientProps {
   initialCategories: AdminCategoryItem[];
 }
 
+type CategoryActionType = "deactivate" | "delete";
+
 export function CategoryTableClient({ initialCategories }: CategoryTableClientProps) {
   const [categories, setCategories] = useState<AdminCategoryItem[]>(initialCategories);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [confirmCat, setConfirmCat] = useState<AdminCategoryItem | null>(null);
+  const [actionItem, setActionItem] = useState<{
+    category: AdminCategoryItem;
+    action: CategoryActionType;
+  } | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  // Shared handler for all destructive/deactivation category actions
+  const handleConfirmAction = (category: AdminCategoryItem, action: CategoryActionType) => {
+    setErrorNotice(null);
+    setActionItem({ category, action });
+  };
+
   const handleToggleClick = (cat: AdminCategoryItem) => {
     setErrorNotice(null);
-
-    // If currently active and contains products, prompt confirmation before hiding
-    if (cat.isActive && cat._count.products > 0) {
-      setConfirmCat(cat);
+    if (cat.isActive) {
+      handleConfirmAction(cat, "deactivate");
       return;
     }
-
     executeToggle(cat.id);
+  };
+
+  const executeDelete = (id: string) => {
+    const target = categories.find((c) => c.id === id);
+    if (!target) return;
+
+    const previousCategories = [...categories];
+    // Optimistic remove
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+    setPendingId(id);
+
+    startTransition(async () => {
+      const res = await deleteCategory(id);
+      setPendingId(null);
+      if (!res.success) {
+        setCategories(previousCategories);
+        setErrorNotice(res.error || "Failed to delete category");
+      } else {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("show-toast", {
+              detail: {
+                message: `Category "${target.name}" was permanently deleted.`,
+                type: "success",
+              },
+            })
+          );
+        }
+      }
+    });
   };
 
   const executeToggle = (id: string) => {
@@ -152,7 +190,7 @@ export function CategoryTableClient({ initialCategories }: CategoryTableClientPr
                           ? "Active: Click to set Inactive"
                           : "Inactive: Click to set Active"
                       }
-                      className={`group inline-flex items-center gap-2.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs disabled:opacity-50 disabled:cursor-not-allowed ${
+                      className={`group inline-flex items-center gap-2.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs disabled:opacity-50 disabled:cursor-not-allowed ${
                         cat.isActive
                           ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300"
                           : "border-stone-200 bg-stone-100 text-stone-600 hover:bg-stone-200 hover:border-stone-300"
@@ -199,7 +237,7 @@ export function CategoryTableClient({ initialCategories }: CategoryTableClientPr
                         type="button"
                         disabled={isUpdating}
                         onClick={() => handleToggleClick(cat)}
-                        className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                        className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
                           cat.isActive
                             ? "border-amber-200 bg-amber-50/70 text-amber-800 hover:bg-amber-100"
                             : "border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100"
@@ -210,10 +248,20 @@ export function CategoryTableClient({ initialCategories }: CategoryTableClientPr
                       </button>
                       <Link
                         href={`/admin/categories/${cat.id}`}
-                        className="inline-flex items-center rounded-lg border border-[var(--color-sand)] bg-[var(--color-cream)] px-2.5 py-1 text-xs font-semibold text-[var(--color-navy)] hover:border-[var(--color-navy)]/30 hover:bg-white transition-colors"
+                        className="inline-flex items-center rounded-lg border border-[var(--color-sand)] bg-[var(--color-cream)] px-2.5 py-1 text-sm font-semibold text-[var(--color-navy)] hover:border-[var(--color-navy)]/30 hover:bg-white transition-colors"
                       >
                         Edit
                       </Link>
+                      <button
+                        type="button"
+                        disabled={isUpdating}
+                        onClick={() => handleConfirmAction(cat, "delete")}
+                        className="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50/70 p-1 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Delete category"
+                        aria-label={`Delete ${cat.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -223,26 +271,68 @@ export function CategoryTableClient({ initialCategories }: CategoryTableClientPr
         </table>
       </div>
 
-      {/* Confirmation modal when deactivating category with existing products */}
-      {confirmCat && (
+      {/* Unified Confirmation modal for deactivating or deleting a category */}
+      {actionItem && (
         <Dialog
-          open={Boolean(confirmCat)}
+          open={Boolean(actionItem)}
           onOpenChange={(isOpen) => {
-            if (!isOpen) setConfirmCat(null);
+            if (!isOpen) setActionItem(null);
           }}
         >
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <div className="flex items-center gap-2.5 text-amber-600 mb-1">
+              <div
+                className={`flex items-center gap-2.5 mb-1 ${
+                  actionItem.action === "delete" ? "text-rose-600" : "text-amber-600"
+                }`}
+              >
                 <AlertTriangle className="h-5 w-5" />
-                <span className="text-xs font-bold uppercase tracking-wider">Category Status Change</span>
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  {actionItem.action === "delete" ? "Delete Category" : "Category Status Change"}
+                </span>
               </div>
               <DialogTitle className="text-xl font-bold text-[var(--color-navy)]">
-                Set &quot;{confirmCat.name}&quot; to Inactive?
+                {actionItem.action === "delete"
+                  ? `Delete "${actionItem.category.name}"?`
+                  : `Set "${actionItem.category.name}" to Inactive?`}
               </DialogTitle>
               <DialogDescription className="text-sm text-[var(--color-navy)]/70 pt-2 leading-relaxed">
-                This category currently contains <strong className="text-[var(--color-navy)]">{confirmCat._count.products} product(s)</strong>.
-                Setting it to <strong className="text-amber-800">Inactive</strong> will hide all associated products from the public storefront, search results, and category filters.
+                {actionItem.action === "delete" ? (
+                  actionItem.category._count.products > 0 ? (
+                    <>
+                      Cannot delete this category because it currently contains{" "}
+                      <strong className="text-[var(--color-navy)]">
+                        {actionItem.category._count.products} product(s)
+                      </strong>
+                      . Please reassign or delete the products first, or deactivate the category
+                      instead to hide it from the storefront.
+                    </>
+                  ) : (
+                    <>
+                      Are you sure you want to permanently delete{" "}
+                      <strong className="text-[var(--color-navy)]">
+                        &quot;{actionItem.category.name}&quot;
+                      </strong>
+                      ? This action cannot be undone.
+                    </>
+                  )
+                ) : actionItem.category._count.products > 0 ? (
+                  <>
+                    This category currently contains{" "}
+                    <strong className="text-[var(--color-navy)]">
+                      {actionItem.category._count.products} product(s)
+                    </strong>
+                    . Setting it to <strong className="text-amber-800">Inactive</strong> will hide
+                    all associated products from the public storefront, search results, and category
+                    filters.
+                  </>
+                ) : (
+                  <>
+                    Setting &quot;{actionItem.category.name}&quot; to{" "}
+                    <strong className="text-amber-800">Inactive</strong> will hide this category from
+                    the public storefront navigation and filters.
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
 
@@ -250,22 +340,51 @@ export function CategoryTableClient({ initialCategories }: CategoryTableClientPr
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setConfirmCat(null)}
+                onClick={() => setActionItem(null)}
                 className="rounded-xl border-[var(--color-sand)]"
               >
-                Keep Active
+                {actionItem.action === "delete" ? "Cancel" : "Keep Active"}
               </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  const id = confirmCat.id;
-                  setConfirmCat(null);
-                  executeToggle(id);
-                }}
-                className="rounded-xl bg-amber-600 text-white hover:bg-amber-700 font-semibold"
-              >
-                Set Inactive &amp; Hide Products
-              </Button>
+
+              {actionItem.action === "delete" ? (
+                actionItem.category._count.products > 0 ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const cat = actionItem.category;
+                      setActionItem(null);
+                      handleConfirmAction(cat, "deactivate");
+                    }}
+                    className="rounded-xl bg-amber-600 text-white hover:bg-amber-700 font-semibold"
+                  >
+                    Deactivate Instead
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const id = actionItem.category.id;
+                      setActionItem(null);
+                      executeDelete(id);
+                    }}
+                    className="rounded-xl bg-rose-600 text-white hover:bg-rose-700 font-semibold"
+                  >
+                    Delete Category
+                  </Button>
+                )
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const id = actionItem.category.id;
+                    setActionItem(null);
+                    executeToggle(id);
+                  }}
+                  className="rounded-xl bg-amber-600 text-white hover:bg-amber-700 font-semibold"
+                >
+                  Set Inactive
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

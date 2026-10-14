@@ -21,8 +21,6 @@ import {
 import { useCartStore } from "@/stores/cart-store";
 import { Price } from "@/components/ui/Price";
 import { Button } from "@/components/ui/button";
-import { debounce, type DebouncedFunction } from "@/lib/utils/debounce";
-import { getImagesForColor } from "@/lib/utils/gallery";
 import { getSafeImageUrl } from "@/lib/utils";
 
 type RecommendedProduct = {
@@ -33,22 +31,6 @@ type RecommendedProduct = {
   image: string;
 };
 
-type DbCartItem = {
-  variant: {
-    id: string;
-    size: string;
-    color: string;
-    price: string | number;
-    stock: number;
-    product: {
-      name: string;
-      slug: string;
-      images: { url: string }[];
-    };
-  };
-  quantity: number;
-};
-
 export function CartDrawer() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -56,55 +38,41 @@ export function CartDrawer() {
 
   const isDrawerOpen = useCartStore((state) => state.isDrawerOpen);
   const closeDrawer = useCartStore((state) => state.closeDrawer);
-  const localItems = useCartStore((state) => state.items);
-  const localRemove = useCartStore((state) => state.removeItem);
-  const localUpdate = useCartStore((state) => state.updateQuantity);
+  const cartItems = useCartStore((state) => state.items);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const fetchCart = useCartStore((state) => state.fetchCart);
+  const hasHydrated = useCartStore((state) => state.hasHydrated);
+  const isFetching = useCartStore((state) => state.isFetching);
 
-  const [dbItems, setDbItems] = useState<DbCartItem[]>([]);
-  const [loadingDb, setLoadingDb] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const [alertAnnouncement, setAlertAnnouncement] = useState("");
   const [recommendations, setRecommendations] = useState<RecommendedProduct[]>([]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
-  // Debounced sync for logged-in users
-  const debouncedSyncMapRef = useRef<Map<string, DebouncedFunction<(quantity: number) => void>>>(
-    new Map()
-  );
-
-  // Fetch db items on login, open, or when "cart-updated" is broadcast
-  const fetchDbCart = () => {
-    if (!isLoggedIn) return;
-    setLoadingDb(true);
-    fetch("/api/cart")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.items) {
-          setDbItems(data.items);
-        }
-      })
-      .catch((err) => console.error("Failed to fetch cart:", err))
-      .finally(() => setLoadingDb(false));
-  };
-
   useEffect(() => {
     if (isLoggedIn) {
-      fetchDbCart();
+      fetchCart();
     }
-  }, [isLoggedIn, isDrawerOpen]);
+  }, [isLoggedIn, isDrawerOpen, fetchCart]);
 
   useEffect(() => {
     const handleCartUpdated = () => {
       if (isLoggedIn) {
-        fetchDbCart();
+        fetchCart();
       }
     };
     window.addEventListener("cart-updated", handleCartUpdated);
     return () => window.removeEventListener("cart-updated", handleCartUpdated);
-  }, [isLoggedIn]);
+  }, [isLoggedIn, fetchCart]);
 
   // Fetch store catalog recommendations when drawer opens
   useEffect(() => {
@@ -129,30 +97,6 @@ export function CartDrawer() {
     };
   }, [isDrawerOpen]);
 
-  // Unified items list
-  const cartItems = useMemo(() => {
-    if (isLoggedIn) {
-      return dbItems.map((item) => {
-        const matching = getImagesForColor(item.variant.product.images || [], item.variant.color);
-        return {
-          variantId: item.variant.id,
-          productName: item.variant.product.name,
-          slug: item.variant.product.slug,
-          image: matching[0]?.url || item.variant.product.images?.[0]?.url || "/placeholder-shoe.png",
-          size: item.variant.size,
-          color: item.variant.color,
-          price: Number(item.variant.price) || 0,
-          quantity: item.quantity,
-          stock: item.variant.stock ?? 999,
-        };
-      });
-    }
-    return localItems.map((item) => ({
-      ...item,
-      price: Number(item.price) || 0,
-    }));
-  }, [isLoggedIn, dbItems, localItems]);
-
   const totalCount = useMemo(
     () => cartItems.reduce((acc, item) => acc + item.quantity, 0),
     [cartItems]
@@ -169,45 +113,9 @@ export function CartDrawer() {
     return recommendations.filter((r) => !cartSlugs.has(r.slug)).slice(0, 3);
   }, [recommendations, cartItems]);
 
-  // Debounced API sync for server-side quantities
-  function debouncedSyncQuantity(variantId: string, quantity: number) {
-    let debouncedFn = debouncedSyncMapRef.current.get(variantId);
-    if (!debouncedFn) {
-      debouncedFn = debounce(async (qty: number) => {
-        try {
-          const res = await fetch("/api/cart", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ variantId, quantity: qty }),
-          });
-
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            setAlertAnnouncement(data.error || "Could not update quantity");
-            window.dispatchEvent(
-              new CustomEvent("show-toast", {
-                detail: data.error || "Could not update quantity",
-              })
-            );
-            fetchDbCart();
-          } else {
-            window.dispatchEvent(new Event("cart-updated"));
-          }
-        } catch {
-          setAlertAnnouncement("Network error updating cart");
-        }
-      }, 600);
-      debouncedSyncMapRef.current.set(variantId, debouncedFn);
-    }
-    debouncedFn(quantity);
-  }
-
   // Handle quantity changes
   const handleQuantityChange = (variantId: string, newQty: number, maxStock: number) => {
-    if (newQty <= 0) {
-      handleRemoveItem(variantId);
-      return;
-    }
+    if (newQty < 1) return;
 
     if (newQty > maxStock) {
       const msg = maxStock <= 0 ? "Out of stock" : `Only ${maxStock} left in stock`;
@@ -216,53 +124,16 @@ export function CartDrawer() {
       return;
     }
 
-    if (isLoggedIn) {
-      setDbItems((prev) =>
-        prev.map((i) =>
-          i.variant.id === variantId ? { ...i, quantity: newQty } : i
-        )
-      );
-      debouncedSyncQuantity(variantId, newQty);
-    } else {
-      localUpdate(variantId, newQty);
-    }
+    updateQuantity(variantId, newQty);
   };
 
   // Handle item removal
-  const handleRemoveItem = async (variantId: string) => {
+  const handleRemoveItem = (variantId: string) => {
     const itemToRemove = cartItems.find((i) => i.variantId === variantId);
     if (itemToRemove) {
       setLiveAnnouncement(`Removed ${itemToRemove.productName} from your cart`);
     }
-
-    // Always clear from local store
-    localRemove(variantId);
-
-    if (isLoggedIn) {
-      const debouncedFn = debouncedSyncMapRef.current.get(variantId);
-      if (debouncedFn) {
-        debouncedFn.cancel();
-        debouncedSyncMapRef.current.delete(variantId);
-      }
-
-      setDbItems((prev) => prev.filter((i) => i.variant.id !== variantId));
-      try {
-        const res = await fetch(`/api/cart?variantId=${encodeURIComponent(variantId)}`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ variantId }),
-        });
-        if (!res.ok) {
-          console.error("Failed to delete cart item on server");
-          fetchDbCart();
-        } else {
-          window.dispatchEvent(new Event("cart-updated"));
-        }
-      } catch (err) {
-        console.error("Failed to delete cart item:", err);
-        fetchDbCart();
-      }
-    }
+    removeItem(variantId);
   };
 
   // Keyboard navigation & Focus management
@@ -383,7 +254,25 @@ export function CartDrawer() {
 
         {/* ── 2. Scrollable Items Area ── */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {cartItems.length === 0 ? (
+          {!mounted || !hasHydrated || (isLoggedIn && isFetching) ? (
+            <div className="space-y-4 animate-pulse">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex gap-3.5 py-4 border-b border-[var(--color-sand)]/60">
+                  <div className="h-20 w-20 rounded-md bg-[var(--color-sand)]/50 shrink-0" />
+                  <div className="flex flex-1 flex-col justify-between py-1">
+                    <div className="space-y-1.5">
+                      <div className="h-4 w-36 rounded bg-[var(--color-sand)]" />
+                      <div className="h-3 w-24 rounded bg-[var(--color-sand)]/60" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="h-4 w-16 rounded bg-[var(--color-sand)]/80" />
+                      <div className="h-6 w-20 rounded bg-[var(--color-sand)]/50" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : cartItems.length === 0 ? (
             <div className="flex h-full flex-col justify-between py-6 text-center">
               <div className="my-auto flex flex-col items-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-sand)]/50 text-[var(--color-navy)] mb-4 shadow-2xs">
@@ -532,6 +421,8 @@ export function CartDrawer() {
                           <div className="flex items-center rounded-md border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-0.5">
                             <button
                               type="button"
+                              disabled={item.quantity <= 1}
+                              aria-disabled={item.quantity <= 1}
                               onClick={() =>
                                 handleQuantityChange(
                                   item.variantId,
@@ -539,7 +430,11 @@ export function CartDrawer() {
                                   item.stock
                                 )
                               }
-                              className="flex h-6 w-6 items-center justify-center rounded-xs text-[var(--color-navy)]/70 hover:bg-[var(--color-sand)]/60 hover:text-[var(--color-navy)] transition disabled:opacity-30"
+                              className={`flex h-6 w-6 items-center justify-center rounded-xs text-[var(--color-navy)]/70 transition ${
+                                item.quantity <= 1
+                                  ? "opacity-25 cursor-not-allowed pointer-events-none"
+                                  : "hover:bg-[var(--color-sand)]/60 hover:text-[var(--color-navy)] cursor-pointer"
+                              }`}
                               aria-label={`Decrease quantity of ${item.productName}`}
                             >
                               <Minus className="h-3 w-3" />

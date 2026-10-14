@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useCartStore } from "@/stores/cart-store";
 import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 import { Button } from "@/components/ui/button";
+import { StoreContainer } from "@/components/layout/PageContainer";
 import { getImagesForColor } from "@/lib/utils/gallery";
 import { getSafeImageUrl } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,9 @@ import {
   RotateCcw,
   BadgeCheck,
   Banknote,
+  Minus,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { CouponInput, AppliedCoupon } from "@/components/cart/CouponInput";
 
@@ -53,8 +57,13 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { status } = useSession();
   const isLoggedIn = status === "authenticated";
-  const localItems = useCartStore((state) => state.items);
-  const clearLocalCart = useCartStore((state) => state.clearCart);
+  const cartItems = useCartStore((state) => state.items);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const clearCart = useCartStore((state) => state.clearCart);
+  const fetchCart = useCartStore((state) => state.fetchCart);
+  const hasHydrated = useCartStore((state) => state.hasHydrated);
+  const isFetching = useCartStore((state) => state.isFetching);
 
   // Client session-stable idempotency key (persists across re-renders and form edits)
   const idempotencyKeyRef = useRef<string>("");
@@ -65,7 +74,12 @@ export default function CheckoutPage() {
         : `idem_${Date.now()}_${Math.random().toString(36).substring(2)}`;
   }
 
-  const [dbItems, setDbItems] = useState<any[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
@@ -121,7 +135,7 @@ export default function CheckoutPage() {
     syncRates();
   }, [syncRates]);
 
-  // Synchronize country whenever active currency changes (e.g. user toggles CurrencySwitcher in Header)
+  // Synchronize country whenever active currency changes, but do NOT override user's selected currency
   useEffect(() => {
     const matchingCountry = CURRENCY_TO_COUNTRY[storeCurrency];
     if (matchingCountry && isCountryEnabled(matchingCountry) && selectedCountryCode !== matchingCountry) {
@@ -129,18 +143,9 @@ export default function CheckoutPage() {
     }
   }, [storeCurrency, selectedCountryCode, setValue]);
 
-  // Synchronize currency store whenever user selects a different country in checkout dropdown
-  useEffect(() => {
-    if (selectedCountry?.currency) {
-      const countryCur = selectedCountry.currency as SupportedCurrency;
-      if (countryCur && useCurrencyStore.getState().currency !== countryCur) {
-        useCurrencyStore.getState().setCurrency(countryCur);
-      }
-    }
-  }, [selectedCountryCode, selectedCountry]);
-
-  const currency = selectedCountry?.currency || storeCurrency || "USD";
-  const currencyConfig = CURRENCIES[currency] || CURRENCIES[storeCurrency] || CURRENCIES.USD;
+  // Selected currency stays persistently selected across checkout without auto-switching
+  const currency = storeCurrency || "USD";
+  const currencyConfig = CURRENCIES[currency] || CURRENCIES.USD;
   const exchangeRate = rates[currency] || currencyConfig.rateToBaseUSD || 1.0;
 
   // Price conversion helper ensuring Display = Charge
@@ -162,30 +167,51 @@ export default function CheckoutPage() {
     }
   }, [selectedCountryCode, selectedCountry, currentPaymentMethod, setValue]);
 
+  // Load cart from DB if logged in and synchronize with cart-updated events
   useEffect(() => {
     if (isLoggedIn) {
-      fetch("/api/cart")
-        .then((res) => res.json())
-        .then((data) => setDbItems(data.items ?? []));
+      fetchCart();
     }
-  }, [isLoggedIn]);
+    const handleCartUpdated = () => {
+      if (isLoggedIn) {
+        fetchCart();
+      }
+    };
+    window.addEventListener("cart-updated", handleCartUpdated);
+    return () => window.removeEventListener("cart-updated", handleCartUpdated);
+  }, [isLoggedIn, fetchCart]);
 
-  const items = (isLoggedIn ? dbItems : localItems).map((i) => {
-    const rawUsdPrice = Number(isLoggedIn ? i.variant?.price : i.price) || 0;
+  const handleCheckoutQuantity = (variantId: string, newQty: number, maxStock: number) => {
+    if (newQty < 1) return; // Minimum-1 rule
+    if (newQty > maxStock) {
+      window.dispatchEvent(
+        new CustomEvent("show-toast", {
+          detail: maxStock <= 0 ? "Out of stock" : `Only ${maxStock} left in stock`,
+        })
+      );
+      return;
+    }
+    updateQuantity(variantId, newQty);
+  };
+
+  const handleCheckoutRemove = (variantId: string) => {
+    removeItem(variantId);
+  };
+
+  const items = cartItems.map((i) => {
+    const rawUsdPrice = Number(i.price) || 0;
     const localPrice = toLocalPrice(rawUsdPrice);
     return {
-      variantId: isLoggedIn ? i.variant.id : i.variantId,
+      variantId: i.variantId,
+      productId: i.productId,
       quantity: i.quantity,
       usdPrice: rawUsdPrice,
       localPrice,
-      productName: isLoggedIn ? i.variant.product.name : i.productName,
-      image: isLoggedIn
-        ? (getImagesForColor(i.variant.product.images || [], i.variant.color)[0]?.url ||
-            i.variant.product.images?.[0]?.url ||
-            "/images/Shoes/s05.avif")
-        : i.image || "/images/Shoes/s05.avif",
-      size: isLoggedIn ? i.variant.size : i.size,
-      color: isLoggedIn ? i.variant.color : i.color,
+      productName: i.productName,
+      image: i.image || "/images/Shoes/s05.avif",
+      size: i.size,
+      color: i.color,
+      stock: i.stock ?? 999,
     };
   });
 
@@ -270,10 +296,8 @@ export default function CheckoutPage() {
           setError(result.error ?? "Failed to initialize Khalti payment.");
           return;
         }
-        // Clear local cart before redirecting
-        clearLocalCart();
-        setDbItems([]);
-        window.dispatchEvent(new Event("cart-updated"));
+        // Clear cart before redirecting
+        clearCart();
         // Redirect browser to Khalti payment gateway
         window.location.href = result.paymentUrl;
         return;
@@ -306,9 +330,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      clearLocalCart();
-      setDbItems([]);
-      window.dispatchEvent(new Event("cart-updated"));
+      clearCart();
 
       router.push(`/order-confirmation/${result.order.id}`);
     } catch (err: any) {
@@ -334,31 +356,58 @@ export default function CheckoutPage() {
     }
   }
 
+  const isCheckoutLoading =
+    !mounted ||
+    status === "loading" ||
+    !hasHydrated ||
+    (isLoggedIn && isFetching);
+
+  if (isCheckoutLoading) {
+    return (
+      <div className="min-h-screen bg-[var(--color-cream)]">
+        <StoreContainer className="py-8 md:py-12 animate-pulse">
+          <div className="mb-8 space-y-3">
+            <div className="h-4 w-36 rounded bg-[var(--color-sand)]/60" />
+            <div className="h-10 w-64 rounded bg-[var(--color-sand)]/70" />
+          </div>
+          <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_420px] lg:gap-14">
+            <div className="space-y-6">
+              <div className="h-48 rounded-2xl border border-[var(--color-sand)] bg-white/60 p-6" />
+              <div className="h-72 rounded-2xl border border-[var(--color-sand)] bg-white/60 p-6" />
+              <div className="h-56 rounded-2xl border border-[var(--color-sand)] bg-white/60 p-6" />
+            </div>
+            <div className="h-96 rounded-2xl border border-[var(--color-sand)] bg-white/60 p-6" />
+          </div>
+        </StoreContainer>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
-      <div className="mx-auto flex min-h-[65vh] max-w-xl flex-col items-center justify-center px-6 text-center">
+      <StoreContainer className="flex min-h-[65vh] flex-col items-center justify-center py-16 text-center">
         <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-[var(--color-sand)]/40 text-[var(--color-navy)] shadow-inner">
           <Package className="h-9 w-9 text-[var(--color-navy)]/60" />
         </div>
         <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-[var(--color-navy)] sm:text-4xl">
           Your Cart is Empty
         </h1>
-        <p className="mt-3 text-sm text-[var(--color-navy)]/60">
+        <p className="mt-3 text-sm text-[var(--color-navy)]/60 max-w-md">
           You don&apos;t have any shoes in your checkout queue right now.
         </p>
         <Button
-          className="mt-8 h-13 rounded-2xl px-9 bg-[var(--color-navy)] text-sm font-semibold text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 shadow-md transition-all active:scale-95"
+          className="mt-8 h-12 rounded-xl px-8 bg-[var(--color-navy)] text-sm font-semibold text-[var(--color-cream)] hover:bg-[var(--color-navy)]/90 shadow-md transition-all active:scale-95 cursor-pointer"
           onClick={() => router.push("/shop")}
         >
           Explore Collection
         </Button>
-      </div>
+      </StoreContainer>
     );
   }
 
   return (
     <div className="min-h-screen bg-[var(--color-cream)]">
-      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
+      <StoreContainer className="py-8 md:py-12">
         {/* Breadcrumb Header */}
         <div className="mb-8 md:mb-12">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)]/50">
@@ -867,12 +916,12 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Item List with Thumbnails */}
-              <div className="mt-6 max-h-[300px] overflow-y-auto space-y-4 pr-1 no-scrollbar">
+              {/* Item List with Thumbnails & Controls */}
+              <div className="mt-6 max-h-[340px] overflow-y-auto space-y-3 pr-1 no-scrollbar">
                 {items.map((item) => (
                   <div
                     key={item.variantId}
-                    className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--color-sand)]/50 bg-[var(--color-cream)]/30 p-3 transition-colors hover:bg-[var(--color-cream)]/60"
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-sand)]/50 bg-[var(--color-cream)]/30 p-3 transition-colors hover:bg-[var(--color-cream)]/60"
                   >
                     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[var(--color-sand)] bg-white">
                       <Image
@@ -881,16 +930,13 @@ export default function CheckoutPage() {
                         fill
                         className="object-cover"
                       />
-                      <span className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-navy)] text-[10px] font-bold text-[var(--color-cream)] shadow-xs">
-                        {item.quantity}
-                      </span>
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-bold text-[var(--color-navy)]">
                         {item.productName}
                       </p>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-[var(--color-navy)]/60">
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--color-navy)]/60">
                         {item.size && (
                           <span className="rounded-md border border-[var(--color-sand)] bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase">
                             Size {item.size}
@@ -902,11 +948,64 @@ export default function CheckoutPage() {
                           </span>
                         )}
                       </div>
+
+                      {/* Interactive Quantity Stepper & Remove */}
+                      <div className="mt-2 flex items-center gap-3">
+                        <div className="inline-flex items-center rounded-lg border border-[var(--color-sand)] bg-white p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleCheckoutQuantity(item.variantId, item.quantity - 1, item.stock)}
+                            disabled={item.quantity <= 1}
+                            aria-disabled={item.quantity <= 1}
+                            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+                              item.quantity <= 1
+                                ? "cursor-not-allowed text-stone-300 opacity-40 pointer-events-none"
+                                : "text-[var(--color-navy)] hover:bg-[var(--color-cream)] cursor-pointer"
+                            }`}
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="min-w-[20px] text-center text-xs font-bold text-[var(--color-navy)]">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCheckoutQuantity(item.variantId, item.quantity + 1, item.stock)}
+                            disabled={item.quantity >= item.stock}
+                            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+                              item.quantity >= item.stock
+                                ? "cursor-not-allowed text-stone-300"
+                                : "text-[var(--color-navy)] hover:bg-[var(--color-cream)]"
+                            }`}
+                            aria-label="Increase quantity"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCheckoutRemove(item.variantId)}
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                          title="Remove item"
+                          aria-label="Remove item from checkout"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <p className="font-bold text-sm text-[var(--color-navy)] shrink-0">
-                      {formatCurrency(item.localPrice * item.quantity, currency)}
-                    </p>
+                    <div className="text-right shrink-0">
+                      <p className="font-bold text-sm text-[var(--color-navy)]">
+                        {formatCurrency(item.localPrice * item.quantity, currency)}
+                      </p>
+                      {item.quantity > 1 && (
+                        <p className="text-[11px] text-[var(--color-navy)]/50">
+                          {formatCurrency(item.localPrice, currency)} each
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -995,7 +1094,7 @@ export default function CheckoutPage() {
             </div>
           </div>
         </div>
-      </div>
+      </StoreContainer>
     </div>
   );
 }

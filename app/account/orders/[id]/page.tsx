@@ -16,6 +16,7 @@ import {
 import { formatCurrency } from "@/lib/constants/currencies";
 import { getImagesForColor } from "@/lib/utils/gallery";
 import { OrderCustomerActions } from "@/components/account/OrderCustomerActions";
+import { PrintInvoice, type InvoiceOrder } from "@/components/invoice/PrintInvoice";
 
 export default async function OrderDetailPage({
   params,
@@ -73,8 +74,51 @@ export default async function OrderDetailPage({
   const currentStatusIndex = stages.findIndex((s) => s.key === order.status);
   const isCancelled = order.status === "CANCELLED";
 
+  const invoiceOrder: InvoiceOrder = {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt,
+    currency: order.currency,
+    subtotal: order.subtotal ? Number(order.subtotal) : undefined,
+    shipping: order.shipping ? Number(order.shipping) : undefined,
+    discount: order.discount ? Number(order.discount) : undefined,
+    tax: order.tax ? Number(order.tax) : undefined,
+    total: Number(order.total),
+    paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus,
+    address: order.address
+      ? {
+          fullName: order.address.fullName,
+          phone: order.address.phone,
+          addressLine1: order.address.line1,
+          addressLine2: order.address.line2,
+          city: order.address.city,
+          state: order.address.state,
+          postalCode: order.address.postalCode,
+          country: order.address.country,
+        }
+      : null,
+    items: order.items.map((i) => {
+      const matching = getImagesForColor(i.variant?.product?.images || [], i.color);
+      const imgUrl =
+        matching[0]?.url ||
+        i.variant?.product?.images?.[0]?.url ||
+        "/images/Shoes/gmm.jpeg";
+      return {
+        id: i.id,
+        productName: i.productName,
+        quantity: i.quantity,
+        price: Number(i.price),
+        size: i.size,
+        color: i.color,
+        image: imgUrl,
+      };
+    }),
+  };
+
   return (
-    <div className="space-y-8">
+    <>
+      <div className="space-y-8 print:hidden">
       {/* Back Link */}
       <div>
         <Link
@@ -312,5 +356,7 @@ export default async function OrderDetailPage({
         </Link>
       </div>
     </div>
+    <PrintInvoice order={invoiceOrder} />
+  </>
   );
 }
