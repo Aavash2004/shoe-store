@@ -5,6 +5,7 @@
   --font-display: var(--font-urbanist), "Urbanist", sans-serif;
   --font-body: var(--font-urbanist), "Urbanist", sans-serif;
   --font-sans: var(--font-urbanist), "Urbanist", sans-serif;
+  --font-handwriting: var(--font-caveat), "Caveat", cursive;
 }
 
 /* ========================================
