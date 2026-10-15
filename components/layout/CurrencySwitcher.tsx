@@ -18,13 +18,25 @@ const CURRENCY_OPTIONS: { code: SupportedCurrency; name: string; symbol: string 
 interface CurrencySwitcherProps {
   variant?: "dropdown" | "segmented";
   className?: string;
+  initialCurrency?: SupportedCurrency;
 }
 
-export function CurrencySwitcher({ variant = "dropdown", className = "" }: CurrencySwitcherProps) {
+export function CurrencySwitcher({
+  variant = "dropdown",
+  className = "",
+  initialCurrency,
+}: CurrencySwitcherProps) {
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { currency, setCurrency, syncRatesFromServer, ratesLoaded } = useCurrencyStore();
+
+  // If server provided an initialCurrency that differs from client store, sync it
+  useEffect(() => {
+    if (initialCurrency && currency !== initialCurrency) {
+      setCurrency(initialCurrency);
+    }
+  }, [initialCurrency, currency, setCurrency]);
 
   useEffect(() => {
     if (!ratesLoaded) {
@@ -48,13 +60,19 @@ export function CurrencySwitcher({ variant = "dropdown", className = "" }: Curre
     };
   }, [open]);
 
-  const activeCode: SupportedCurrency = mounted ? currency : "USD";
+  // Resolve active currency:
+  // On client after mount: client store currency
+  // During SSR or pre-mount: initialCurrency from server cookie, or client store if in browser, fallback to USD
+  const activeCode: SupportedCurrency = mounted
+    ? currency
+    : (initialCurrency || (typeof window !== "undefined" ? currency : "USD"));
   const activeCurrencyConfig = CURRENCIES[activeCode] || { symbol: "$", code: "USD" };
 
   // Segmented control variant for mobile drawer / compact spaces
   if (variant === "segmented") {
     return (
       <div
+        suppressHydrationWarning
         className={`inline-flex items-center rounded-full border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-1 ${className}`}
       >
         {CURRENCY_OPTIONS.map((opt) => {
@@ -90,14 +108,15 @@ export function CurrencySwitcher({ variant = "dropdown", className = "" }: Curre
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        suppressHydrationWarning
         className="group flex items-center gap-1.5 rounded-full border border-[var(--color-sand)]/90 bg-[var(--color-cream)] px-2.5 py-1 text-xs font-semibold text-[var(--color-navy)]/80 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:bg-[var(--color-cream-alt)] hover:text-[var(--color-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-sky)] shadow-2xs"
         title="Change currency"
       >
         <FlagIcon code={activeCode} className="h-3 w-4 rounded-xs shadow-2xs" />
-        <span className="font-bold text-[11px] tracking-tight text-[var(--color-navy)]">
+        <span suppressHydrationWarning className="font-bold text-[11px] tracking-tight text-[var(--color-navy)]">
           {activeCode}
         </span>
-        <span className="text-[11px] text-[var(--color-navy)]/50 font-medium">
+        <span suppressHydrationWarning className="text-[11px] text-[var(--color-navy)]/50 font-medium">
           ({activeCurrencyConfig.symbol})
         </span>
         <ChevronDown

@@ -7,13 +7,13 @@ export type SupportedCurrency = "USD" | "NPR" | "EUR" | "GBP";
 const getInitialCurrency = (): SupportedCurrency => {
   if (typeof window !== "undefined") {
     try {
-      // Migrate legacy admin_selected_currency if present
-      const adminLegacy = localStorage.getItem("admin_selected_currency");
-      if (adminLegacy && ["USD", "NPR", "EUR", "GBP"].includes(adminLegacy)) {
-        localStorage.removeItem("admin_selected_currency");
-        return adminLegacy as SupportedCurrency;
+      // 1. Primary source of truth: cookie shared with SSR
+      const match = document.cookie.match(/(?:^|;\s*)shoe_currency=([A-Z]{3})/);
+      if (match && ["USD", "NPR", "EUR", "GBP"].includes(match[1])) {
+        return match[1] as SupportedCurrency;
       }
 
+      // 2. Persisted Zustand state in localStorage
       const persisted = localStorage.getItem("shoe-store-currency");
       if (persisted) {
         const parsed = JSON.parse(persisted);
@@ -22,9 +22,12 @@ const getInitialCurrency = (): SupportedCurrency => {
           return cur;
         }
       }
-      const match = document.cookie.match(/(?:^|;\s*)shoe_currency=([A-Z]{3})/);
-      if (match && ["USD", "NPR", "EUR", "GBP"].includes(match[1])) {
-        return match[1] as SupportedCurrency;
+
+      // 3. Migrate legacy admin_selected_currency if present
+      const adminLegacy = localStorage.getItem("admin_selected_currency");
+      if (adminLegacy && ["USD", "NPR", "EUR", "GBP"].includes(adminLegacy)) {
+        localStorage.removeItem("admin_selected_currency");
+        return adminLegacy as SupportedCurrency;
       }
     } catch {}
   }
@@ -104,6 +107,27 @@ export const useCurrencyStore = create<CurrencyState>()(
     }),
     {
       name: "shoe-store-currency",
+      partialize: (state) => ({ currency: state.currency }),
+      merge: (persistedState: any, currentState) => {
+        let cookieCurrency: SupportedCurrency | undefined;
+        if (typeof window !== "undefined") {
+          try {
+            const match = document.cookie.match(/(?:^|;\s*)shoe_currency=([A-Z]{3})/);
+            if (match && ["USD", "NPR", "EUR", "GBP"].includes(match[1])) {
+              cookieCurrency = match[1] as SupportedCurrency;
+            }
+          } catch {}
+        }
+        return {
+          ...currentState,
+          ...(persistedState || {}),
+          currency:
+            cookieCurrency ||
+            (persistedState?.currency as SupportedCurrency) ||
+            currentState.currency ||
+            "USD",
+        };
+      },
     }
   )
 );

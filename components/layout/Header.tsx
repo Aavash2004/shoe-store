@@ -11,6 +11,7 @@ import { useCartStore, useCartHydrated } from "@/stores/cart-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
 import { useDebouncedValue } from "@/hooks/use-debounce";
 import { CurrencySwitcher } from "@/components/layout/CurrencySwitcher";
+import type { SupportedCurrency } from "@/stores/currency-store";
 import { Price } from "@/components/ui/Price";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
@@ -40,7 +41,11 @@ const DEFAULT_CATEGORIES: CategoryNav[] = [
 ];
 
 
-function HeaderInner() {
+export interface HeaderProps {
+  initialCurrency?: SupportedCurrency;
+}
+
+function HeaderInner({ initialCurrency }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -480,7 +485,7 @@ function HeaderInner() {
           </div>
 
           {/* Desktop Currency Switcher */}
-          <CurrencySwitcher variant="dropdown" className="hidden sm:inline-block" />
+          <CurrencySwitcher variant="dropdown" className="hidden sm:inline-block" initialCurrency={initialCurrency} />
 
           {/* Wishlist */}
           <Button
@@ -706,7 +711,7 @@ function HeaderInner() {
               Currency
             </p>
             <div className="px-3 pb-2">
-              <CurrencySwitcher variant="segmented" />
+              <CurrencySwitcher variant="segmented" initialCurrency={initialCurrency} />
             </div>
           </div>
         </div>
@@ -715,10 +720,10 @@ function HeaderInner() {
   );
 }
 
-export function Header() {
+export function Header({ initialCurrency }: HeaderProps = {}) {
   return (
     <Suspense fallback={<header className="sticky top-0 z-50 h-16 bg-[var(--color-cream)] border-b border-[var(--color-sand)]/70 md:h-[72px]" />}>
-      <HeaderInner />
+      <HeaderInner initialCurrency={initialCurrency} />
     </Suspense>
   );
 }
