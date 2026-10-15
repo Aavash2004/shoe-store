@@ -3,9 +3,61 @@
  * Documentation: https://docs.khalti.com/khalti-epayment/
  */
 
-const KHALTI_API_URL =
-    process.env.KHALTI_API_URL || "https://dev.khalti.com/api/v2";
-const KHALTI_SECRET_KEY = process.env.KHALTI_SECRET_KEY || "";
+import fs from "fs";
+import path from "path";
+
+/**
+ * Dynamically resolves Khalti Secret Key from process.env with fallback
+ * to reading .env / .env.local on disk to handle hot updates without server restart.
+ */
+export function getKhaltiSecretKey(): string {
+    let key = process.env.KHALTI_SECRET_KEY?.trim() || "";
+    if (!key && process.env.NODE_ENV !== "production" && typeof window === "undefined") {
+        try {
+            const cwd = process.cwd();
+            const envFiles = [".env.local", ".env"];
+            for (const file of envFiles) {
+                const filePath = path.resolve(/*turbopackIgnore: true*/ cwd, file);
+                if (fs.existsSync(filePath)) {
+                    const content = fs.readFileSync(filePath, "utf8");
+                    const match = content.match(/^KHALTI_SECRET_KEY=["']?([^"'\r\n]+)["']?/m);
+                    if (match && match[1]) {
+                        key = match[1].trim();
+                        process.env.KHALTI_SECRET_KEY = key;
+                        break;
+                    }
+                }
+            }
+        } catch {}
+    }
+    return key;
+}
+
+/**
+ * Dynamically resolves Khalti API URL.
+ */
+export function getKhaltiApiUrl(): string {
+    let url = process.env.KHALTI_API_URL?.trim() || "";
+    if (!url && process.env.NODE_ENV !== "production" && typeof window === "undefined") {
+        try {
+            const cwd = process.cwd();
+            const envFiles = [".env.local", ".env"];
+            for (const file of envFiles) {
+                const filePath = path.resolve(/*turbopackIgnore: true*/ cwd, file);
+                if (fs.existsSync(filePath)) {
+                    const content = fs.readFileSync(filePath, "utf8");
+                    const match = content.match(/^KHALTI_API_URL=["']?([^"'\r\n]+)["']?/m);
+                    if (match && match[1]) {
+                        url = match[1].trim();
+                        process.env.KHALTI_API_URL = url;
+                        break;
+                    }
+                }
+            }
+        } catch {}
+    }
+    return url || "https://dev.khalti.com/api/v2";
+}
 
 export interface KhaltiInitiatePayload {
     returnUrl: string;
@@ -52,16 +104,19 @@ export function toKhaltiPaisa(amountInNpr: number): number {
 export async function initiateKhaltiPayment(
     payload: KhaltiInitiatePayload
 ): Promise<KhaltiInitiateResponse> {
-    if (!KHALTI_SECRET_KEY) {
-        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables.");
+    const secretKey = getKhaltiSecretKey();
+    if (!secretKey) {
+        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables. Please ensure KHALTI_SECRET_KEY is set in your .env file.");
     }
 
-    // Khalti Authorization header expects "Key <SECRET_KEY>"
-    const authHeader = KHALTI_SECRET_KEY.startsWith("Key ")
-        ? KHALTI_SECRET_KEY
-        : `Key ${KHALTI_SECRET_KEY}`;
+    const apiUrl = getKhaltiApiUrl();
 
-    const response = await fetch(`${KHALTI_API_URL}/epayment/initiate/`, {
+    // Khalti Authorization header expects "Key <SECRET_KEY>"
+    const authHeader = secretKey.startsWith("Key ")
+        ? secretKey
+        : `Key ${secretKey}`;
+
+    const response = await fetch(`${apiUrl}/epayment/initiate/`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -93,15 +148,17 @@ export async function initiateKhaltiPayment(
 export async function lookupKhaltiPayment(
     pidx: string
 ): Promise<KhaltiLookupResponse> {
-    if (!KHALTI_SECRET_KEY) {
-        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables.");
+    const secretKey = getKhaltiSecretKey();
+    if (!secretKey) {
+        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables. Please ensure KHALTI_SECRET_KEY is set in your .env file.");
     }
 
-    const authHeader = KHALTI_SECRET_KEY.startsWith("Key ")
-        ? KHALTI_SECRET_KEY
-        : `Key ${KHALTI_SECRET_KEY}`;
+    const apiUrl = getKhaltiApiUrl();
+    const authHeader = secretKey.startsWith("Key ")
+        ? secretKey
+        : `Key ${secretKey}`;
 
-    const response = await fetch(`${KHALTI_API_URL}/epayment/lookup/`, {
+    const response = await fetch(`${apiUrl}/epayment/lookup/`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -126,16 +183,18 @@ export async function lookupKhaltiPayment(
 export async function refundKhaltiPayment(
     pidx: string
 ): Promise<{ success: boolean; data?: any; error?: string }> {
-    if (!KHALTI_SECRET_KEY) {
-        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables.");
+    const secretKey = getKhaltiSecretKey();
+    if (!secretKey) {
+        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables. Please ensure KHALTI_SECRET_KEY is set in your .env file.");
     }
 
-    const authHeader = KHALTI_SECRET_KEY.startsWith("Key ")
-        ? KHALTI_SECRET_KEY
-        : `Key ${KHALTI_SECRET_KEY}`;
+    const apiUrl = getKhaltiApiUrl();
+    const authHeader = secretKey.startsWith("Key ")
+        ? secretKey
+        : `Key ${secretKey}`;
 
     try {
-        const response = await fetch(`${KHALTI_API_URL}/epayment/refund/`, {
+        const response = await fetch(`${apiUrl}/epayment/refund/`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

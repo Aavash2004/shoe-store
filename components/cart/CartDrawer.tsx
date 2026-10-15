@@ -17,6 +17,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Check,
+  Loader2,
 } from "lucide-react";
 import { useCartStore } from "@/stores/cart-store";
 import { Price } from "@/components/ui/Price";
@@ -42,10 +43,12 @@ export function CartDrawer() {
   const removeItem = useCartStore((state) => state.removeItem);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const fetchCart = useCartStore((state) => state.fetchCart);
+  const isFetching = useCartStore((state) => state.isFetching);
   const hasHydrated = useCartStore((state) => state.hasHydrated);
   const hasFetchedInitial = useCartStore((state) => state.hasFetchedInitial);
 
   const [mounted, setMounted] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState("");
   const [alertAnnouncement, setAlertAnnouncement] = useState("");
   const [recommendations, setRecommendations] = useState<RecommendedProduct[]>([]);
@@ -59,10 +62,10 @@ export function CartDrawer() {
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (isLoggedIn && !hasFetchedInitial) {
+    if (isLoggedIn && (isDrawerOpen || !hasFetchedInitial)) {
       fetchCart();
     }
-  }, [isLoggedIn, hasFetchedInitial, fetchCart]);
+  }, [isLoggedIn, isDrawerOpen, hasFetchedInitial, fetchCart]);
 
   // Fetch store catalog recommendations when drawer opens
   useEffect(() => {
@@ -229,6 +232,12 @@ export function CartDrawer() {
             <span className="inline-flex h-5 items-center justify-center rounded-full bg-[var(--color-navy)] px-2 text-[11px] font-bold text-white">
               {totalCount}
             </span>
+            {isFetching && (
+              <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-navy)]/60 bg-[var(--color-sand)]/40 px-2 py-0.5 rounded-full animate-in fade-in duration-200">
+                <Loader2 className="h-3 w-3 animate-spin text-[var(--color-navy)]" />
+                <span className="text-[10px] font-semibold">Syncing</span>
+              </div>
+            )}
           </div>
 
           <button
@@ -244,23 +253,33 @@ export function CartDrawer() {
 
         {/* ── 2. Scrollable Items Area ── */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {!mounted || !hasHydrated || (isLoggedIn && !hasFetchedInitial && cartItems.length === 0) ? (
-            <div className="space-y-4 animate-pulse">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex gap-3.5 py-4 border-b border-[var(--color-sand)]/60">
-                  <div className="h-20 w-20 rounded-md bg-[var(--color-sand)]/50 shrink-0" />
-                  <div className="flex flex-1 flex-col justify-between py-1">
-                    <div className="space-y-1.5">
-                      <div className="h-4 w-36 rounded bg-[var(--color-sand)]" />
-                      <div className="h-3 w-24 rounded bg-[var(--color-sand)]/60" />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="h-4 w-16 rounded bg-[var(--color-sand)]/80" />
-                      <div className="h-6 w-20 rounded bg-[var(--color-sand)]/50" />
+          {!mounted || !hasHydrated || (isFetching && cartItems.length === 0) || (isLoggedIn && !hasFetchedInitial && cartItems.length === 0) ? (
+            <div className="py-6 space-y-6">
+              <div className="flex flex-col items-center justify-center py-6 text-center space-y-2.5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-sand)]/50 text-[var(--color-navy)] shadow-2xs">
+                  <Loader2 className="h-6 w-6 animate-spin text-[var(--color-navy)]" />
+                </div>
+                <p className="text-xs font-semibold text-[var(--color-navy)]/70 tracking-tight">
+                  Loading your cart...
+                </p>
+              </div>
+              <div className="space-y-4 animate-pulse">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex gap-3.5 py-4 border-b border-[var(--color-sand)]/60">
+                    <div className="h-20 w-20 rounded-md bg-[var(--color-sand)]/50 shrink-0" />
+                    <div className="flex flex-1 flex-col justify-between py-1">
+                      <div className="space-y-1.5">
+                        <div className="h-4 w-36 rounded bg-[var(--color-sand)]" />
+                        <div className="h-3 w-24 rounded bg-[var(--color-sand)]/60" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="h-4 w-16 rounded bg-[var(--color-sand)]/80" />
+                        <div className="h-6 w-20 rounded bg-[var(--color-sand)]/50" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : cartItems.length === 0 ? (
             <div className="flex h-full flex-col justify-between py-6 text-center">
@@ -533,11 +552,27 @@ export function CartDrawer() {
               {/* Primary: Checkout */}
               <Button
                 asChild
+                disabled={isCheckingOut}
                 className="w-full h-11 rounded-lg bg-[var(--color-navy)] text-white font-bold text-xs uppercase tracking-wider hover:bg-[var(--color-navy)]/90 shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2"
               >
-                <Link href="/checkout" onClick={closeDrawer}>
-                  <span>Proceed to Checkout</span>
-                  <ArrowRight className="h-4 w-4" />
+                <Link
+                  href="/checkout"
+                  onClick={() => {
+                    setIsCheckingOut(true);
+                    closeDrawer();
+                  }}
+                >
+                  {isCheckingOut ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                      <span>Proceeding to Checkout...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Proceed to Checkout</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
                 </Link>
               </Button>
 

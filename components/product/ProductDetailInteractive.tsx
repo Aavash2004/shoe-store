@@ -6,7 +6,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { useSession } from "next-auth/react";
 import { gsap } from "@/lib/gsap";
 import { WishlistButton } from "@/components/product/WishlistButton";
-import { Ruler } from "lucide-react";
+import { Ruler, Loader2, Check } from "lucide-react";
 import { SizeFitGuideModal } from "@/components/product/SizeFitGuideModal";
 import {
   SizeSystem,
@@ -123,60 +123,40 @@ export function ProductDetailInteractive({
       );
       return;
     }
-    if (!isLoggedIn) {
-      const existing = useCartStore.getState().items.find(
-        (i) => i.variantId === matchedVariant.id
+    const existing = useCartStore.getState().items.find(
+      (i) => i.variantId === matchedVariant.id
+    );
+    const currentQty = existing?.quantity ?? 0;
+    if (currentQty + 1 > matchedVariant.stock) {
+      window.dispatchEvent(
+        new CustomEvent("show-toast", { detail: `Only ${matchedVariant.stock} left in stock` })
       );
-      const currentQty = existing?.quantity ?? 0;
-      if (currentQty + 1 > matchedVariant.stock) {
-        window.dispatchEvent(
-          new CustomEvent("show-toast", { detail: `Only ${matchedVariant.stock} left in stock` })
-        );
-        return;
-      }
+      return;
     }
 
     setIsSubmitting(true);
     try {
-      if (isLoggedIn) {
-        const res = await fetch("/api/cart", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ variantId: matchedVariant.id, quantity: 1 }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          window.dispatchEvent(
-            new CustomEvent("show-toast", {
-              detail:
-                data.error ||
-                (matchedVariant.stock <= 0
-                  ? "Out of stock"
-                  : `Only ${matchedVariant.stock} left in stock`),
-            })
-          );
-          return;
-        }
-      } else {
-        const matchingImages = getImagesForColor(
-          product.galleryImages || product.images || [],
-          matchedVariant.color
-        );
-        const variantImage = matchingImages[0]?.url || product.image;
+      const matchingImages = getImagesForColor(
+        product.galleryImages || product.images || [],
+        matchedVariant.color
+      );
+      const variantImage = matchingImages[0]?.url || product.image;
 
-        addItem({
-          variantId: matchedVariant.id,
-          productId: product.id,
-          productName: product.name,
-          slug: product.slug,
-          image: variantImage,
-          size: matchedVariant.size,
-          color: matchedVariant.color,
-          price: matchedVariant.price,
-          quantity: 1,
-          stock: matchedVariant.stock,
-        });
-      }
+      addItem({
+        variantId: matchedVariant.id,
+        productId: product.id,
+        productName: product.name,
+        slug: product.slug,
+        image: variantImage,
+        size: matchedVariant.size,
+        color: matchedVariant.color,
+        price: matchedVariant.price,
+        quantity: 1,
+        stock: matchedVariant.stock,
+      });
+
+      setAdded(true);
+      setTimeout(() => setAdded(false), 2000);
       openDrawer();
     } finally {
       setIsSubmitting(false);
@@ -358,15 +338,23 @@ export function ProductDetailInteractive({
             disabled={isSubmitting || !canAddToCart || (matchedVariant?.stock ?? 0) <= 0}
             onClick={handleAddToCart}
           >
-            {isSubmitting
-              ? "Adding..."
-              : added
-                ? "Added!"
-                : !canAddToCart
-                  ? "Select size & color"
-                  : (matchedVariant?.stock ?? 0) <= 0
-                    ? "Out of Stock"
-                    : "Add to Cart"}
+            {isSubmitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Adding to Cart...</span>
+              </span>
+            ) : added ? (
+              <span className="flex items-center justify-center gap-1.5">
+                <Check className="h-4 w-4 stroke-[2.5]" />
+                <span>Added to Cart!</span>
+              </span>
+            ) : !canAddToCart ? (
+              "Select size & color"
+            ) : (matchedVariant?.stock ?? 0) <= 0 ? (
+              "Out of Stock"
+            ) : (
+              "Add to Cart"
+            )}
           </Button>
           <div className="shrink-0">
             <WishlistButton
