@@ -17,6 +17,7 @@ export class InsufficientStockError extends Error {
     this.variantId = variantId;
     this.requested = requested;
     this.available = available;
+    Object.setPrototypeOf(this, InsufficientStockError.prototype);
   }
 }
 

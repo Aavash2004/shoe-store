@@ -363,11 +363,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle Out-Of-Stock Error cleanly as 400 Bad Request
-    if (err instanceof InsufficientStockError) {
+    if (
+      err instanceof InsufficientStockError ||
+      err?.name === "InsufficientStockError" ||
+      err?.code === "OUT_OF_STOCK"
+    ) {
       return NextResponse.json(
         {
           error: err.message,
-          code: err.code,
+          code: err.code || "OUT_OF_STOCK",
           variantId: err.variantId,
           requested: err.requested,
           available: err.available,
@@ -377,11 +381,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle Pricing Error cleanly as 400 Bad Request
-    if (err instanceof PricingError) {
+    if (
+      err instanceof PricingError ||
+      err?.name === "PricingError" ||
+      err?.code === "ITEM_UNAVAILABLE" ||
+      err?.code === "PRICING_ERROR" ||
+      err?.code === "INVALID_COUNTRY" ||
+      err?.code === "VARIANT_NOT_FOUND"
+    ) {
       return NextResponse.json(
         {
           error: err.message,
-          code: err.code,
+          code: err.code || "PRICING_ERROR",
         },
         { status: 400 }
       );
@@ -390,8 +401,11 @@ export async function POST(request: NextRequest) {
     console.error("[Stripe Create Intent Error]:", err);
     return NextResponse.json(
       {
-        error: "Failed to initialize payment intent. Please try again.",
-        details: process.env.NODE_ENV === "development" ? err.message : undefined,
+        error:
+          err?.message && !err.message.includes("Secret")
+            ? err.message
+            : "Failed to initialize payment intent. Please try again.",
+        details: err?.message,
       },
       { status: 500 }
     );

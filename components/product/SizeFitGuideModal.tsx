@@ -63,7 +63,7 @@ export function SizeFitGuideModal({
 
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--color-sand)] text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-cream)] transition-all"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--color-sand)] text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-cream)] transition-all cursor-pointer"
             aria-label="Close size guide"
           >
             <X className="h-4 w-4" />
@@ -74,7 +74,7 @@ export function SizeFitGuideModal({
         <div className="flex border-b border-[var(--color-sand)] px-6 bg-[var(--color-cream)] text-xs font-bold">
           <button
             onClick={() => setActiveTab("chart")}
-            className={`flex items-center gap-2 py-3 px-3 border-b-2 transition-all ${
+            className={`flex items-center gap-2 py-3 px-3 border-b-2 transition-all cursor-pointer ${
               activeTab === "chart"
                 ? "border-[var(--color-navy)] text-[var(--color-navy)]"
                 : "border-transparent text-[var(--color-navy)]/50 hover:text-[var(--color-navy)]"
@@ -85,7 +85,7 @@ export function SizeFitGuideModal({
           </button>
           <button
             onClick={() => setActiveTab("measure")}
-            className={`flex items-center gap-2 py-3 px-3 border-b-2 transition-all ${
+            className={`flex items-center gap-2 py-3 px-3 border-b-2 transition-all cursor-pointer ${
               activeTab === "measure"
                 ? "border-[var(--color-navy)] text-[var(--color-navy)]"
                 : "border-transparent text-[var(--color-navy)]/50 hover:text-[var(--color-navy)]"
@@ -96,7 +96,7 @@ export function SizeFitGuideModal({
           </button>
           <button
             onClick={() => setActiveTab("tips")}
-            className={`flex items-center gap-2 py-3 px-3 border-b-2 transition-all ${
+            className={`flex items-center gap-2 py-3 px-3 border-b-2 transition-all cursor-pointer ${
               activeTab === "tips"
                 ? "border-[var(--color-navy)] text-[var(--color-navy)]"
                 : "border-transparent text-[var(--color-navy)]/50 hover:text-[var(--color-navy)]"

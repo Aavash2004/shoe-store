@@ -182,7 +182,7 @@ export function ProductReviewsSection({
                           onMouseLeave={() => setHoverRating(null)}
                           onClick={() => setRating(star)}
                           aria-label={`Rate ${star} out of 5 stars`}
-                          className="p-1 transition-all hover:scale-115 active:scale-95 focus:outline-none"
+                          className="p-1 transition-all hover:scale-115 active:scale-95 focus:outline-none cursor-pointer"
                         >
                           <Star
                             className={`h-5 w-5 transition-all duration-150 ${

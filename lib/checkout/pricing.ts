@@ -34,6 +34,7 @@ export class PricingError extends Error {
     super(message);
     this.name = "PricingError";
     this.code = code;
+    Object.setPrototypeOf(this, PricingError.prototype);
   }
 }
 

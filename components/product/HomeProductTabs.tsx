@@ -33,7 +33,7 @@ export function HomeProductTabs({
               <button
                 type="button"
                 onClick={() => setActiveTab("new")}
-                className={`font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-bold transition-all relative ${activeTab === "new"
+                className={`font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-bold transition-all relative cursor-pointer ${activeTab === "new"
                     ? "text-[var(--color-navy)] after:absolute after:-bottom-3 after:left-0 after:h-0.5 after:w-full after:bg-[var(--color-navy)]"
                     : "text-[var(--color-navy)]/40 hover:text-[var(--color-navy)]/70"
                   }`}
@@ -46,7 +46,7 @@ export function HomeProductTabs({
               <button
                 type="button"
                 onClick={() => setActiveTab("best")}
-                className={`font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-bold transition-all relative ${activeTab === "best"
+                className={`font-[family-name:var(--font-display)] text-2xl sm:text-3xl font-bold transition-all relative cursor-pointer ${activeTab === "best"
                     ? "text-[var(--color-navy)] after:absolute after:-bottom-3 after:left-0 after:h-0.5 after:w-full after:bg-[var(--color-navy)]"
                     : "text-[var(--color-navy)]/40 hover:text-[var(--color-navy)]/70"
                   }`}

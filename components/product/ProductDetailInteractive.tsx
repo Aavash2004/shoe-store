@@ -199,7 +199,7 @@ export function ProductDetailInteractive({
               <button
                 key={color}
                 onClick={() => handleColorSelect(color)}
-                className={`rounded-md border px-3.5 py-1.5 text-sm transition-all ${isSelected
+                className={`rounded-md border px-3.5 py-1.5 text-sm transition-all cursor-pointer ${isSelected
                   ? "border-[var(--color-navy)] bg-[var(--color-cream-alt)] text-[var(--color-navy)] shadow-xs"
                   : "border-[var(--color-sand)] text-[var(--color-navy)]/80 hover:border-[var(--color-navy)]/40 hover:bg-white/60"
                   }`}
@@ -229,7 +229,7 @@ export function ProductDetailInteractive({
                   key={sys.id}
                   type="button"
                   onClick={() => setSizeSystem(sys.id)}
-                  className={`rounded-xs px-2 py-0.5 transition-all ${
+                  className={`rounded-xs px-2 py-0.5 transition-all cursor-pointer ${
                     sizeSystem === sys.id
                       ? "bg-[var(--color-navy)] text-[var(--color-cream)] shadow-2xs"
                       : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
@@ -245,7 +245,7 @@ export function ProductDetailInteractive({
           <button
             type="button"
             onClick={() => setIsGuideOpen(true)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-navy)]/70 hover:text-[var(--color-navy)] transition-colors underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-navy)]/70 hover:text-[var(--color-navy)] transition-colors underline-offset-4 hover:underline cursor-pointer"
           >
             <Ruler className="h-3.5 w-3.5 text-[var(--color-navy)]/80" />
             <span>Size & Fit Guide</span>
@@ -263,7 +263,7 @@ export function ProductDetailInteractive({
                 key={size}
                 type="button"
                 onClick={() => setSelectedSize(size)}
-                className={`relative flex flex-col items-center justify-center rounded-md border py-2.5 px-2 text-center transition-all ${
+                className={`relative flex flex-col items-center justify-center rounded-md border py-2.5 px-2 text-center transition-all cursor-pointer ${
                   isSelected
                     ? "border-[var(--color-navy)] bg-[var(--color-cream-alt)] shadow-xs ring-1 ring-[var(--color-navy)]"
                     : "border-[var(--color-sand)] bg-white/70 hover:border-[var(--color-navy)]/40 hover:bg-white"

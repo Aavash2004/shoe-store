@@ -82,7 +82,7 @@ export function CurrencySwitcher({
               key={opt.code}
               type="button"
               onClick={() => setCurrency(opt.code)}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200 cursor-pointer ${
                 isActive
                   ? "bg-[var(--color-navy)] text-white shadow-xs"
                   : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)]"
@@ -109,7 +109,7 @@ export function CurrencySwitcher({
         aria-expanded={open}
         aria-haspopup="listbox"
         suppressHydrationWarning
-        className="group flex items-center gap-1.5 rounded-full border border-[var(--color-sand)]/90 bg-[var(--color-cream)] px-2.5 py-1 text-xs font-semibold text-[var(--color-navy)]/80 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:bg-[var(--color-cream-alt)] hover:text-[var(--color-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-sky)] shadow-2xs"
+        className="group flex items-center gap-1.5 rounded-full border border-[var(--color-sand)]/90 bg-[var(--color-cream)] px-2.5 py-1 text-xs font-semibold text-[var(--color-navy)]/80 transition-all duration-200 hover:border-[var(--color-navy)]/30 hover:bg-[var(--color-cream-alt)] hover:text-[var(--color-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-sky)] shadow-2xs cursor-pointer"
         title="Change currency"
       >
         <FlagIcon code={activeCode} className="h-3 w-4 rounded-xs shadow-2xs" />
@@ -145,7 +145,7 @@ export function CurrencySwitcher({
                     setCurrency(opt.code);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs transition-colors duration-150 ${
+                  className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs transition-colors duration-150 cursor-pointer ${
                     isActive
                       ? "bg-[var(--color-navy)] text-white font-bold"
                       : "text-[var(--color-navy)]/75 hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] font-medium"

@@ -244,7 +244,7 @@ export function CartDrawer() {
             ref={closeBtnRef}
             type="button"
             onClick={closeDrawer}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--color-navy)]/60 transition hover:bg-[var(--color-sand)]/60 hover:text-[var(--color-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--color-navy)]/60 transition hover:bg-[var(--color-sand)]/60 hover:text-[var(--color-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] cursor-pointer"
             aria-label="Close cart drawer"
           >
             <X className="h-4.5 w-4.5" />
@@ -389,7 +389,7 @@ export function CartDrawer() {
                             <button
                               type="button"
                               onClick={() => handleRemoveItem(item.variantId)}
-                              className="text-[var(--color-navy)]/35 hover:text-rose-600 transition-colors p-1"
+                              className="text-[var(--color-navy)]/35 hover:text-rose-600 transition-colors p-1 cursor-pointer"
                               aria-label={`Remove ${item.productName} from cart`}
                             >
                               <Trash2 className="h-3.5 w-3.5" />

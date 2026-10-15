@@ -286,7 +286,7 @@ function HeaderInner({ initialCurrency }: HeaderProps) {
               onClick={() => setCategoriesOpen((v) => !v)}
               aria-expanded={categoriesOpen}
               aria-haspopup="true"
-              className={`group flex items-center gap-1.5 py-1 text-sm font-medium transition-colors relative after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${
+              className={`group flex items-center gap-1.5 py-1 text-sm font-medium transition-colors relative cursor-pointer after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--color-navy)] after:transition-transform after:duration-200 hover:after:scale-x-100 ${
                 activeCategory
                   ? "text-[var(--color-navy)] font-semibold after:scale-x-100"
                   : "text-[var(--color-navy)]/65 hover:text-[var(--color-navy)]"
@@ -410,7 +410,7 @@ function HeaderInner({ initialCurrency }: HeaderProps) {
                   type="button"
                   disabled={isPending}
                   onClick={handleClearSearch}
-                  className="absolute right-2.5 p-0.5 text-[var(--color-navy)]/40 hover:text-[var(--color-navy)] transition-colors disabled:opacity-40"
+                  className="absolute right-2.5 p-0.5 text-[var(--color-navy)]/40 hover:text-[var(--color-navy)] transition-colors disabled:opacity-40 cursor-pointer"
                   aria-label="Clear search query"
                 >
                   <X className="h-3 w-3" />
