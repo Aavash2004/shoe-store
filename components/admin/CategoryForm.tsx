@@ -280,7 +280,7 @@ export function CategoryForm({ initialData }: CategoryFormProps) {
                 Are you sure you want to delete <strong className="text-[var(--color-navy)]">&quot;{initialData?.name}&quot;</strong>? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="gap-2.5 sm:gap-3">
               <Button
                 type="button"
                 variant="outline"

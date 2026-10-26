@@ -17,6 +17,7 @@ import {
   toStripeSmallestUnit,
   validateStripeChargeMinimum,
 } from "@/lib/services/stripe";
+import type Stripe from "stripe";
 
 function generateOrderNumber(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -117,7 +118,25 @@ export async function POST(request: NextRequest) {
   } catch {
     session = null;
   }
-  const userId = session?.user ? (session.user as any).id : null;
+  const rawUserId = session?.user ? (session.user as any).id : null;
+  let userId: string | null = null;
+
+  // Verify that userId actually exists in the database to prevent foreign key errors (e.g. stale JWT)
+  if (rawUserId) {
+    const userInDb = await prisma.user.findUnique({
+      where: { id: rawUserId },
+      select: { id: true, email: true, name: true },
+    });
+    if (userInDb) {
+      userId = userInDb.id;
+      if (!data.guestEmail && userInDb.email) {
+        data.guestEmail = userInDb.email;
+      }
+      if (!data.guestName && userInDb.name) {
+        data.guestName = userInDb.name;
+      }
+    }
+  }
 
   if (!userId) {
     if (!data.guestName && data.fullName) {
@@ -173,25 +192,57 @@ export async function POST(request: NextRequest) {
       pricing.currency
     );
 
-    // 7. Create Stripe PaymentIntent with Stripe-level idempotency key
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: amountInSmallestUnit,
-        currency: pricing.currency.toLowerCase(),
-        payment_method_types: ["card"],
-        metadata: {
-          idempotencyKey,
-          guestEmail: data.guestEmail || "",
-          country: data.country,
-          orderSubtotal: pricing.subtotal.toString(),
-          orderShipping: pricing.shipping.toString(),
-          orderTotal: pricing.total.toString(),
+    // 7. Create Stripe PaymentIntent with automatic idempotency fallback
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount: amountInSmallestUnit,
+          currency: pricing.currency.toLowerCase(),
+          payment_method_types: ["card"],
+          metadata: {
+            idempotencyKey,
+            guestEmail: data.guestEmail || "",
+            country: data.country,
+            orderSubtotal: pricing.subtotal.toString(),
+            orderShipping: pricing.shipping.toString(),
+            orderTotal: pricing.total.toString(),
+          },
         },
-      },
-      {
-        idempotencyKey: `pi_${idempotencyKey}`,
+        {
+          idempotencyKey: `pi_${idempotencyKey}`,
+        }
+      );
+    } catch (stripeErr: any) {
+      // If Stripe rejected due to idempotency key parameter mismatch (e.g. cart updated), retry with unique key
+      if (
+        stripeErr?.type === "StripeIdempotencyError" ||
+        stripeErr?.code === "idempotency_key_in_use" ||
+        String(stripeErr?.message || "").includes("Keys for idempotent requests")
+      ) {
+        console.warn("[Stripe] Idempotency conflict detected. Retrying with fresh key suffix...");
+        paymentIntent = await stripe.paymentIntents.create(
+          {
+            amount: amountInSmallestUnit,
+            currency: pricing.currency.toLowerCase(),
+            payment_method_types: ["card"],
+            metadata: {
+              idempotencyKey,
+              guestEmail: data.guestEmail || "",
+              country: data.country,
+              orderSubtotal: pricing.subtotal.toString(),
+              orderShipping: pricing.shipping.toString(),
+              orderTotal: pricing.total.toString(),
+            },
+          },
+          {
+            idempotencyKey: `pi_${idempotencyKey}_${Date.now()}`,
+          }
+        );
+      } else {
+        throw stripeErr;
       }
-    );
+    }
 
     // 8. Interactive database transaction with DB-level unique constraint
     const order = await prisma.$transaction(
@@ -267,13 +318,8 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Step E: Clear authenticated user cart
-        if (userId) {
-          const userCart = await tx.cart.findUnique({ where: { userId } });
-          if (userCart) {
-            await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });
-          }
-        }
+        // Note: We do NOT delete the user's cart here in create-intent.
+        // Cart clearing happens upon successful payment confirmation to prevent loss of cart if payment fails or is aborted.
 
         return newOrder;
       },
@@ -362,6 +408,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Handle Foreign Key Constraint Violation (P2003)
+    if (err?.code === "P2003") {
+      return NextResponse.json(
+        {
+          error: "Your session or user account reference is out of sync. Please refresh the page and try again.",
+          code: "FOREIGN_KEY_VIOLATION",
+        },
+        { status: 400 }
+      );
+    }
+
     // Handle Out-Of-Stock Error cleanly as 400 Bad Request
     if (
       err instanceof InsufficientStockError ||
@@ -402,7 +459,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          err?.message && !err.message.includes("Secret")
+          err?.message && !err.message.includes("Secret") && !err.message.includes("key")
             ? err.message
             : "Failed to initialize payment intent. Please try again.",
         details: err?.message,

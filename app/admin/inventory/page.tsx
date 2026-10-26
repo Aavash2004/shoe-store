@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminInventoryPage() {
   const variants = await prisma.productVariant.findMany({
     where: {
-      isActive: true,
+      isActive:true,
       deletedAt: null,
       product: { deletedAt: null },
     },

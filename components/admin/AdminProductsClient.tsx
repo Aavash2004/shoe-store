@@ -15,9 +15,19 @@ import {
   FileText,
   Boxes,
   ArrowUpDown,
+  Clock,
+  ArrowDownNarrowWide,
+  ArrowUpNarrowWide,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDebouncedValue } from "@/hooks/use-debounce";
 import { formatCurrency } from "@/lib/constants/currencies";
 import { getSafeImageUrl } from "@/lib/utils";
@@ -38,10 +48,31 @@ interface AdminProductsClientProps {
   initialProducts: AdminProductItem[];
 }
 
+type SortOption = "NEWEST" | "PRICE_ASC" | "PRICE_DESC" | "STOCK_ASC";
+
+const SORT_OPTIONS: {
+  value: SortOption;
+  label: string;
+  description: string;
+  icon: typeof Clock;
+}[] = [
+  { value: "NEWEST", label: "Newest First", description: "Latest catalog arrivals", icon: Clock },
+  { value: "PRICE_ASC", label: "Price: Low to High", description: "Ascending price order", icon: ArrowDownNarrowWide },
+  { value: "PRICE_DESC", label: "Price: High to Low", description: "Descending price order", icon: ArrowUpNarrowWide },
+  { value: "STOCK_ASC", label: "Stock: Low to High", description: "Restock & low inventory first", icon: Boxes },
+];
+
+const SORT_OPTIONS_MAP: Record<SortOption, string> = {
+  NEWEST: "Newest First",
+  PRICE_ASC: "Price: Low to High",
+  PRICE_DESC: "Price: High to Low",
+  STOCK_ASC: "Stock: Low to High",
+};
+
 export function AdminProductsClient({ initialProducts }: AdminProductsClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DRAFT" | "LOW_STOCK">("ALL");
-  const [sortBy, setSortBy] = useState<"NEWEST" | "PRICE_ASC" | "PRICE_DESC" | "STOCK_ASC">("NEWEST");
+  const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
 
   // Debounce search query by 150ms for responsive filtering
   const debouncedSearch = useDebouncedValue(searchQuery, 150);
@@ -97,6 +128,11 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
         const aStock = a.variants.reduce((sum, v) => sum + v.stock, 0);
         const bStock = b.variants.reduce((sum, v) => sum + v.stock, 0);
 
+        if (sortBy === "NEWEST") {
+          const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bDate - aDate;
+        }
         if (sortBy === "PRICE_ASC") return aMinPrice - bMinPrice;
         if (sortBy === "PRICE_DESC") return bMinPrice - aMinPrice;
         if (sortBy === "STOCK_ASC") return aStock - bStock;
@@ -211,7 +247,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
             <AlertTriangle className="h-4 w-4 text-rose-500" />
           </div>
           <div className="mt-2 text-2xl font-extrabold text-rose-700">{kpis.lowStock}</div>
-        </button>
+        </button> 
       </div>
 
       {/* Search & Filter Bar */}
@@ -229,19 +265,64 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
 
         {/* Sort Select */}
         <div className="flex items-center gap-2">
-          <div className="relative flex items-center">
-            <ArrowUpDown className="absolute left-3 h-3.5 w-3.5 text-[var(--color-navy)]/40 pointer-events-none" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="h-10 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 pl-8 pr-8 text-sm font-semibold text-[var(--color-navy)] cursor-pointer focus:bg-white focus:outline-none"
+          <Select
+            value={sortBy}
+            onValueChange={(val) => {
+              if (val) setSortBy(val as SortOption);
+            }}
+            items={SORT_OPTIONS_MAP}
+          >
+            <SelectTrigger
+              id="admin-products-sort-trigger"
+              className="h-10 min-w-[210px] sm:min-w-[230px] rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 hover:bg-white hover:border-[var(--color-navy)]/30 focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]/10 text-sm font-semibold text-[var(--color-navy)] px-3.5 shadow-2xs transition-all gap-2"
             >
-              <option value="NEWEST">Newest First</option>
-              <option value="PRICE_ASC">Price: Low to High</option>
-              <option value="PRICE_DESC">Price: High to Low</option>
-              <option value="STOCK_ASC">Stock: Low to High</option>
-            </select>
-          </div>
+              <div className="flex items-center gap-2 text-left flex-1 min-w-0">
+                <ArrowUpDown className="h-3.5 w-3.5 text-[var(--color-navy)]/50 shrink-0" />
+                <span className="text-[11px] font-bold text-[var(--color-navy)]/45 uppercase tracking-wider shrink-0">
+                  Sort:
+                </span>
+                <span className="truncate text-sm font-bold text-[var(--color-navy)]">
+                  <SelectValue>
+                    {(val) => (val && SORT_OPTIONS_MAP[val as SortOption]) || "Sort by..."}
+                  </SelectValue>
+                </span>
+              </div>
+            </SelectTrigger>
+            <SelectContent
+              align="end"
+              side="bottom"
+              sideOffset={6}
+              className="w-64 rounded-2xl border border-[var(--color-sand)] bg-white p-1.5 shadow-xl shadow-[var(--color-navy)]/8 ring-1 ring-black/5"
+            >
+              <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/45 border-b border-[var(--color-sand)]/50 mb-1">
+                Sort catalog by
+              </div>
+              {SORT_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    className="rounded-xl px-2.5 py-2 text-xs font-semibold text-[var(--color-navy)] cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--color-cream-alt)] text-[var(--color-navy)]/70">
+                        <Icon className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="text-xs font-bold text-[var(--color-navy)]">
+                          {opt.label}
+                        </span>
+                        <span className="text-[10px] font-normal text-[var(--color-navy)]/55">
+                          {opt.description}
+                        </span>
+                      </div>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

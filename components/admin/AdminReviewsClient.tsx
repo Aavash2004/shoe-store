@@ -14,6 +14,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { deleteReview } from "@/app/admin/reviews/actions";
 
 export type AdminReviewRow = {
@@ -99,18 +106,71 @@ export function AdminReviewsClient({
           />
         </div>
 
-        <select
+        <Select
           value={selectedRating}
-          onChange={(e) => setSelectedRating(e.target.value)}
-          className="h-10 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 px-3 text-sm font-semibold text-[var(--color-navy)] cursor-pointer focus:bg-white"
+          onValueChange={(val) => {
+            if (val) setSelectedRating(val);
+          }}
+          items={{
+            ALL: "All Ratings",
+            "5": "5 Stars",
+            "4": "4 Stars",
+            "3": "3 Stars",
+            "2": "2 Stars",
+            "1": "1 Star",
+          }}
         >
-          <option value="ALL">All Ratings</option>
-          <option value="5">5 Stars</option>
-          <option value="4">4 Stars</option>
-          <option value="3">3 Stars</option>
-          <option value="2">2 Stars</option>
-          <option value="1">1 Star</option>
-        </select>
+          <SelectTrigger
+            id="admin-reviews-rating-trigger"
+            className="h-10 min-w-[170px] rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 hover:bg-white hover:border-[var(--color-navy)]/30 focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]/10 text-sm font-semibold text-[var(--color-navy)] px-3.5 shadow-2xs transition-all gap-2"
+          >
+            <div className="flex items-center gap-2 text-left flex-1 min-w-0">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500 shrink-0" />
+              <span className="truncate text-sm font-bold text-[var(--color-navy)]">
+                <SelectValue>
+                  {(val) =>
+                    val === "ALL"
+                      ? "All Ratings"
+                      : val
+                      ? `${val} Stars`
+                      : "All Ratings"
+                  }
+                </SelectValue>
+              </span>
+            </div>
+          </SelectTrigger>
+          <SelectContent
+            align="end"
+            side="bottom"
+            sideOffset={6}
+            className="w-48 rounded-2xl border border-[var(--color-sand)] bg-white p-1.5 shadow-xl shadow-[var(--color-navy)]/8 ring-1 ring-black/5"
+          >
+            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/45 border-b border-[var(--color-sand)]/50 mb-1">
+              Filter by rating
+            </div>
+            {[
+              { value: "ALL", label: "All Ratings" },
+              { value: "5", label: "5 Stars" },
+              { value: "4", label: "4 Stars" },
+              { value: "3", label: "3 Stars" },
+              { value: "2", label: "2 Stars" },
+              { value: "1", label: "1 Star" },
+            ].map((opt) => (
+              <SelectItem
+                key={opt.value}
+                value={opt.value}
+                className="rounded-xl px-2.5 py-2 text-xs font-semibold text-[var(--color-navy)] cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  {opt.value !== "ALL" && (
+                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500 shrink-0" />
+                  )}
+                  <span>{opt.label}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Reviews Table */}

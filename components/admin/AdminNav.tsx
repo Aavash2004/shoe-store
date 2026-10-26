@@ -22,7 +22,7 @@ const links = [
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/coupons", label: "Coupons" },
   { href: "/admin/reviews", label: "Reviews" },
-  { href: "/admin/users", label: "Users" },
+  { href: "/admin/customers", label: "Customers" },
 ];
 
 export function AdminNav({ email }: { email: string }) {

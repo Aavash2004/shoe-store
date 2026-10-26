@@ -624,11 +624,11 @@ export function AdminDashboardClient({
                 <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
               </Link>
               <Link
-                href="/admin/users"
+                href={"/admin/customers" as any}
                 className="flex items-center justify-between rounded-xl border border-[var(--color-sand)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 transition-colors shadow-2xs"
               >
                 <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Users
+                  <Users className="h-4 w-4 text-[var(--color-navy)]/50 shrink-0" /> Manage Customers
                 </span>
                 <ArrowRight className="h-3.5 w-3.5 text-[var(--color-navy)]/40 shrink-0" />
               </Link>

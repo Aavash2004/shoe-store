@@ -336,7 +336,7 @@ export function CategoryTableClient({ initialCategories }: CategoryTableClientPr
               </DialogDescription>
             </DialogHeader>
 
-            <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <DialogFooter className="gap-2.5 sm:gap-3 mt-4">
               <Button
                 type="button"
                 variant="outline"

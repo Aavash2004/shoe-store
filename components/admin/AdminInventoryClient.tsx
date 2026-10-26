@@ -22,6 +22,13 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDebouncedValue } from "@/hooks/use-debounce";
 import { formatCurrency } from "@/lib/constants/currencies";
 import { updateVariantStock } from "@/app/admin/inventory/actions";
@@ -47,11 +54,30 @@ interface AdminInventoryClientProps {
   initialVariants: AdminInventoryVariant[];
 }
 
+type InventorySortOption = "STOCK_ASC" | "STOCK_DESC" | "NAME_ASC" | "PRICE_DESC";
+
+const INVENTORY_SORT_OPTIONS: {
+  value: InventorySortOption;
+  label: string;
+}[] = [
+  { value: "STOCK_ASC", label: "Stock: Low to High" },
+  { value: "STOCK_DESC", label: "Stock: High to Low" },
+  { value: "NAME_ASC", label: "Shoe Name (A-Z)" },
+  { value: "PRICE_DESC", label: "Price: High to Low" },
+];
+
+const INVENTORY_SORT_MAP: Record<InventorySortOption, string> = {
+  STOCK_ASC: "Stock: Low to High",
+  STOCK_DESC: "Stock: High to Low",
+  NAME_ASC: "Shoe Name (A-Z)",
+  PRICE_DESC: "Price: High to Low",
+};
+
 export function AdminInventoryClient({ initialVariants }: AdminInventoryClientProps) {
   const [variants, setVariants] = useState<AdminInventoryVariant[]>(initialVariants);
   const [searchQuery, setSearchQuery] = useState("");
   const [stockFilter, setStockFilter] = useState<"ALL" | "LOW" | "OUT" | "HEALTHY">("ALL");
-  const [sortBy, setSortBy] = useState<"STOCK_ASC" | "STOCK_DESC" | "NAME_ASC" | "PRICE_DESC">("STOCK_ASC");
+  const [sortBy, setSortBy] = useState<InventorySortOption>("STOCK_ASC");
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [tempStock, setTempStock] = useState<number>(0);
   const [isSaving, startTransition] = useTransition();
@@ -273,19 +299,49 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
 
         {/* Sort */}
         <div className="flex items-center gap-2">
-          <div className="relative flex items-center">
-            <ArrowUpDown className="absolute left-3 h-3.5 w-3.5 text-[var(--color-navy)]/40 pointer-events-none" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="h-10 rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 pl-8 pr-8 text-xs font-semibold text-[var(--color-navy)] cursor-pointer focus:bg-white focus:outline-none"
+          <Select
+            value={sortBy}
+            onValueChange={(val) => {
+              if (val) setSortBy(val as InventorySortOption);
+            }}
+            items={INVENTORY_SORT_MAP}
+          >
+            <SelectTrigger
+              id="admin-inventory-sort-trigger"
+              className="h-10 min-w-[200px] sm:min-w-[220px] rounded-xl border border-[var(--color-sand)] bg-[var(--color-cream-alt)]/50 hover:bg-white hover:border-[var(--color-navy)]/30 focus-visible:ring-2 focus-visible:ring-[var(--color-navy)]/10 text-xs font-semibold text-[var(--color-navy)] px-3.5 shadow-2xs transition-all gap-2"
             >
-              <option value="STOCK_ASC">Stock: Low to High</option>
-              <option value="STOCK_DESC">Stock: High to Low</option>
-              <option value="NAME_ASC">Shoe Name (A-Z)</option>
-              <option value="PRICE_DESC">Price: High to Low</option>
-            </select>
-          </div>
+              <div className="flex items-center gap-2 text-left flex-1 min-w-0">
+                <ArrowUpDown className="h-3.5 w-3.5 text-[var(--color-navy)]/50 shrink-0" />
+                <span className="text-[10px] font-bold text-[var(--color-navy)]/45 uppercase tracking-wider shrink-0">
+                  Sort:
+                </span>
+                <span className="truncate text-xs font-bold text-[var(--color-navy)]">
+                  <SelectValue>
+                    {(val) => (val && INVENTORY_SORT_MAP[val as InventorySortOption]) || "Sort by..."}
+                  </SelectValue>
+                </span>
+              </div>
+            </SelectTrigger>
+            <SelectContent
+              align="end"
+              side="bottom"
+              sideOffset={6}
+              className="w-56 rounded-2xl border border-[var(--color-sand)] bg-white p-1.5 shadow-xl shadow-[var(--color-navy)]/8 ring-1 ring-black/5"
+            >
+              <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)]/45 border-b border-[var(--color-sand)]/50 mb-1">
+                Sort inventory by
+              </div>
+              {INVENTORY_SORT_OPTIONS.map((opt) => (
+                <SelectItem
+                  key={opt.value}
+                  value={opt.value}
+                  className="rounded-xl px-2.5 py-2 text-xs font-semibold text-[var(--color-navy)] cursor-pointer"
+                >
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

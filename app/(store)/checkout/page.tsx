@@ -65,13 +65,17 @@ export default function CheckoutPage() {
   const hasHydrated = useCartStore((state) => state.hasHydrated);
   const hasFetchedInitial = useCartStore((state) => state.hasFetchedInitial);
 
-  // Client session-stable idempotency key (persists across re-renders and form edits)
+  // Client session-stable idempotency key (persists across re-renders, regenerates on cart/coupon edits or errors)
   const idempotencyKeyRef = useRef<string>("");
-  if (!idempotencyKeyRef.current) {
+  const refreshIdempotencyKey = useCallback(() => {
     idempotencyKeyRef.current =
       typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
         : `idem_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+  }, []);
+
+  if (!idempotencyKeyRef.current) {
+    refreshIdempotencyKey();
   }
 
   const [mounted, setMounted] = useState(false);
@@ -174,12 +178,21 @@ export default function CheckoutPage() {
     }
   }, [isLoggedIn, hasFetchedInitial, fetchCart]);
 
-  // Reset Stripe payment intent if items in cart change so total amount matches
+  // Reset Stripe payment intent and refresh idempotency key if items in cart change so total amount matches
   useEffect(() => {
     if (stripeData) {
       setStripeData(null);
     }
-  }, [cartItems]);
+    refreshIdempotencyKey();
+  }, [cartItems, refreshIdempotencyKey]);
+
+  // Refresh idempotency key when applied coupon changes
+  useEffect(() => {
+    if (stripeData) {
+      setStripeData(null);
+    }
+    refreshIdempotencyKey();
+  }, [appliedCoupon, refreshIdempotencyKey]);
 
   const handleCheckoutQuantity = (variantId: string, newQty: number, maxStock: number) => {
     if (newQty < 1) return; // Minimum-1 rule
@@ -258,6 +271,8 @@ export default function CheckoutPage() {
         setLoading(false);
 
         if (!res.ok) {
+          refreshIdempotencyKey();
+          console.error("[Checkout] Stripe intent initialization error:", result);
           setError(result.error ?? "Failed to initialize card payment. Please try again.");
           return;
         }
@@ -293,6 +308,7 @@ export default function CheckoutPage() {
         });
         const result = await res.json();
         if (!res.ok) {
+          refreshIdempotencyKey();
           setLoading(false);
           setError(result.error ?? "Failed to initialize Khalti payment.");
           return;
@@ -327,6 +343,7 @@ export default function CheckoutPage() {
       setLoading(false);
 
       if (!res.ok) {
+        refreshIdempotencyKey();
         setError(result.error ?? "Checkout could not be completed. Please try again.");
         return;
       }
@@ -335,6 +352,7 @@ export default function CheckoutPage() {
 
       router.push(`/order-confirmation/${result.order.id}`);
     } catch (err: any) {
+      refreshIdempotencyKey();
       setLoading(false);
       setError("Network or server connection failed. Please check your connection.");
     }
@@ -442,7 +460,10 @@ export default function CheckoutPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setStripeData(null)}
+                    onClick={() => {
+                      setStripeData(null);
+                      refreshIdempotencyKey();
+                    }}
                     className="text-xs font-semibold text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] underline cursor-pointer"
                   >
                     Edit Shipping Information
@@ -479,6 +500,7 @@ export default function CheckoutPage() {
                     orderNumber={stripeData.orderNumber}
                     amount={stripeData.amount}
                     currency={stripeData.currency}
+                    onPaymentSuccess={() => clearCart()}
                   />
                 </Elements>
               </section>
@@ -874,7 +896,7 @@ export default function CheckoutPage() {
 
               <p className="flex items-center justify-center gap-2 text-center text-xs font-medium text-[var(--color-navy)]/60">
                 <Lock className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Guaranteed Safe & Secure Checkout</span>
+                <span>Guaranteed Safe &amp; Secure Checkout</span>
               </p>
             </div>
           </form>
@@ -950,35 +972,38 @@ export default function CheckoutPage() {
                         )}
                       </div>
 
-                      {/* Interactive Quantity Stepper & Remove */}
-                      <div className="mt-2 flex items-center gap-3">
-                        <div className="inline-flex items-center rounded-lg border border-[var(--color-sand)] bg-white p-0.5">
+                      {/* Quantity Modifier controls */}
+                      <div className="mt-2.5 flex items-center gap-2">
+                        <div className="flex items-center rounded-lg border border-[var(--color-sand)] bg-white px-1 py-0.5 shadow-2xs">
                           <button
                             type="button"
-                            onClick={() => handleCheckoutQuantity(item.variantId, item.quantity - 1, item.stock)}
+                            onClick={() =>
+                              handleCheckoutQuantity(
+                                item.variantId,
+                                item.quantity - 1,
+                                item.stock
+                              )
+                            }
                             disabled={item.quantity <= 1}
-                            aria-disabled={item.quantity <= 1}
-                            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
-                              item.quantity <= 1
-                                ? "cursor-not-allowed text-stone-300 opacity-40 pointer-events-none"
-                                : "text-[var(--color-navy)] hover:bg-[var(--color-cream)] cursor-pointer"
-                            }`}
+                            className="p-1 text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                             aria-label="Decrease quantity"
                           >
                             <Minus className="h-3 w-3" />
                           </button>
-                          <span className="min-w-[20px] text-center text-xs font-bold text-[var(--color-navy)]">
+                          <span className="w-6 text-center text-xs font-bold text-[var(--color-navy)]">
                             {item.quantity}
                           </span>
                           <button
                             type="button"
-                            onClick={() => handleCheckoutQuantity(item.variantId, item.quantity + 1, item.stock)}
+                            onClick={() =>
+                              handleCheckoutQuantity(
+                                item.variantId,
+                                item.quantity + 1,
+                                item.stock
+                              )
+                            }
                             disabled={item.quantity >= item.stock}
-                            className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
-                              item.quantity >= item.stock
-                                ? "cursor-not-allowed text-stone-300"
-                                : "text-[var(--color-navy)] hover:bg-[var(--color-cream)]"
-                            }`}
+                            className="p-1 text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
                             aria-label="Increase quantity"
                           >
                             <Plus className="h-3 w-3" />
@@ -988,21 +1013,20 @@ export default function CheckoutPage() {
                         <button
                           type="button"
                           onClick={() => handleCheckoutRemove(item.variantId)}
-                          className="flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                          title="Remove item"
-                          aria-label="Remove item from checkout"
+                          className="p-1 text-[var(--color-navy)]/40 hover:text-rose-600 transition-colors cursor-pointer"
+                          aria-label="Remove item"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-sm text-[var(--color-navy)]">
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-[var(--color-navy)]">
                         {formatCurrency(item.localPrice * item.quantity, currency)}
                       </p>
                       {item.quantity > 1 && (
-                        <p className="text-[11px] text-[var(--color-navy)]/50">
+                        <p className="mt-0.5 text-[10px] text-[var(--color-navy)]/50">
                           {formatCurrency(item.localPrice, currency)} each
                         </p>
                       )}
@@ -1011,84 +1035,71 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              {/* Coupon Section */}
+              {/* Promo Code Input Field */}
               <div className="mt-6 border-t border-[var(--color-sand)] pt-5">
-                <p className="mb-2.5 text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
-                  Promo Code
-                </p>
                 <CouponInput
                   subtotal={subtotal}
                   appliedCoupon={appliedCoupon}
-                  onApplyCoupon={setAppliedCoupon}
+                  onApplyCoupon={(coupon) => setAppliedCoupon(coupon)}
                 />
               </div>
 
-              {/* Subtotal & Shipping Costs */}
-              <div className="mt-5 space-y-2.5 border-t border-[var(--color-sand)] pt-4 text-sm font-medium">
-                <div className="flex justify-between text-[var(--color-navy)]/70">
+              {/* Price Calculation Breakdown */}
+              <div className="mt-6 space-y-2.5 border-t border-[var(--color-sand)] pt-4 text-xs font-medium text-[var(--color-navy)]/70">
+                <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="font-bold text-[var(--color-navy)]">
+                  <span className="font-semibold text-[var(--color-navy)]">
                     {formatCurrency(subtotal, currency)}
                   </span>
                 </div>
 
-                {appliedCoupon && (
-                  <div className="flex justify-between text-xs font-bold text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
-                    <span>Discount ({appliedCoupon.code})</span>
-                    <span>-{formatCurrency(appliedCoupon.discountAmount, currency)}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-between text-[var(--color-navy)]/70">
+                <div className="flex justify-between">
                   <span>Shipping</span>
-                  <span>
-                    {shipping === 0 ? (
-                      <span className="font-extrabold text-emerald-600 uppercase tracking-wider text-xs">
-                        Free Delivery
-                      </span>
-                    ) : (
-                      <span className="font-bold text-[var(--color-navy)]">
-                        {formatCurrency(shipping, currency)}
-                      </span>
-                    )}
-                  </span>
+                  {shipping === 0 ? (
+                    <span className="font-bold text-emerald-600">FREE</span>
+                  ) : (
+                    <span className="font-semibold text-[var(--color-navy)]">
+                      {formatCurrency(shipping, currency)}
+                    </span>
+                  )}
                 </div>
 
-                {selectedCountryCode === "NP" && (
-                  <div className="flex justify-between text-xs text-[var(--color-navy)]/50 pt-1">
-                    <span>Includes 13% Nepal VAT</span>
-                    <span>{formatCurrency(Math.round(subtotal - subtotal / 1.13), currency)}</span>
+                {appliedCoupon && (
+                  <div className="flex justify-between text-emerald-700 font-semibold">
+                    <span>Discount ({appliedCoupon.code})</span>
+                    <span>-{formatCurrency(discountAmount, currency)}</span>
                   </div>
                 )}
-              </div>
 
-              {/* Grand Total */}
-              <div className="mt-5 flex items-baseline justify-between border-t border-[var(--color-sand)] pt-5 text-lg font-black text-[var(--color-navy)]">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-wider text-[var(--color-navy)]">
-                    Total Due
-                  </p>
-                  <p className="text-[10px] font-normal text-[var(--color-navy)]/50">
-                    {selectedCountryCode === "NP" ? "VAT included · Payable via COD" : "Taxes & shipping included"}
-                  </p>
+                <div className="border-t border-[var(--color-sand)]/60 pt-3">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]">
+                        Total Due
+                      </span>
+                      <p className="text-[10px] text-[var(--color-navy)]/50">
+                        Taxes &amp; shipping included
+                      </p>
+                    </div>
+                    <span className="font-[family-name:var(--font-display)] text-2xl font-black text-[var(--color-navy)]">
+                      {formatCurrency(total, currency)}
+                    </span>
+                  </div>
                 </div>
-                <span className="font-mono text-2xl font-black tracking-tight text-[var(--color-navy)]">
-                  {formatCurrency(total, currency)}
-                </span>
               </div>
 
-              {/* Store Guarantee Badges */}
-              <div className="mt-6 grid grid-cols-3 gap-2 border-t border-[var(--color-sand)] pt-5 text-center text-[10px] font-semibold text-[var(--color-navy)]/70">
-                <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-[var(--color-cream)]/40">
-                  <BadgeCheck className="h-4 w-4 text-[var(--color-navy)]" />
+              {/* Reassurance Trust Badges */}
+              <div className="mt-6 grid grid-cols-3 gap-2 border-t border-[var(--color-sand)]/60 pt-4 text-center text-[10px] font-bold text-[var(--color-navy)]/60">
+                <div className="flex flex-col items-center gap-1">
+                  <BadgeCheck className="h-4 w-4 text-[var(--color-navy)]/70" />
                   <span>100% Authentic</span>
                 </div>
-                <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-[var(--color-cream)]/40">
-                  <RotateCcw className="h-4 w-4 text-[var(--color-navy)]" />
+                <div className="flex flex-col items-center gap-1">
+                  <RotateCcw className="h-4 w-4 text-[var(--color-navy)]/70" />
                   <span>30-Day Returns</span>
                 </div>
-                <div className="flex flex-col items-center gap-1 p-2 rounded-xl bg-[var(--color-cream)]/40">
-                  <Truck className="h-4 w-4 text-[var(--color-navy)]" />
+                <div className="flex flex-col items-center gap-1">
+                  <Truck className="h-4 w-4 text-[var(--color-navy)]/70" />
                   <span>Fast Express</span>
                 </div>
               </div>

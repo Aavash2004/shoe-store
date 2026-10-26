@@ -44,7 +44,7 @@ const NAV_ITEMS = [
   { href: "/admin/orders", label: "Orders", icon: Receipt },
   { href: "/admin/coupons", label: "Coupons", icon: Ticket },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
-  { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/customers", label: "Customers", icon: Users },
 ];
 
 export function AdminSidebar({ user }: AdminSidebarProps) {
@@ -80,6 +80,9 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   const isLinkActive = (href: string) => {
     if (href === "/admin") {
       return pathname === "/admin";
+    }
+    if (href === "/admin/customers") {
+      return pathname.startsWith("/admin/customers") || pathname.startsWith("/admin/users");
     }
     return pathname === href || pathname.startsWith(`${href}/`);
   };
