@@ -19,6 +19,7 @@ import { POST as codCheckoutHandler } from "../app/api/checkout/route";
 import { POST as stripeWebhookHandler } from "../app/api/webhooks/stripe/route";
 import { GET as cleanupCronHandler } from "../app/api/cron/cleanup-expired-orders/route";
 import { updateOrderStatus } from "../app/admin/orders/[id]/actions";
+import { GET as orderStatusHandler } from "../app/api/orders/[id]/status/route";
 
 async function runTests() {
   console.log("=== Running Extended Route-Handler Parity & Payment Lifecycle Test Suite ===\n");
@@ -1482,6 +1483,107 @@ async function runTests() {
     stripe.refunds.create = trackedStripeRefundCreate16;
     stripe.webhooks.constructEvent = originalConstructEvent16;
     await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBeforeDbErr } });
+
+    // =========================================================================
+    // TEST 17: BUG-003 - GET /api/orders/[id]/status Read-Only & PII Guard
+    // =========================================================================
+    console.log("\n--- TEST 17: BUG-003 - GET /api/orders/[id]/status Read-Only & PII Guard ---");
+    const testSecretEmail = "private_customer@example.com";
+    const testPiiAddress = await prisma.address.create({
+      data: {
+        fullName: "Secret Agent Customer",
+        phone: "9800000000",
+        line1: "123 Classified St",
+        city: "Secret City",
+        state: "Bagmati",
+        postalCode: "44600",
+        country: "NP",
+      },
+    });
+
+    const piiOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-PII-${Date.now()}`,
+        currency: "USD",
+        subtotal: 100,
+        shipping: 10,
+        discount: 0,
+        total: 110,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        guestEmail: testSecretEmail,
+        guestName: "Secret Agent Customer",
+        addressId: testPiiAddress.id,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 100,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(piiOrder.id);
+
+    // 1. Unauthenticated request without matching email (Public IDOR attempt)
+    const publicReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status`, {
+      method: "GET",
+      headers: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}` },
+    });
+    const publicRes = await orderStatusHandler(publicReq, { params: Promise.resolve({ id: piiOrder.id }) });
+    assert(publicRes.status === 200, "Public request returns 200 OK");
+    const publicData = await publicRes.json();
+    assert(publicData.order?.status === "PENDING", "Public response includes status");
+    assert(publicData.order?.paymentStatus === "PENDING", "Public response includes paymentStatus");
+    assert(!publicData.order?.address, "Public response REDACTS customer address (no PII leak)");
+    assert(!publicData.order?.items, "Public response REDACTS items purchased (no PII leak)");
+    assert(publicData.order?.total === undefined, "Public response REDACTS pricing totals");
+
+    // 2. Request with incorrect email
+    const wrongEmailReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status?email=intruder@attacker.com`, {
+      method: "GET",
+      headers: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}` },
+    });
+    const wrongEmailRes = await orderStatusHandler(wrongEmailReq, { params: Promise.resolve({ id: piiOrder.id }) });
+    const wrongEmailData = await wrongEmailRes.json();
+    assert(!wrongEmailData.order?.address && !wrongEmailData.order?.items, "Request with non-matching email REDACTS all PII");
+
+    // 3. Request with MATCHING email
+    const matchingEmailReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status?email=${encodeURIComponent(testSecretEmail)}`, {
+      method: "GET",
+      headers: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}` },
+    });
+    const matchingEmailRes = await orderStatusHandler(matchingEmailReq, { params: Promise.resolve({ id: piiOrder.id }) });
+    assert(matchingEmailRes.status === 200, "Matching email request returns 200 OK");
+    const matchingData = await matchingEmailRes.json();
+    assert(Boolean(matchingData.order?.address), "Matching email request successfully retrieves address");
+    assert(matchingData.order?.address?.line1 === "123 Classified St", "Matching email retrieves shipping line1");
+    assert(matchingData.order?.address?.phone === "***-***-0000", "Matching email masks recipient phone number");
+    assert(matchingData.order?.items?.length === 1, "Matching email retrieves order items");
+    assert(matchingData.order?.total === 110, "Matching email retrieves order total");
+
+    // 4. Rate-limiting verification
+    const spamIp = `203.0.113.${Date.now() % 250}`;
+    let hitRateLimit = false;
+    for (let i = 0; i < 25; i++) {
+      const spamReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status`, {
+        method: "GET",
+        headers: { "x-forwarded-for": spamIp },
+      });
+      const spamRes = await orderStatusHandler(spamReq, { params: Promise.resolve({ id: piiOrder.id }) });
+      if (spamRes.status === 429) {
+        hitRateLimit = true;
+        break;
+      }
+    }
+    assert(hitRateLimit, "Status endpoint rate-limits excessive queries per IP with HTTP 429");
 
   } catch (err) {
     console.error("Test execution caught unexpected exception:", err);

@@ -1,12 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { stripe } from "@/lib/services/stripe";
+import { auth } from "@/lib/auth/auth";
+import { checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 1. IP-based rate limiting to prevent enumeration / IDOR probing
+    const clientIp = getClientIp(request);
+    const rateLimitResult = await checkRateLimit(`order-status:${clientIp}`);
+    if (!rateLimitResult.success) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+      );
+      return NextResponse.json(
+        { error: "Too many status checks. Please wait a minute before trying again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfter),
+            "X-RateLimit-Limit": String(rateLimitResult.limit),
+            "X-RateLimit-Remaining": String(rateLimitResult.remaining),
+          },
+        }
+      );
+    }
+
     const { id } = await context.params;
 
     if (!id) {
@@ -16,43 +38,14 @@ export async function GET(
       );
     }
 
+    // 2. Pure read-only lookup (NO Stripe retrieve, NO payment confirmation in GET)
     const order = await prisma.order.findUnique({
       where: { id },
-      select: {
-        id: true,
-        orderNumber: true,
-        status: true,
-        paymentStatus: true,
-        paymentMethod: true,
-        stripePaymentIntentId: true,
-        couponCode: true,
-        subtotal: true,
-        shipping: true,
-        tax: true,
-        discount: true,
-        total: true,
-        currency: true,
-        createdAt: true,
-        address: {
-          select: {
-            fullName: true,
-            line1: true,
-            line2: true,
-            city: true,
-            state: true,
-            postalCode: true,
-            country: true,
-            phone: true,
-          },
-        },
+      include: {
+        user: { select: { id: true, email: true } },
+        address: true,
         items: {
-          select: {
-            id: true,
-            productName: true,
-            size: true,
-            color: true,
-            quantity: true,
-            price: true,
+          include: {
             variant: {
               select: {
                 product: {
@@ -79,55 +72,48 @@ export async function GET(
       );
     }
 
-    // Real-time Stripe payment status reconciliation (ensures local dev & fast webhooks succeed)
-    let currentPaymentStatus = order.paymentStatus;
-    let currentStatus = order.status;
-
-    if (
-      order.paymentMethod === "STRIPE" &&
-      order.paymentStatus === "PENDING" &&
-      order.stripePaymentIntentId
-    ) {
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
-        if (paymentIntent.status === "succeeded") {
-          await prisma.order.update({
-            where: { id: order.id },
-            data: {
-              paymentStatus: "PAID",
-              status: "PROCESSING",
-            },
-          });
-          currentPaymentStatus = "PAID";
-          currentStatus = "PROCESSING";
-
-          await prisma.orderStatusHistory.create({
-            data: {
-              orderId: order.id,
-              status: "PAID",
-              note: `Payment confirmed via Stripe (Amount: ${paymentIntent.currency.toUpperCase()} ${(
-                paymentIntent.amount / 100
-              ).toFixed(2)}, PI: ${paymentIntent.id})`,
-            },
-          }).catch(() => {});
-
-          // Send transactional confirmation email
-          try {
-            const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
-            const emailResult = await sendOrderConfirmationEmail(order.id);
-            if (!emailResult?.success) {
-              console.error(`[Order Status] Confirmation email dispatch failed for order ${order.id}:`, emailResult?.error);
-            }
-          } catch (emailErr) {
-            console.error("[Order Status] Failed to dispatch order confirmation email:", emailErr);
-          }
-        }
-      } catch (stripeErr) {
-        console.warn("[Order Status] Stripe status reconciliation error:", stripeErr);
-      }
+    // 3. Authorization check: owner, admin, or caller with matching email
+    let session = null;
+    try {
+      session = await auth();
+    } catch {
+      // In isolated test runner or outside App Router context
     }
 
-    // Mask phone number to prevent PII exposure (e.g. ***-***-1234)
+    const { searchParams } = new URL(request.url);
+    const emailParam = (
+      searchParams.get("email") || request.headers.get("x-order-email")
+    )?.trim().toLowerCase();
+
+    const orderCustomerEmail = (
+      order.user?.email || order.guestEmail || ""
+    ).toLowerCase();
+
+    const isOwner = Boolean(
+      session?.user?.id && session.user.id === order.userId
+    );
+    const isAdmin = Boolean(session?.user?.role === "ADMIN");
+    const isMatchingEmail = Boolean(
+      emailParam && orderCustomerEmail && emailParam === orderCustomerEmail
+    );
+
+    const isAuthorized = isOwner || isAdmin || isMatchingEmail;
+
+    // 4. Return ONLY status/paymentStatus unless owner or matching email (BUG-003 fix)
+    if (!isAuthorized) {
+      return NextResponse.json(
+        {
+          order: {
+            id: order.id,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // 5. Authorized response: Return full details with masked phone
     const maskedPhone = order.address?.phone
       ? order.address.phone.length > 4
         ? `***-***-${order.address.phone.slice(-4)}`
@@ -135,20 +121,25 @@ export async function GET(
       : null;
 
     const formattedOrder = {
-      ...order,
-      status: currentStatus,
-      paymentStatus: currentPaymentStatus,
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      currency: order.currency,
+      subtotal: Number(order.subtotal),
+      shipping: Number(order.shipping),
+      tax: Number(order.tax),
+      discount: Number(order.discount),
+      total: Number(order.total),
+      couponCode: order.couponCode,
+      createdAt: order.createdAt,
       address: order.address
         ? {
             ...order.address,
             phone: maskedPhone,
           }
         : null,
-      subtotal: Number(order.subtotal),
-      shipping: Number(order.shipping),
-      tax: Number(order.tax),
-      discount: Number(order.discount),
-      total: Number(order.total),
       items: order.items.map((item) => ({
         id: item.id,
         productName: item.productName,
