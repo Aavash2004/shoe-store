@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { AdminPagination } from "@/components/admin/AdminPagination";
 import {
   Plus,
   Package,
@@ -73,9 +74,16 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DRAFT" | "LOW_STOCK">("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Debounce search query by 150ms for responsive filtering
   const debouncedSearch = useDebouncedValue(searchQuery, 150);
+
+  // Reset page to 1 when filters or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, debouncedSearch, sortBy]);
 
   // Compute overall KPI metrics
   const kpis = useMemo(() => {
@@ -139,6 +147,13 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
         return 0; // Default order
       });
   }, [initialProducts, statusFilter, debouncedSearch, sortBy]);
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredProducts.length / pageSize) || 1;
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -369,7 +384,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-sand)]/60">
-                {filteredProducts.map((product) => {
+                {paginatedProducts.map((product) => {
                   const imageUrl = getSafeImageUrl(product.images[0]?.url);
                   const prices = product.variants.map((v) => Number(v.price) || 0);
                   const minPrice = prices.length ? Math.min(...prices) : 0;
@@ -500,7 +515,7 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
 
           {/* Mobile Card Grid View */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
-            {filteredProducts.map((product) => {
+            {paginatedProducts.map((product) => {
               const imageUrl = getSafeImageUrl(product.images[0]?.url);
               const prices = product.variants.map((v) => Number(v.price) || 0);
               const minPrice = prices.length ? Math.min(...prices) : 0;
@@ -569,6 +584,21 @@ export function AdminProductsClient({ initialProducts }: AdminProductsClientProp
               );
             })}
           </div>
+
+          {/* Pagination Controls */}
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredProducts.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            pageSizeOptions={[10, 20, 50]}
+            itemLabel="products"
+          />
         </>
       )}
     </div>

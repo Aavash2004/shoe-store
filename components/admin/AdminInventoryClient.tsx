@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { AdminPagination } from "@/components/admin/AdminPagination";
 import {
   Boxes,
   AlertTriangle,
@@ -78,11 +79,18 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
   const [searchQuery, setSearchQuery] = useState("");
   const [stockFilter, setStockFilter] = useState<"ALL" | "LOW" | "OUT" | "HEALTHY">("ALL");
   const [sortBy, setSortBy] = useState<InventorySortOption>("STOCK_ASC");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [tempStock, setTempStock] = useState<number>(0);
   const [isSaving, startTransition] = useTransition();
 
   const debouncedSearch = useDebouncedValue(searchQuery, 150);
+
+  // Reset page to 1 when filters or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [stockFilter, debouncedSearch, sortBy]);
 
   useEffect(() => {
     setVariants(initialVariants);
@@ -160,7 +168,14 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
         if (sortBy === "PRICE_DESC") return b.price - a.price;
         return 0;
       });
-  }, [initialVariants, stockFilter, debouncedSearch, sortBy]);
+  }, [variants, stockFilter, debouncedSearch, sortBy]);
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredVariants.length / pageSize) || 1;
+  const paginatedVariants = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredVariants.slice(start, start + pageSize);
+  }, [filteredVariants, currentPage, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -387,7 +402,7 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-sand)]/60">
-                {filteredVariants.map((v) => {
+                {paginatedVariants.map((v) => {
                   return (
                     <tr
                       key={v.id}
@@ -560,7 +575,7 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
 
           {/* Mobile Card View */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
-            {filteredVariants.map((v) => {
+            {paginatedVariants.map((v) => {
               return (
                 <div
                   key={v.id}
@@ -666,6 +681,21 @@ export function AdminInventoryClient({ initialVariants }: AdminInventoryClientPr
               );
             })}
           </div>
+
+          {/* Pagination Controls */}
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredVariants.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            pageSizeOptions={[15, 30, 50]}
+            itemLabel="variants"
+          />
         </>
       )}
     </div>
