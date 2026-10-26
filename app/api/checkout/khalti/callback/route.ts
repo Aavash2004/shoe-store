@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { lookupKhaltiPayment } from "@/lib/services/khalti";
-import { releaseOrderStock } from "@/lib/checkout/stock";
-import { releaseCouponUsage } from "@/lib/checkout/coupon";
+import { lookupKhaltiPayment, refundKhaltiPayment } from "@/lib/services/khalti";
+import { releaseOrderStock, decrementStockWithLock } from "@/lib/checkout/stock";
+import * as Sentry from "@sentry/nextjs";
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const baseUrl =
         process.env.NEXT_PUBLIC_APP_URL ||
         `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    const supportEmail = process.env.SUPPORT_EMAIL || "support@abxv.com";
 
     if (!pidx) {
         return NextResponse.redirect(
@@ -53,14 +54,147 @@ export async function GET(request: NextRequest) {
             // Verify payment amount matches order total exactly
             if (Number(lookupResult.total_amount) !== expectedPaisa) {
                 console.error(
-                    `[Khalti Amount Mismatch] Order ${order.id}: expected ${expectedPaisa} paisa, received ${lookupResult.total_amount} paisa.`
+                    `🚨 [CRITICAL SECURITY ALERT] Khalti payment amount mismatch detected for order ${order.id} (${order.orderNumber})!\n` +
+                    `Expected: ${expectedPaisa} paisa (Rs. ${order.total} NPR)\n` +
+                    `Received: ${lookupResult.total_amount} paisa\n` +
+                    `Transaction ID: ${lookupResult.transaction_id || pidx}\n` +
+                    `ACTION: Order marked for MANUAL_REVIEW. Stock and promo code remain reserved.`
                 );
+
+                // Dispatch Sentry alert
+                try {
+                    Sentry.captureMessage(
+                        `🚨 Khalti Payment Amount Mismatch for Order #${order.orderNumber}: expected ${expectedPaisa} paisa, received ${lookupResult.total_amount} paisa`,
+                        {
+                            level: "fatal",
+                            extra: {
+                                orderId: order.id,
+                                orderNumber: order.orderNumber,
+                                expectedPaisa,
+                                receivedPaisa: lookupResult.total_amount,
+                                pidx,
+                                transactionId: lookupResult.transaction_id,
+                            },
+                        }
+                    );
+                } catch (sentryErr) {
+                    console.error("[Khalti Callback] Failed to capture Sentry alert:", sentryErr);
+                }
+
+                await prisma.$transaction(async (tx) => {
+                    await tx.order.update({
+                        where: { id: order.id },
+                        data: {
+                            status: "MANUAL_REVIEW",
+                            transactionId: lookupResult.transaction_id || pidx,
+                        },
+                    });
+
+                    await tx.orderStatusHistory.create({
+                        data: {
+                            orderId: order.id,
+                            status: "MANUAL_REVIEW",
+                            note: `🚨 Payment amount mismatch: expected ${expectedPaisa} paisa (Rs. ${order.total} NPR), received ${lookupResult.total_amount} paisa. Order held for manual review. Stock and promo code remain reserved.`,
+                        },
+                    });
+                });
+
+                // Dispatch email alert to admin
+                try {
+                    const { sendShippingUpdateEmail } = await import("@/lib/services/email");
+                    await sendShippingUpdateEmail(
+                        order.id,
+                        `🚨 SECURITY ALERT: Order #${order.orderNumber} placed in MANUAL_REVIEW due to Khalti payment amount mismatch. Expected: Rs. ${order.total}, Received: Rs. ${(Number(lookupResult.total_amount) / 100).toFixed(2)}.`
+                    );
+                } catch (emailErr) {
+                    console.error("[Khalti Callback] Failed to dispatch admin alert email:", emailErr);
+                }
+
                 return NextResponse.redirect(
-                    `${baseUrl}/checkout?error=${encodeURIComponent("Payment amount mismatch. Please contact support.")}`
+                    `${baseUrl}/checkout?error=${encodeURIComponent(
+                        `Payment amount mismatch detected. Order #${order.orderNumber} is held for manual review. Please contact support at ${supportEmail}.`
+                    )}&orderNumber=${encodeURIComponent(order.orderNumber)}&supportEmail=${encodeURIComponent(supportEmail)}`
                 );
             }
 
-            // 3. Mark Order as PAID and PROCESSING (atomic conditional update for idempotency)
+            // Check if the order was previously CANCELLED (e.g. 30-min TTL expired)
+            if (order.status === "CANCELLED") {
+                // Late payment on a CANCELLED order: Try to reinstate if stock allows; otherwise auto-refund
+                try {
+                    await prisma.$transaction(async (tx) => {
+                        await decrementStockWithLock(
+                            tx,
+                            order.items.map((i) => ({
+                                variantId: i.variantId,
+                                quantity: i.quantity,
+                            }))
+                        );
+
+                        await tx.order.update({
+                            where: { id: order.id },
+                            data: {
+                                status: "PROCESSING",
+                                paymentStatus: "PAID",
+                                transactionId: lookupResult.transaction_id || pidx,
+                            },
+                        });
+
+                        await tx.orderStatusHistory.create({
+                            data: {
+                                orderId: order.id,
+                                status: "PAID",
+                                note: `Late payment confirmed via Khalti (Txn ID: ${lookupResult.transaction_id || pidx}). Stock successfully re-reserved and order reinstated to PROCESSING.`,
+                            },
+                        });
+                    });
+
+                    console.warn(
+                        `[Khalti Callback - Late Payment REINSTATED] Order ${order.id} was CANCELLED, but payment completed (${pidx}). Stock re-reserved and order reinstated.`
+                    );
+
+                    try {
+                        const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
+                        await sendOrderConfirmationEmail(order.id);
+                    } catch (emailErr) {
+                        console.error("[Khalti Callback] Failed to dispatch order confirmation email on reinstatement:", emailErr);
+                    }
+
+                    return NextResponse.redirect(
+                        `${baseUrl}/order-confirmation/${order.id}`
+                    );
+                } catch (stockErr: any) {
+                    console.error(
+                        `🚨 [Khalti Callback - Late Payment OUT OF STOCK] Order ${order.id} was CANCELLED and payment succeeded (${pidx}), but items are out of stock. Triggering auto-refund:`,
+                        stockErr.message
+                    );
+
+                    const refundRes = await refundKhaltiPayment(pidx);
+
+                    await prisma.order.update({
+                        where: { id: order.id },
+                        data: {
+                            paymentStatus: "REFUNDED",
+                            transactionId: lookupResult.transaction_id || pidx,
+                        },
+                    });
+
+                    await prisma.orderStatusHistory.create({
+                        data: {
+                            orderId: order.id,
+                            status: "CANCELLED",
+                            note: `Late payment received for CANCELLED order, but stock was no longer available. Auto-refund requested via Khalti API (${refundRes.success ? "Refund successful" : refundRes.error}).`,
+                        },
+                    });
+
+                    return NextResponse.redirect(
+                        `${baseUrl}/checkout?error=${encodeURIComponent(
+                            `Order #${order.orderNumber} was previously expired and items are now out of stock. A refund has been issued to your Khalti wallet.`
+                        )}&orderNumber=${encodeURIComponent(order.orderNumber)}&supportEmail=${encodeURIComponent(supportEmail)}`
+                    );
+                }
+            }
+
+            // 3. Normal Path: Mark Order as PAID and PROCESSING (atomic conditional update for idempotency)
             const updateCount = await prisma.$transaction(async (tx) => {
                 const res = await tx.order.updateMany({
                     where: { id: order.id, paymentStatus: { not: "PAID" } },
@@ -102,27 +236,20 @@ export async function GET(request: NextRequest) {
                 `${baseUrl}/order-confirmation/${order.id}`
             );
         } else {
-            // Payment canceled or expired: Release stock and coupon atomically & idempotently
+            // Payment canceled or expired: Release stock and coupon atomically & idempotently ONLY when transitioning to CANCELLED
             await prisma.$transaction(async (tx) => {
-                const res = await tx.order.updateMany({
-                    where: { id: order.id, status: { not: "CANCELLED" } },
+                await releaseOrderStock(
+                    tx,
+                    order.id,
+                    `Khalti payment status: ${lookupResult.status}`,
+                    { requireNonPaid: true }
+                );
+                await tx.order.updateMany({
+                    where: { id: order.id },
                     data: {
                         paymentStatus: "FAILED",
-                        status: "CANCELLED",
                     },
                 });
-
-                if (res.count > 0) {
-                    await releaseOrderStock(tx, order.id);
-                    await releaseCouponUsage(tx, order.couponCode);
-                    await tx.orderStatusHistory.create({
-                        data: {
-                            orderId: order.id,
-                            status: "CANCELLED",
-                            note: `Khalti payment status: ${lookupResult.status}`,
-                        },
-                    });
-                }
             });
 
             return NextResponse.redirect(

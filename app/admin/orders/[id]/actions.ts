@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
+import { releaseOrderStock } from "@/lib/checkout/stock";
 
 import {
   canTransition,
@@ -21,6 +22,7 @@ const UpdateOrderStatusSchema = z.object({
     "SHIPPED",
     "DELIVERED",
     "CANCELLED",
+    "MANUAL_REVIEW",
   ]),
   note: z.string().max(500, "Note cannot exceed 500 characters.").optional(),
 });
@@ -64,31 +66,36 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
         };
     }
 
-    // Race-safe atomic update
-    const updateResult = await prisma.order.updateMany({
-        where: {
-            id: validOrderId,
-            status: currentStatus,
-        },
-        data: {
-            status: validStatus,
-        },
-    });
-
-    if (updateResult.count === 0) {
-        return {
-            success: false as const,
-            error: `Order status was concurrently modified by another user or is no longer in "${currentStatus}". Please refresh.`,
-        };
-    }
-
-    // Restock inventory on transition to CANCELLED
+    // Restock inventory and release coupon atomically via releaseOrderStock on transition to CANCELLED
     if (validStatus === "CANCELLED") {
-        for (const item of order.items) {
-            await prisma.productVariant.update({
-                where: { id: item.variantId },
-                data: { stock: { increment: item.quantity } },
-            });
+        const release = await releaseOrderStock(
+            prisma,
+            validOrderId,
+            validNote || "Admin cancelled order"
+        );
+        if (!release.success) {
+            return {
+                success: false as const,
+                error: release.reason || "Failed to cancel order.",
+            };
+        }
+    } else {
+        // Race-safe atomic update for non-cancellation transitions
+        const updateResult = await prisma.order.updateMany({
+            where: {
+                id: validOrderId,
+                status: currentStatus,
+            },
+            data: {
+                status: validStatus,
+            },
+        });
+
+        if (updateResult.count === 0) {
+            return {
+                success: false as const,
+                error: `Order status was concurrently modified by another user or is no longer in "${currentStatus}". Please refresh.`,
+            };
         }
     }
 
@@ -189,22 +196,17 @@ export async function refundOrder(orderId: string, reason?: string) {
             }
         }
 
-        // Restock inventory if order wasn't already cancelled
-        if (order.status !== "CANCELLED") {
-            for (const item of order.items) {
-                await prisma.productVariant.update({
-                    where: { id: item.variantId },
-                    data: { stock: { increment: item.quantity } },
-                });
-            }
-        }
+        // Restock inventory and release coupon atomically via releaseOrderStock if order wasn't already cancelled
+        await releaseOrderStock(
+            prisma,
+            orderId,
+            `Order refunded (${refundIdentifier})${reason ? `: ${reason}` : ""}`
+        );
 
-        // Update order payment & fulfillment status
         await prisma.order.update({
             where: { id: orderId },
             data: {
                 paymentStatus: "REFUNDED",
-                status: "CANCELLED",
             },
         });
 

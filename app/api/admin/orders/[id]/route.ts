@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/db/prisma";
+import { releaseOrderStock } from "@/lib/checkout/stock";
 import { z } from "zod";
 import {
   canTransition,
@@ -79,28 +80,42 @@ export async function PATCH(
     );
   }
 
-  const updateResult = await prisma.order.updateMany({
-    where: { id, status: currentStatus },
-    data: { status: targetStatus },
-  });
-
-  if (updateResult.count === 0) {
-    return NextResponse.json(
-      { error: `Order status was concurrently modified. Please refresh.` },
-      { status: 409 }
+  if (targetStatus === "CANCELLED") {
+    const release = await releaseOrderStock(
+      prisma,
+      id,
+      note || "Order cancelled via Admin API"
     );
-  }
+    if (!release.success) {
+      return NextResponse.json(
+        { error: release.reason || "Order status could not be cancelled." },
+        { status: 409 }
+      );
+    }
+  } else {
+    const updateResult = await prisma.order.updateMany({
+      where: { id, status: currentStatus },
+      data: { status: targetStatus },
+    });
 
-  await prisma.orderStatusHistory.create({
-    data: {
-      orderId: id,
-      status: targetStatus,
-      fromStatus: currentStatus,
-      toStatus: targetStatus,
-      changedBy: authResult.session?.user?.email || "Admin API",
-      note: note || `Order status updated to ${targetStatus} by admin API`,
-    },
-  });
+    if (updateResult.count === 0) {
+      return NextResponse.json(
+        { error: `Order status was concurrently modified. Please refresh.` },
+        { status: 409 }
+      );
+    }
+
+    await prisma.orderStatusHistory.create({
+      data: {
+        orderId: id,
+        status: targetStatus,
+        fromStatus: currentStatus,
+        toStatus: targetStatus,
+        changedBy: authResult.session?.user?.email || "Admin API",
+        note: note || `Order status updated to ${targetStatus} by admin API`,
+      },
+    });
+  }
 
   const updatedOrder = await prisma.order.findUnique({
     where: { id },

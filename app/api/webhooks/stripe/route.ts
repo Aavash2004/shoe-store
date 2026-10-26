@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/db/prisma";
 import { stripe } from "@/lib/services/stripe";
-import { releaseOrderStock } from "@/lib/checkout/stock";
-import { releaseCouponUsage } from "@/lib/checkout/coupon";
+import { releaseOrderStock, decrementStockWithLock } from "@/lib/checkout/stock";
 
 export async function POST(request: NextRequest) {
   // 1. Next.js App Router MUST read the raw unparsed text for signature verification
@@ -53,6 +52,7 @@ export async function POST(request: NextRequest) {
           where: {
             stripePaymentIntentId: paymentIntentId,
             paymentStatus: "PENDING",
+            status: { not: "CANCELLED" },
           },
           data: {
             paymentStatus: "PAID",
@@ -87,6 +87,94 @@ export async function POST(request: NextRequest) {
               console.error("[Stripe Webhook] Failed to dispatch order confirmation email:", emailErr);
             }
           }
+        } else {
+          // Check if the order was previously CANCELLED (e.g. expired by cron)
+          const existingOrder = await prisma.order.findUnique({
+            where: { stripePaymentIntentId: paymentIntentId },
+            include: { items: true },
+          });
+
+          if (
+            existingOrder &&
+            existingOrder.status === "CANCELLED" &&
+            existingOrder.paymentStatus !== "PAID" &&
+            existingOrder.paymentStatus !== "REFUNDED"
+          ) {
+            // Late payment on a CANCELLED order: Try to reinstate if stock allows; otherwise auto-refund
+            try {
+              await prisma.$transaction(async (tx) => {
+                await decrementStockWithLock(
+                  tx,
+                  existingOrder.items.map((i) => ({
+                    variantId: i.variantId,
+                    quantity: i.quantity,
+                  }))
+                );
+
+                await tx.order.update({
+                  where: { id: existingOrder.id },
+                  data: {
+                    status: "PROCESSING",
+                    paymentStatus: "PAID",
+                  },
+                });
+
+                await tx.orderStatusHistory.create({
+                  data: {
+                    orderId: existingOrder.id,
+                    status: "PAID",
+                    note: `Late payment confirmed via Stripe (PI: ${paymentIntentId}). Stock successfully re-reserved and order reinstated to PROCESSING.`,
+                  },
+                });
+              });
+
+              console.warn(
+                `[Stripe Webhook - Late Payment REINSTATED] Order ${existingOrder.id} was CANCELLED, but payment succeeded (${paymentIntentId}). Stock re-reserved and order reinstated.`
+              );
+
+              try {
+                const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
+                await sendOrderConfirmationEmail(existingOrder.id);
+              } catch (emailErr) {
+                console.error("[Stripe Webhook] Failed to dispatch order confirmation email on reinstatement:", emailErr);
+              }
+            } catch (stockErr: any) {
+              console.error(
+                `🚨 [Stripe Webhook - Late Payment OUT OF STOCK] Order ${existingOrder.id} was CANCELLED and payment succeeded (${paymentIntentId}), but items are out of stock. Triggering auto-refund:`,
+                stockErr.message
+              );
+
+              try {
+                const refund = await stripe.refunds.create({
+                  payment_intent: paymentIntentId,
+                });
+
+                await prisma.order.update({
+                  where: { id: existingOrder.id },
+                  data: {
+                    paymentStatus: "REFUNDED",
+                  },
+                });
+
+                await prisma.orderStatusHistory.create({
+                  data: {
+                    orderId: existingOrder.id,
+                    status: "CANCELLED",
+                    note: `Late payment received for CANCELLED order, but stock was no longer available. Auto-refund issued via Stripe (Refund ID: ${refund.id}).`,
+                  },
+                });
+
+                console.log(
+                  `[Stripe Webhook - Auto-Refund Successful] Refund ${refund.id} issued for order ${existingOrder.id}.`
+                );
+              } catch (refundErr: any) {
+                console.error(
+                  `🚨 [Stripe Webhook - AUTO-REFUND FAILED] Failed to issue refund for order ${existingOrder.id} (${paymentIntentId}):`,
+                  refundErr
+                );
+              }
+            }
+          }
         }
         break;
       }
@@ -102,27 +190,13 @@ export async function POST(request: NextRequest) {
         });
 
         if (order && order.paymentStatus === "PENDING") {
-          // Release reserved inventory and coupon idempotently
-          await prisma.$transaction(async (tx) => {
-            const released = await releaseOrderStock(tx, order.id);
-            if (released.success) {
-              await releaseCouponUsage(tx, order.couponCode);
-              await tx.order.update({
-                where: { id: order.id },
-                data: {
-                  paymentStatus: "FAILED",
-                  status: "CANCELLED",
-                },
-              });
-
-              await tx.orderStatusHistory.create({
-                data: {
-                  orderId: order.id,
-                  status: "FAILED",
-                  note: `Payment failed: ${failureMessage}. Inventory safely released.`,
-                },
-              });
-            }
+          // Keep stock and coupon reserved to allow customer retry; record failure note in history
+          await prisma.orderStatusHistory.create({
+            data: {
+              orderId: order.id,
+              status: "PENDING",
+              note: `Payment attempt failed: ${failureMessage}. Order remains PENDING to allow customer retry.`,
+            },
           });
         }
         break;
@@ -138,17 +212,12 @@ export async function POST(request: NextRequest) {
 
         if (order && order.status !== "CANCELLED") {
           await prisma.$transaction(async (tx) => {
-            const released = await releaseOrderStock(tx, order.id);
-            if (released.success) {
-              await releaseCouponUsage(tx, order.couponCode);
-              await tx.orderStatusHistory.create({
-                data: {
-                  orderId: order.id,
-                  status: "CANCELLED",
-                  note: `PaymentIntent was canceled on Stripe. Inventory safely released.`,
-                },
-              });
-            }
+            await releaseOrderStock(
+              tx,
+              order.id,
+              "PaymentIntent was canceled on Stripe.",
+              { requireNonPaid: true }
+            );
           });
         }
         break;

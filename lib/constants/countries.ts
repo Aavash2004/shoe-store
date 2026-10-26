@@ -44,6 +44,17 @@ export const COUNTRIES: Record<string, Country> = {
     allowedPaymentMethods: ["STRIPE"],
     isCheckoutEnabled: true,
   },
+  DE: {
+    code: "DE",
+    name: "Germany",
+    flag: "🇩🇪",
+    dialCode: "+49",
+    currency: "EUR",
+    postalCodeRegex: /^\d{5}$/,
+    postalCodePlaceholder: "e.g. 10115",
+    allowedPaymentMethods: ["STRIPE"],
+    isCheckoutEnabled: true,
+  },
 };
 
 /**

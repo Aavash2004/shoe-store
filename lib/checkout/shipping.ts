@@ -44,6 +44,14 @@ const SHIPPING_RULES: Record<string, CountryShippingRule> = {
     minEstimatedDays: 4,
     maxEstimatedDays: 6,
   },
+  DE: {
+    freeThreshold: 140,
+    flatRate: 14,
+    carrierName: "DHL Express Europe",
+    estimatedDeliveryTime: "3-5 business days",
+    minEstimatedDays: 3,
+    maxEstimatedDays: 5,
+  },
 };
 
 /**

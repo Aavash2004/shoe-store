@@ -9,6 +9,7 @@ import {
 } from "@/lib/checkout/pricing";
 import {
     decrementStockWithLock,
+    releaseOrderStock,
     InsufficientStockError,
 } from "@/lib/checkout/stock";
 import {
@@ -230,25 +231,44 @@ export async function POST(request: NextRequest) {
             { maxWait: 5000, timeout: 10000 }
         );
 
-        // 7. Initiate Khalti ePayment Session
-        const khaltiSession = await initiateKhaltiPayment({
-            returnUrl: `${appUrl}/api/checkout/khalti/callback`,
-            websiteUrl: appUrl,
-            amountInPaisa,
-            purchaseOrderId: order.id,
-            purchaseOrderName: `Order #${order.orderNumber}`,
-            customerInfo: {
-                name: data.fullName,
-                email: data.guestEmail || session?.user?.email || "customer@shoestore.com",
-                phone: data.phone,
-            },
-        });
+        // 7. Initiate Khalti ePayment Session with immediate rollback guard
+        let khaltiSession;
+        try {
+            khaltiSession = await initiateKhaltiPayment({
+                returnUrl: `${appUrl}/api/checkout/khalti/callback`,
+                websiteUrl: appUrl,
+                amountInPaisa,
+                purchaseOrderId: order.id,
+                purchaseOrderName: `Order #${order.orderNumber}`,
+                customerInfo: {
+                    name: data.fullName,
+                    email: data.guestEmail || session?.user?.email || "customer@shoestore.com",
+                    phone: data.phone,
+                },
+            });
 
-        // 8. Associate Khalti pidx with Order
-        await prisma.order.update({
-            where: { id: order.id },
-            data: { khaltiPidx: khaltiSession.pidx },
-        });
+            // 8. Associate Khalti pidx with Order
+            await prisma.order.update({
+                where: { id: order.id },
+                data: { khaltiPidx: khaltiSession.pidx },
+            });
+        } catch (initiateErr: any) {
+            console.error(
+                `🚨 [Khalti Initiate] Payment gateway initiation failed after order creation for order ${order.id}. Releasing stock and coupon immediately:`,
+                initiateErr
+            );
+            try {
+                await releaseOrderStock(
+                    prisma,
+                    order.id,
+                    "Khalti session initiation failed",
+                    { requireNonPaid: true }
+                );
+            } catch (releaseErr) {
+                console.error("[Khalti Initiate] Failed to release order stock after initiation failure:", releaseErr);
+            }
+            throw initiateErr;
+        }
 
         return NextResponse.json(
             {

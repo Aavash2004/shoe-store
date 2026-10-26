@@ -24,10 +24,10 @@ async function handleCleanup(request: NextRequest) {
 
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-  // Query pending Stripe orders older than 30 minutes
+  // Query pending online gateway orders older than 30 minutes (never touches COD)
   const expiredOrders = await prisma.order.findMany({
     where: {
-      paymentMethod: "STRIPE",
+      paymentMethod: { in: ["STRIPE", "KHALTI"] },
       paymentStatus: "PENDING",
       status: "PENDING",
       createdAt: {
@@ -51,8 +51,8 @@ async function handleCleanup(request: NextRequest) {
     try {
       let isCancellable = true;
 
-      // Inspect PaymentIntent on Stripe if attached
-      if (order.stripePaymentIntentId) {
+      // 1. Inspect PaymentIntent on Stripe if attached
+      if (order.paymentMethod === "STRIPE" && order.stripePaymentIntentId) {
         try {
           const intent = await stripe.paymentIntents.retrieve(
             order.stripePaymentIntentId
@@ -65,27 +65,39 @@ async function handleCleanup(request: NextRequest) {
             continue;
           }
 
-          // Only attempt cancellation if the intent is in an abandonable state
-          if (intent.status === "requires_payment_method") {
+          // Cancel the Stripe PaymentIntent across all cancellable states
+          if (
+            [
+              "requires_payment_method",
+              "requires_confirmation",
+              "requires_action",
+              "requires_capture",
+            ].includes(intent.status)
+          ) {
             await stripe.paymentIntents.cancel(order.stripePaymentIntentId, {
               cancellation_reason: "abandoned",
             });
-          } else if (intent.status === "requires_action") {
-            // Customer is mid-3DS or user action; skip cancellation to avoid interrupting legitimate payment
-            isCancellable = false;
-            results.skippedOrRaced++;
-            continue;
           }
         } catch (stripeErr: any) {
-          console.warn(
-            `[Stripe Cleanup] Failed to cancel intent ${order.stripePaymentIntentId}:`,
-            stripeErr.message
-          );
-          // Skip stock release if intent cancellation failed to avoid premature restock
-          isCancellable = false;
-          results.errors.push(`Order ${order.id}: ${stripeErr.message}`);
-          continue;
+          // If already canceled, proceed; otherwise warn and skip
+          if (
+            stripeErr.code !== "resource_missing" &&
+            !stripeErr.message?.includes("already been canceled")
+          ) {
+            console.warn(
+              `[Stripe Cleanup] Failed to cancel intent ${order.stripePaymentIntentId}:`,
+              stripeErr.message
+            );
+            isCancellable = false;
+            results.errors.push(`Order ${order.id}: ${stripeErr.message}`);
+            continue;
+          }
         }
+      } else if (order.paymentMethod === "KHALTI") {
+        // Khalti ePayment v2 pidx expires on Khalti's gateway; treating expired Khalti pidx as dead
+        console.log(
+          `[Khalti Cleanup] Order ${order.id} (pidx: ${order.khaltiPidx || "N/A"}) expired. Treating pidx as dead.`
+        );
       }
 
       if (!isCancellable) {
@@ -93,40 +105,21 @@ async function handleCleanup(request: NextRequest) {
       }
 
       // Execute atomic conditional release:
-      // releaseOrderStock verifies WHERE status IN ('PENDING', 'PENDING_VERIFICATION', 'PROCESSING')
-      // and transitions status = 'CANCELLED'.
-      // If a webhook raced and already marked status = 'PROCESSING' or paymentStatus = 'PAID',
-      // this transaction safely handles the state.
+      // releaseOrderStock verifies WHERE status IN ('PENDING', 'PENDING_VERIFICATION', 'PROCESSING', 'MANUAL_REVIEW')
+      // and paymentStatus != 'PAID' via { requireNonPaid: true }
       await prisma.$transaction(async (tx) => {
-        // Additional double-check on paymentStatus to avoid racing with payment_intent.succeeded
-        const currentOrder = await tx.order.findUnique({
-          where: { id: order.id },
-          select: { paymentStatus: true, status: true },
-        });
+        const release = await releaseOrderStock(
+          tx,
+          order.id,
+          "Reservation expired (30-min TTL). Order cancelled and stock restored.",
+          { requireNonPaid: true }
+        );
 
-        if (
-          !currentOrder ||
-          currentOrder.paymentStatus !== "PENDING" ||
-          currentOrder.status !== "PENDING"
-        ) {
-          results.skippedOrRaced++;
-          return;
-        }
-
-        const release = await releaseOrderStock(tx, order.id);
         if (release.success) {
           await tx.order.update({
             where: { id: order.id },
             data: {
               paymentStatus: "FAILED",
-            },
-          });
-
-          await tx.orderStatusHistory.create({
-            data: {
-              orderId: order.id,
-              status: "CANCELLED",
-              note: "Reservation expired (30-min TTL). Order cancelled and stock restored.",
             },
           });
 
@@ -136,7 +129,7 @@ async function handleCleanup(request: NextRequest) {
         }
       });
     } catch (orderErr: any) {
-      console.error(`[Stripe Cleanup] Error processing order ${order.id}:`, orderErr);
+      console.error(`[Expiry Cleanup] Error processing order ${order.id}:`, orderErr);
       results.errors.push(`Order ${order.id}: ${orderErr.message}`);
     }
   }

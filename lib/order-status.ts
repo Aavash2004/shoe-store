@@ -4,7 +4,8 @@ export type OrderStatus =
   | "PROCESSING"
   | "SHIPPED"
   | "DELIVERED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "MANUAL_REVIEW";
 
 export const ORDER_STATUSES: readonly OrderStatus[] = [
   "PENDING",
@@ -13,15 +14,17 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
   "SHIPPED",
   "DELIVERED",
   "CANCELLED",
+  "MANUAL_REVIEW",
 ] as const;
 
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  PENDING: ["CONFIRMED", "PROCESSING", "CANCELLED"],
+  PENDING: ["CONFIRMED", "PROCESSING", "CANCELLED", "MANUAL_REVIEW"],
   CONFIRMED: ["PROCESSING", "SHIPPED", "CANCELLED"],
   PROCESSING: ["SHIPPED", "CANCELLED"],
   SHIPPED: ["DELIVERED"],
   DELIVERED: [], // Terminal fulfillment state
   CANCELLED: [], // Terminal cancelled state
+  MANUAL_REVIEW: ["CONFIRMED", "PROCESSING", "CANCELLED"],
 } as const;
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -31,6 +34,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   SHIPPED: "Shipped",
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
+  MANUAL_REVIEW: "Manual Review",
 };
 
 export function isValidOrderStatus(status: unknown): status is OrderStatus {

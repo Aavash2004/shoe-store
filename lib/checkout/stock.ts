@@ -1,4 +1,5 @@
 import { Prisma } from "@/lib/generated/prisma/client";
+import { releaseCouponUsage } from "@/lib/checkout/coupon";
 
 export class InsufficientStockError extends Error {
   readonly variantId: string;
@@ -106,6 +107,10 @@ export interface ReleaseStockResult {
   reason?: string;
 }
 
+export interface ReleaseOrderStockOptions {
+  requireNonPaid?: boolean;
+}
+
 /**
  * Idempotently cancels an order and restores stock.
  * Uses conditional status guard to prevent double-restocking on repeated calls.
@@ -114,15 +119,22 @@ export interface ReleaseStockResult {
 export async function releaseOrderStock(
   tx: Prisma.TransactionClient,
   orderId: string,
-  reason: string = "Order cancelled"
+  reason: string = "Order cancelled",
+  options?: ReleaseOrderStockOptions
 ): Promise<ReleaseStockResult> {
   // 1. Conditional status transition guard
-  // Only orders in PENDING, PENDING_VERIFICATION, or PROCESSING may release stock to CANCELLED
+  // Only orders in PENDING, PENDING_VERIFICATION, PROCESSING, or MANUAL_REVIEW may release stock to CANCELLED
+  const whereClause: Prisma.OrderWhereInput = {
+    id: orderId,
+    status: { in: ["PENDING", "PENDING_VERIFICATION", "PROCESSING", "MANUAL_REVIEW"] },
+  };
+
+  if (options?.requireNonPaid) {
+    whereClause.paymentStatus = { not: "PAID" };
+  }
+
   const updateResult = await tx.order.updateMany({
-    where: {
-      id: orderId,
-      status: { in: ["PENDING", "PENDING_VERIFICATION", "PROCESSING"] },
-    },
+    where: whereClause,
     data: {
       status: "CANCELLED",
     },
@@ -136,12 +148,21 @@ export async function releaseOrderStock(
     };
   }
 
+  // 1b. Release coupon usage exactly once when order transitions to CANCELLED
+  const orderRecord = await tx.order.findUnique({
+    where: { id: orderId },
+    select: { couponCode: true },
+  });
+  if (orderRecord?.couponCode) {
+    await releaseCouponUsage(tx, orderRecord.couponCode);
+  }
+
   // 2. Record status history
   await tx.orderStatusHistory.create({
     data: {
       orderId,
       status: "CANCELLED",
-      note: `Stock released back to inventory: ${reason}`,
+      note: `Stock and promo code released: ${reason}`,
     },
   });
 

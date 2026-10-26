@@ -10,6 +10,7 @@ import {
 } from "@/lib/checkout/pricing";
 import {
   decrementStockWithLock,
+  releaseOrderStock,
   InsufficientStockError,
 } from "@/lib/checkout/stock";
 import {
@@ -352,6 +353,14 @@ export async function POST(request: NextRequest) {
       (err?.meta?.target?.includes("transactionId") ||
         String(err?.message || "").includes("transactionId") ||
         String(err?.message || "").includes("orders_transactionId_key"));
+
+    if (paymentIntent?.id && !isUniqueConstraintViolation) {
+      try {
+        await stripe.paymentIntents.cancel(paymentIntent.id, { cancellation_reason: "abandoned" });
+      } catch {
+        // Ignored if already canceled or handled concurrently
+      }
+    }
 
     if (isUniqueConstraintViolation) {
       const existingOrder = await prisma.order.findUnique({

@@ -34,25 +34,14 @@ export async function cancelCustomerOrder(orderId: string) {
 
   try {
     await prisma.$transaction(async (tx) => {
-      // 1. Return items to available stock
-      await releaseOrderStock(tx, order.id);
-
-      // 2. Update status
-      await tx.order.update({
-        where: { id: order.id },
-        data: {
-          status: "CANCELLED",
-        },
-      });
-
-      // 3. Log history
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId: order.id,
-          status: "CANCELLED",
-          note: "Order cancelled by customer via account dashboard.",
-        },
-      });
+      const result = await releaseOrderStock(
+        tx,
+        order.id,
+        "Order cancelled by customer via account dashboard."
+      );
+      if (!result.success) {
+        throw new Error(result.reason || "Order cannot be cancelled.");
+      }
     });
 
     revalidatePath(`/account/orders/${orderId}`);

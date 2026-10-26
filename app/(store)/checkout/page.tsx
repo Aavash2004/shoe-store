@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useRef, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -51,7 +51,52 @@ import { Elements } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/services/stripe-client";
 import { StripePaymentForm } from "@/components/checkout/StripePaymentForm";
 
-type FormData = CheckoutAddressInput;
+function CheckoutNotice() {
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
+  const urlOrderNumber = searchParams.get("orderNumber");
+  const urlSupportEmail = searchParams.get("supportEmail");
+
+  if (!urlError) return null;
+
+  return (
+    <div className="rounded-2xl border border-rose-200 bg-rose-50/95 p-5 shadow-sm text-rose-900 mb-6 animate-in fade-in-50">
+      <div className="flex items-start gap-3.5">
+        <div className="rounded-full bg-rose-100 p-1.5 text-rose-600 mt-0.5 shrink-0">
+          <RotateCcw className="h-4 w-4" />
+        </div>
+        <div className="flex-1 text-sm">
+          <h4 className="font-bold text-rose-950 text-base">
+            {urlOrderNumber ? `Action Required: Order #${urlOrderNumber}` : "Payment Notice"}
+          </h4>
+          <p className="mt-1 text-rose-800 leading-relaxed font-medium">
+            {urlError}
+          </p>
+          {(urlOrderNumber || urlSupportEmail) && (
+            <div className="mt-3.5 flex flex-wrap items-center gap-4 text-xs font-semibold">
+              {urlOrderNumber && (
+                <span className="rounded-lg bg-rose-200/80 px-2.5 py-1 text-rose-950">
+                  Order Reference: #{urlOrderNumber}
+                </span>
+              )}
+              {urlSupportEmail && (
+                <span className="text-rose-900">
+                  Support Concierge:{" "}
+                  <a
+                    href={`mailto:${urlSupportEmail}`}
+                    className="underline text-rose-950 font-bold hover:text-rose-700"
+                  >
+                    {urlSupportEmail}
+                  </a>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -458,6 +503,17 @@ export default function CheckoutPage() {
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_420px] lg:gap-14">
           {/* Main Checkout Area */}
           <div className="space-y-8">
+            <Suspense fallback={null}>
+              <CheckoutNotice />
+            </Suspense>
+
+            {error && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/95 p-4 shadow-sm text-rose-900 flex items-center gap-3">
+                <RotateCcw className="h-4 w-4 text-rose-600 shrink-0" />
+                <p className="text-sm font-semibold">{error}</p>
+              </div>
+            )}
+
             {stripeData && currentPaymentMethod === "STRIPE" ? (
               <section className="rounded-2xl border-2 border-[var(--color-navy)] bg-white p-6 md:p-8 shadow-lg transition-all animate-in fade-in-50">
                 <div className="mb-5 flex items-center justify-between border-b border-[var(--color-sand)] pb-3">
