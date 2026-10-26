@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/db/prisma";
 import { stripe } from "@/lib/services/stripe";
-import { releaseOrderStock, decrementStockWithLock } from "@/lib/checkout/stock";
+import { releaseOrderStock, decrementStockWithLock, InsufficientStockError } from "@/lib/checkout/stock";
 import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
@@ -110,6 +110,8 @@ export async function POST(request: NextRequest) {
                   data: {
                     status: "PROCESSING",
                     paymentStatus: "PAID",
+                    stockReserved: true,
+                    manualReviewReason: null,
                   },
                 });
 
@@ -160,6 +162,20 @@ export async function POST(request: NextRequest) {
                 break;
               }
 
+              // ONLY InsufficientStockError triggers the refund path. Other errors rethrow so the webhook returns 500 and Stripe retries.
+              const isInsufficientStock =
+                stockErr instanceof InsufficientStockError ||
+                stockErr.name === "InsufficientStockError" ||
+                Boolean(stockErr.message?.toLowerCase().includes("out of stock") || stockErr.message?.toLowerCase().includes("left in stock"));
+
+              if (!isInsufficientStock) {
+                console.error(
+                  `[Stripe Webhook] Unexpected non-stock error during late-payment reinstatement for order ${existingOrder.id}. Rethrowing so Stripe retries:`,
+                  stockErr
+                );
+                throw stockErr;
+              }
+
               console.error(
                 `🚨 [Stripe Webhook - Late Payment OUT OF STOCK] Order ${existingOrder.id} was CANCELLED and payment succeeded (${paymentIntentId}), but items are out of stock. Triggering auto-refund:`,
                 stockErr.message
@@ -181,6 +197,7 @@ export async function POST(request: NextRequest) {
                   where: { id: existingOrder.id },
                   data: {
                     paymentStatus: "REFUNDED",
+                    stockReserved: false,
                   },
                 });
 
@@ -207,6 +224,8 @@ export async function POST(request: NextRequest) {
                   data: {
                     status: "MANUAL_REVIEW",
                     paymentStatus: "PAID",
+                    stockReserved: false,
+                    manualReviewReason: "LATE_PAYMENT_OUT_OF_STOCK_REFUND_FAILED",
                   },
                 });
 
@@ -219,10 +238,11 @@ export async function POST(request: NextRequest) {
                 });
 
                 try {
-                  const { sendShippingUpdateEmail } = await import("@/lib/services/email");
-                  await sendShippingUpdateEmail(
-                    existingOrder.id,
-                    `🚨 CRITICAL ALERT: Order #${existingOrder.orderNumber} auto-refund failed after out-of-stock late Stripe payment (${paymentIntentId}). Placed in MANUAL_REVIEW.`
+                  const { sendAdminAlertEmail } = await import("@/lib/services/email");
+                  await sendAdminAlertEmail(
+                    `Auto-Refund Failed for Order #${existingOrder.orderNumber}`,
+                    `A late Stripe payment (${paymentIntentId}) arrived for CANCELLED order #${existingOrder.orderNumber}, but items were out of stock and the automatic Stripe refund failed (${refundErr.message}). Order placed in MANUAL_REVIEW for immediate manual merchant refund.`,
+                    { orderId: existingOrder.id, paymentIntentId, error: refundErr.message }
                   );
                 } catch (emailErr) {
                   console.error("[Stripe Webhook] Failed to dispatch admin alert email on refund failure:", emailErr);

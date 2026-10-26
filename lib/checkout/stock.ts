@@ -123,8 +123,23 @@ export async function releaseOrderStock(
   reason: string = "Order cancelled",
   options?: ReleaseOrderStockOptions
 ): Promise<ReleaseStockResult> {
-  // 1. Conditional status transition guard
-  // Only orders in PENDING, PENDING_VERIFICATION, PROCESSING, or MANUAL_REVIEW may release stock to CANCELLED
+  // 1. Inspect whether stock and coupon are currently reserved for this order
+  const orderRecord = await tx.order.findUnique({
+    where: { id: orderId },
+    select: {
+      couponCode: true,
+      stockReserved: true,
+    },
+  });
+
+  const shouldRelease =
+    options?.stockReserved !== undefined
+      ? options.stockReserved
+      : (orderRecord?.stockReserved ?? false);
+
+  // 2. Conditional status transition guard
+  // Only orders in PENDING, PENDING_VERIFICATION, PROCESSING, or MANUAL_REVIEW may release stock to CANCELLED.
+  // Atomically sets stockReserved = false in the SAME conditional update that cancels the order.
   const whereClause: Prisma.OrderWhereInput = {
     id: orderId,
     status: { in: ["PENDING", "PENDING_VERIFICATION", "PROCESSING", "MANUAL_REVIEW"] },
@@ -138,6 +153,7 @@ export async function releaseOrderStock(
     where: whereClause,
     data: {
       status: "CANCELLED",
+      stockReserved: false,
     },
   });
 
@@ -149,53 +165,19 @@ export async function releaseOrderStock(
     };
   }
 
-  // 1b. Determine whether inventory stock and coupon were actually reserved.
-  // MANUAL_REVIEW has two distinct origins:
-  // (a) Amount mismatch: Stock and coupon were reserved on order creation -> release both.
-  // (b) Out-of-stock late payment / refund failure: Stock was never held -> do NOT restock or decrement coupon.
-  const orderRecord = await tx.order.findUnique({
-    where: { id: orderId },
-    select: {
-      couponCode: true,
-      statusHistory: {
-        select: { note: true, fromStatus: true, status: true },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      },
-    },
-  });
-
-  const isCaseB =
-    options?.stockReserved === false ||
-    (orderRecord as any)?.stockReserved === false ||
-    Boolean(
-      orderRecord?.statusHistory?.some(
-        (h) =>
-          h.fromStatus === "CANCELLED" ||
-          h.note?.toLowerCase().includes("out of stock") ||
-          h.note?.toLowerCase().includes("out-of-stock") ||
-          h.note?.toLowerCase().includes("no longer available") ||
-          h.note?.toLowerCase().includes("not available") ||
-          h.note?.toLowerCase().includes("late payment") ||
-          h.note?.toLowerCase().includes("refund failed") ||
-          h.note?.toLowerCase().includes("no stock")
-      )
-    );
-
-  const shouldRelease = options?.stockReserved !== undefined ? options.stockReserved : !isCaseB;
-
+  // 3. Release coupon usage if stock & coupon were reserved
   if (shouldRelease && orderRecord?.couponCode) {
     await releaseCouponUsage(tx, orderRecord.couponCode);
   }
 
-  // 2. Record status history
+  // 4. Record status history
   await tx.orderStatusHistory.create({
     data: {
       orderId,
       status: "CANCELLED",
       note: shouldRelease
         ? `Stock and promo code released: ${reason}`
-        : `Order cancelled from MANUAL_REVIEW without stock/coupon release (none were reserved): ${reason}`,
+        : `Order cancelled without stock/coupon release (none were reserved): ${reason}`,
     },
   });
 

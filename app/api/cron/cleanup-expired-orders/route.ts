@@ -124,6 +124,8 @@ async function handleCleanup(request: NextRequest) {
                   data: {
                     status: "MANUAL_REVIEW",
                     transactionId: lookupResult.transaction_id || order.khaltiPidx,
+                    stockReserved: true,
+                    manualReviewReason: "KHALTI_AMOUNT_MISMATCH",
                   },
                 });
 
@@ -135,6 +137,17 @@ async function handleCleanup(request: NextRequest) {
                   },
                 });
               });
+
+              try {
+                const { sendAdminAlertEmail } = await import("@/lib/services/email");
+                await sendAdminAlertEmail(
+                  `🚨 SECURITY ALERT: Khalti payment amount mismatch during cron for Order #${order.orderNumber}`,
+                  `Order #${order.orderNumber} placed in MANUAL_REVIEW during cleanup cron due to Khalti payment amount mismatch. Expected: Rs. ${order.total}, Received: Rs. ${(Number(lookupResult.total_amount) / 100).toFixed(2)}. Stock and promo code remain reserved.`,
+                  { orderId: order.id, pidx: order.khaltiPidx, expected: order.total, received: lookupResult.total_amount }
+                );
+              } catch (alertErr) {
+                console.error("[Cleanup Cron] Failed to send admin alert email:", alertErr);
+              }
 
               results.skippedOrRaced++;
               continue;

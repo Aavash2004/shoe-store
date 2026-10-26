@@ -86,27 +86,9 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
             };
         }
     } else if (currentStatus === "MANUAL_REVIEW" && (validStatus === "PROCESSING" || validStatus === "CONFIRMED")) {
-        // Restrict MANUAL_REVIEW -> PROCESSING/CONFIRMED for case (b) (out of stock late payment)
-        // unless stock can be re-reserved atomically right now
-        const history = await prisma.orderStatusHistory.findMany({
-            where: { orderId: validOrderId },
-            orderBy: { createdAt: "desc" },
-            take: 5,
-        });
-
-        const isCaseB =
-            (order as any).stockReserved === false ||
-            history.some(
-                (h) =>
-                    h.fromStatus === "CANCELLED" ||
-                    h.note?.toLowerCase().includes("out of stock") ||
-                    h.note?.toLowerCase().includes("out-of-stock") ||
-                    h.note?.toLowerCase().includes("no longer available") ||
-                    h.note?.toLowerCase().includes("not available") ||
-                    h.note?.toLowerCase().includes("late payment") ||
-                    h.note?.toLowerCase().includes("refund failed") ||
-                    h.note?.toLowerCase().includes("no stock")
-            );
+        // Restrict MANUAL_REVIEW -> PROCESSING/CONFIRMED for case (b) (where stockReserved === false)
+        // unless stock and coupon can be re-reserved atomically right now
+        const isCaseB = order.stockReserved === false;
 
         if (isCaseB) {
             try {
@@ -120,10 +102,29 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
                         }))
                     );
 
-                    await tx.order.update({
-                        where: { id: validOrderId },
-                        data: { status: validStatus },
+                    // Re-reserve coupon if attached
+                    if (order.couponId) {
+                        await tx.coupon.update({
+                            where: { id: order.couponId },
+                            data: { usedCount: { increment: 1 } },
+                        });
+                    }
+
+                    const updateClaim = await tx.order.updateMany({
+                        where: {
+                            id: validOrderId,
+                            status: currentStatus,
+                        },
+                        data: {
+                            status: validStatus,
+                            stockReserved: true,
+                            manualReviewReason: null,
+                        },
                     });
+
+                    if (updateClaim.count === 0) {
+                        throw new Error("ORDER_ALREADY_CLAIMED");
+                    }
                 });
             } catch (stockErr: any) {
                 return {
@@ -140,6 +141,7 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
                 },
                 data: {
                     status: validStatus,
+                    manualReviewReason: null,
                 },
             });
 
@@ -152,14 +154,19 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
         }
     } else {
         // Race-safe atomic update for other non-cancellation transitions
+        const updateData: any = {
+            status: validStatus,
+        };
+        if (validStatus === "MANUAL_REVIEW") {
+            updateData.manualReviewReason = validNote || "ADMIN_MANUAL_REVIEW";
+        }
+
         const updateResult = await prisma.order.updateMany({
             where: {
                 id: validOrderId,
                 status: currentStatus,
             },
-            data: {
-                status: validStatus,
-            },
+            data: updateData,
         });
 
         if (updateResult.count === 0) {

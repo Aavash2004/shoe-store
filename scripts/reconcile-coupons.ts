@@ -10,7 +10,12 @@ interface CouponReconcileRow {
 
 async function main() {
   const isApply = process.argv.includes("--apply");
-  const mode = isApply ? "APPLY (WRITING TO DB)" : "DRY RUN (READ-ONLY)";
+  const isConfirmed = process.argv.includes("--confirm") || process.argv.includes("--yes");
+  const mode = isApply && isConfirmed
+    ? "APPLY (WRITING TO DB)"
+    : isApply
+    ? "APPLY BLOCKED (CONFIRMATION REQUIRED)"
+    : "DRY RUN (READ-ONLY)";
 
   console.log(`=======================================================`);
   console.log(` COUPON RECONCILIATION WORKER`);
@@ -32,18 +37,19 @@ async function main() {
   let outOfSyncCount = 0;
 
   for (const coupon of coupons) {
-    // Count non-cancelled orders associated with this coupon
-    const nonCancelledCount = await prisma.order.count({
+    // Count active orders holding this coupon reservation (non-cancelled and stockReserved = true)
+    const activeReservedCount = await prisma.order.count({
       where: {
         OR: [
           { couponId: coupon.id },
           { couponCode: { equals: coupon.code, mode: "insensitive" } },
         ],
         status: { not: "CANCELLED" },
+        stockReserved: true,
       },
     });
 
-    const diff = nonCancelledCount - coupon.usedCount;
+    const diff = activeReservedCount - coupon.usedCount;
     const isOutOfSync = diff !== 0;
 
     if (isOutOfSync) {
@@ -53,7 +59,7 @@ async function main() {
     rows.push({
       code: coupon.code,
       currentUsedCount: coupon.usedCount,
-      actualUsedCount: nonCancelledCount,
+      actualUsedCount: activeReservedCount,
       diff,
       status: isOutOfSync ? "OUT_OF_SYNC" : "IN_SYNC",
     });
@@ -76,25 +82,69 @@ async function main() {
 
   console.log(`\nEvaluated ${coupons.length} coupon(s). Found ${outOfSyncCount} out of sync.`);
 
-  if (isApply) {
+  if (isApply && !isConfirmed) {
+    console.warn(
+      `\n⚠️  SAFETY LOCK: '--apply' was passed without '--confirm'.`
+    );
+    console.warn(
+      `To protect production data, diff has been displayed above, but changes will NOT be applied unless '--confirm' is also specified.`
+    );
+    console.warn(
+      `Required command: npx tsx scripts/reconcile-coupons.ts --apply --confirm\n`
+    );
+    await prisma.$disconnect();
+    return;
+  }
+
+  if (isApply && isConfirmed) {
+    // Safety guard: refuse to reconcile if any order was created within the last 5 minutes (in-flight checkout protection)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentOrdersCount = await prisma.order.count({
+      where: {
+        createdAt: { gte: fiveMinutesAgo },
+      },
+    });
+
+    if (recentOrdersCount > 0) {
+      console.warn(
+        `\n⚠️  SAFETY LOCK REFUSAL: Found ${recentOrdersCount} order(s) created in the last 5 minutes.`
+      );
+      console.warn(
+        `To protect in-flight customer checkouts, coupon reconciliation refuses to commit changes when orders were created recently.`
+      );
+      console.warn(`Please wait for active checkouts to settle before running with '--apply --confirm'.\n`);
+      await prisma.$disconnect();
+      return;
+    }
+
     if (outOfSyncCount > 0) {
-      console.log(`\nApplying updates to ${outOfSyncCount} coupon(s)...`);
-      for (const row of rows) {
-        if (row.diff !== 0) {
-          await prisma.coupon.update({
-            where: { code: row.code },
-            data: { usedCount: row.actualUsedCount },
-          });
-          console.log(`  Updated ${row.code}: usedCount ${row.currentUsedCount} -> ${row.actualUsedCount}`);
+      console.log(`\nApplying updates to ${outOfSyncCount} coupon(s) inside an interactive transaction...`);
+      await prisma.$transaction(async (tx) => {
+        // Re-verify recent orders inside the transaction
+        const inTxRecentOrders = await tx.order.count({
+          where: { createdAt: { gte: fiveMinutesAgo } },
+        });
+        if (inTxRecentOrders > 0) {
+          throw new Error(`Transaction aborted: ${inTxRecentOrders} order(s) created in the last 5 minutes.`);
         }
-      }
-      console.log(`\n✅ Successfully reconciled and updated all coupons in the database.`);
+
+        for (const row of rows) {
+          if (row.diff !== 0) {
+            await tx.coupon.update({
+              where: { code: row.code },
+              data: { usedCount: row.actualUsedCount },
+            });
+            console.log(`  Updated ${row.code}: usedCount ${row.currentUsedCount} -> ${row.actualUsedCount}`);
+          }
+        }
+      });
+      console.log(`\n✅ Successfully reconciled and transactionally committed all coupons in the database.`);
     } else {
       console.log(`\n✅ All coupons are already in sync. No database updates required.`);
     }
   } else {
     console.log(
-      `\n🔎 Dry-run mode: No modifications made to database. Run with '--apply' to commit changes.`
+      `\n🔎 Dry-run mode: No modifications made to database. Run with '--apply --confirm' to commit changes.`
     );
   }
 

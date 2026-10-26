@@ -489,3 +489,73 @@ export async function sendShippingUpdateEmail(orderId: string, statusNote?: stri
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Dedicated admin alert sender for CRITICAL system & operational alerts
+ * (e.g. gateway amount mismatches, out-of-stock late payments, auto-refund failures).
+ * Always routes directly to process.env.ADMIN_EMAIL.
+ */
+export async function sendAdminAlertEmail(
+  subject: string,
+  message: string,
+  metadata?: Record<string, unknown>
+): Promise<{ success: boolean; error?: string; code?: string; data?: unknown }> {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL?.trim();
+
+    if (!adminEmail) {
+      const errMsg = "CRITICAL CONFIGURATION ERROR: ADMIN_EMAIL is not configured in environment. Admin alert dropped!";
+      console.error(`🚨 ${errMsg}`, { subject, metadata });
+      try {
+        const Sentry = await import("@sentry/nextjs");
+        Sentry.captureMessage(errMsg, {
+          level: "fatal",
+          extra: { subject, message, metadata },
+        });
+      } catch (sentryErr) {
+        console.error("[Email Service] Failed to report missing ADMIN_EMAIL to Sentry:", sentryErr);
+      }
+      return { success: false, error: "ADMIN_EMAIL not configured", code: "ADMIN_EMAIL_MISSING" };
+    }
+
+    const html = wrapEmailHtml(
+      subject,
+      `
+      <h1 style="color: #ef4444; font-size: 20px; font-weight: 700; margin: 0 0 12px 0;">🚨 CRITICAL STORE ALERT</h1>
+      <p style="color: #f87171; font-size: 15px; margin: 0 0 16px 0; font-weight: 600;">${subject}</p>
+      
+      <div style="background-color: #1a1616; border: 1px solid #7f1d1d; border-radius: 8px; padding: 18px; margin-bottom: 20px;">
+        <p style="color: #fca5a5; font-size: 14px; margin: 0 0 12px 0; line-height: 1.6;">${message}</p>
+        ${
+          metadata
+            ? `<pre style="background-color: #0b0909; padding: 12px; border-radius: 6px; color: #cbd5e1; font-size: 12px; overflow-x: auto; margin: 0;">${JSON.stringify(
+                metadata,
+                null,
+                2
+              )}</pre>`
+            : ""
+        }
+      </div>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${appUrl}/admin/orders" style="background-color: #ef4444; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: 700; text-decoration: none; display: inline-block; font-size: 14px;">
+          Open Admin Portal
+        </a>
+      </div>
+      `
+    );
+
+    return await sendTransactionalEmail({
+      to: adminEmail,
+      subject: `🚨 [CRITICAL ALERT] ${subject}`,
+      html,
+    });
+  } catch (err: any) {
+    console.error("[Email Service] Exception sending admin alert email:", err);
+    try {
+      const Sentry = await import("@sentry/nextjs");
+      Sentry.captureException(err, { extra: { subject, message, metadata } });
+    } catch {}
+    return { success: false, error: err.message || "Failed to dispatch admin alert" };
+  }
+}

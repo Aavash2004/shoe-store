@@ -959,6 +959,8 @@ async function runTests() {
         paymentMethod: "KHALTI",
         paymentStatus: "PAID",
         status: "MANUAL_REVIEW",
+        stockReserved: false,
+        manualReviewReason: "LATE_PAYMENT_OUT_OF_STOCK",
         coupon: { connect: { id: couponB.id } },
         couponCode: couponB.code,
         items: {
@@ -1005,17 +1007,33 @@ async function runTests() {
     // TEST 11: Restrict MANUAL_REVIEW -> PROCESSING for Case (b) unless stock re-reserved
     // =========================================================================
     console.log("\n--- TEST 11: Restrict MANUAL_REVIEW -> PROCESSING for Case (b) unless stock re-reserved ---");
+    const couponB2 = await prisma.coupon.create({
+      data: {
+        code: `MR_B2_${Date.now()}`,
+        discountType: "FIXED_AMOUNT",
+        discountValue: 10,
+        minSubtotal: 0,
+        usedCount: 0,
+        isActive: true,
+      },
+    });
+    createdCouponCodes.push(couponB2.code);
+
     const orderB2 = await prisma.order.create({
       data: {
         orderNumber: `ORD-MR-B2-${Date.now()}`,
         currency: "NPR",
         subtotal: 1000,
         shipping: 0,
-        discount: 0,
-        total: 1000,
+        discount: 10,
+        total: 990,
         paymentMethod: "KHALTI",
         paymentStatus: "PAID",
         status: "MANUAL_REVIEW",
+        stockReserved: false,
+        manualReviewReason: "LATE_PAYMENT_OUT_OF_STOCK",
+        coupon: { connect: { id: couponB2.id } },
+        couponCode: couponB2.code,
         items: {
           create: [
             {
@@ -1055,6 +1073,13 @@ async function runTests() {
 
     const stockAfterReReserve = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock;
     assert(stockAfterReReserve === 4, `Stock decremented from 5 to 4 upon confirming Case (b) order`);
+
+    const couponAfterReReserve = await prisma.coupon.findUnique({ where: { id: couponB2.id } });
+    assert(couponAfterReReserve?.usedCount === 1, `Coupon usedCount incremented from 0 to 1 upon re-activating Case (b) order`);
+
+    const orderB2AfterReactivation = await prisma.order.findUnique({ where: { id: orderB2.id } });
+    assert(orderB2AfterReactivation?.stockReserved === true, "stockReserved updated to true upon re-activation");
+    assert(orderB2AfterReactivation?.manualReviewReason === null, "manualReviewReason cleared upon re-activation");
 
     // Reset stock back
     await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBeforeCancelB } });
@@ -1227,6 +1252,236 @@ async function runTests() {
     assert(orderAfterCron14?.status === "PENDING", "Order with in-flight payment ('processing') is skipped and NOT cancelled");
     assert(orderAfterCron14?.paymentStatus === "PENDING", "Order paymentStatus remains PENDING");
     stripe.paymentIntents.retrieve = savedStripeRetrieve;
+
+    // =========================================================================
+    // TEST 15: Late Stripe payment, out of stock, refund fails -> MANUAL_REVIEW -> admin cancel (Item 1)
+    // =========================================================================
+    console.log("\n--- TEST 15: Late Stripe payment, out of stock, refund fails -> MANUAL_REVIEW -> admin cancel ---");
+    const e2eCoupon = await prisma.coupon.create({
+      data: {
+        code: `E2E_REFUND_FAIL_${Date.now()}`,
+        discountType: "FIXED_AMOUNT",
+        discountValue: 10,
+        minSubtotal: 0,
+        usedCount: 0,
+        isActive: true,
+      },
+    });
+    createdCouponCodes.push(e2eCoupon.code);
+
+    const e2eStripePi = `pi_e2e_late_${Date.now()}`;
+    const e2eOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-E2E-LATE-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 10,
+        total: 40,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "CANCELLED",
+        stockReserved: false,
+        stripePaymentIntentId: e2eStripePi,
+        couponId: e2eCoupon.id,
+        couponCode: e2eCoupon.code,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 50,
+              quantity: 2,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(e2eOrder.id);
+
+    // Deplete stock to 0 so reinstatement fails with InsufficientStockError
+    const stockBaseline15 = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 10;
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: 0 } });
+
+    // Mock stripe.refunds.create to simulate refund failure
+    const originalStripeRefundCreate15 = stripe.refunds.create;
+    stripe.refunds.create = (async () => {
+      throw new Error("Stripe API Error: Balance insufficient for refund");
+    }) as any;
+
+    // Mock constructEvent
+    const originalConstructEvent15 = stripe.webhooks.constructEvent;
+    stripe.webhooks.constructEvent = ((body: any) => JSON.parse(body)) as any;
+
+    const webhookReq15 = new NextRequest("http://localhost:3000/api/webhooks/stripe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "stripe-signature": "mock_signature",
+      },
+      body: JSON.stringify({
+        id: `evt_test_${Date.now()}`,
+        type: "payment_intent.succeeded",
+        data: {
+          object: {
+            id: e2eStripePi,
+            amount: 4000,
+            currency: "usd",
+            status: "succeeded",
+          },
+        },
+      }),
+    });
+
+    const webhookRes15 = await stripeWebhookHandler(webhookReq15);
+    assert(webhookRes15.status === 200, "Webhook returns 200 after gracefully placing order into MANUAL_REVIEW on refund failure");
+
+    const orderAfterWebhook15 = await prisma.order.findUnique({ where: { id: e2eOrder.id } });
+    assert(orderAfterWebhook15?.status === "MANUAL_REVIEW", "Order transitioned to MANUAL_REVIEW");
+    assert(orderAfterWebhook15?.paymentStatus === "PAID", "Order paymentStatus is PAID");
+    assert(orderAfterWebhook15?.stockReserved === false, "Order stockReserved remains false");
+    assert(orderAfterWebhook15?.manualReviewReason === "LATE_PAYMENT_OUT_OF_STOCK_REFUND_FAILED", "Order manualReviewReason records refund failure");
+
+    // Admin cancels the order from MANUAL_REVIEW
+    const adminCancelRes15 = await updateOrderStatus(e2eOrder.id, "CANCELLED", "Merchant cancelled manual review order");
+    assert(adminCancelRes15.success, "Admin cancellation of Case (b) MANUAL_REVIEW succeeds");
+
+    const orderFinal15 = await prisma.order.findUnique({ where: { id: e2eOrder.id } });
+    assert(orderFinal15?.status === "CANCELLED", "Order status is now CANCELLED");
+    assert(orderFinal15?.stockReserved === false, "stockReserved remains false after cancel");
+
+    const variantStockFinal15 = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock;
+    assert(variantStockFinal15 === 0, `Variant stock remains UNCHANGED at 0 (did not restock unheld stock)`);
+
+    const couponFinal15 = await prisma.coupon.findUnique({ where: { id: e2eCoupon.id } });
+    assert(couponFinal15?.usedCount === 0, `Coupon usedCount remains UNCHANGED at 0 (did not decrement unheld coupon)`);
+
+    // Restore stock and mocks
+    stripe.refunds.create = originalStripeRefundCreate15;
+    stripe.webhooks.constructEvent = originalConstructEvent15;
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBaseline15 } });
+
+    // =========================================================================
+    // TEST 16: Stripe Late-Payment Catch - Non-stock DB error inside transaction after claim, then retry succeeds (Item 2 & Check 5)
+    // =========================================================================
+    console.log("\n--- TEST 16: Stripe Late-Payment Catch - Non-stock DB errors rethrow (HTTP 500) and retry succeeds ---");
+    const dbErrStripePi = `pi_dberr_${Date.now()}`;
+    const dbErrOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-DBERR-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "CANCELLED",
+        stockReserved: false,
+        stripePaymentIntentId: dbErrStripePi,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(dbErrOrder.id);
+
+    let refundCalled16 = false;
+    const trackedStripeRefundCreate16 = stripe.refunds.create;
+    stripe.refunds.create = (async () => {
+      refundCalled16 = true;
+      return { id: `ref_mock_${Date.now()}` };
+    }) as any;
+
+    const originalConstructEvent16 = stripe.webhooks.constructEvent;
+    stripe.webhooks.constructEvent = ((body: any) => JSON.parse(body)) as any;
+
+    const stockBeforeDbErr = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 0;
+
+    // Simulate transient database failure inside transaction right AFTER the claim
+    let simulateDbError = true;
+    const originalPrismaTransaction = prisma.$transaction;
+    (prisma as any).$transaction = async (fn: any, options?: any) => {
+      if (typeof fn === "function" && simulateDbError) {
+        return (originalPrismaTransaction as any).apply(prisma, [
+          async (tx: any) => {
+            const originalUpdateMany = tx.order.updateMany;
+            tx.order.updateMany = async (...args: any[]) => {
+              const res = await originalUpdateMany.apply(tx.order, args);
+              // Injected DB crash right inside the transaction after the claim:
+              throw new Error("PrismaClientInitializationError: Connection pool timeout simulated after claim");
+            };
+            return fn(tx);
+          },
+          options,
+        ]);
+      }
+      return (originalPrismaTransaction as any).apply(prisma, [fn, options]);
+    };
+
+    const webhookPayload16 = JSON.stringify({
+      id: `evt_dberr_${Date.now()}`,
+      type: "payment_intent.succeeded",
+      data: {
+        object: {
+          id: dbErrStripePi,
+          amount: 5000,
+          currency: "usd",
+          status: "succeeded",
+        },
+      },
+    });
+
+    const createWebhookReq16 = () =>
+      new NextRequest("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "stripe-signature": "mock_signature",
+        },
+        body: webhookPayload16,
+      });
+
+    // Attempt 1: Injected DB error triggers rollback & HTTP 500
+    const webhookRes16 = await stripeWebhookHandler(createWebhookReq16());
+    assert(webhookRes16.status === 500, "Webhook returns HTTP 500 on unexpected non-stock error so Stripe retries");
+    assert(!refundCalled16, "Auto-refund was NOT triggered on simulated DB error (only InsufficientStockError triggers refund)");
+
+    const orderAfterDbErr = await prisma.order.findUnique({ where: { id: dbErrOrder.id } });
+    assert(orderAfterDbErr?.status === "CANCELLED", "Order remains in CANCELLED state due to transaction rollback");
+    assert(orderAfterDbErr?.paymentStatus === "PENDING", "Order paymentStatus remains PENDING");
+
+    // Attempt 2: Stripe retries delivery after DB recovers -> Order is successfully reinstated
+    simulateDbError = false;
+    const retryRes16 = await stripeWebhookHandler(createWebhookReq16());
+    assert(retryRes16.status === 200, "Retry delivery succeeds with 200 OK after DB recovers");
+
+    const orderAfterRetry = await prisma.order.findUnique({ where: { id: dbErrOrder.id } });
+    assert(orderAfterRetry?.status === "PROCESSING", "Order reinstated to PROCESSING upon retry");
+    assert(orderAfterRetry?.paymentStatus === "PAID", "Order paymentStatus updated to PAID upon retry");
+    assert(orderAfterRetry?.stockReserved === true, "stockReserved set to true upon retry reinstatement");
+
+    const stockAfterRetry = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 0;
+    assert(stockAfterRetry === stockBeforeDbErr - 1, `Stock successfully decremented on retry (${stockBeforeDbErr} -> ${stockAfterRetry})`);
+
+    // Restore mocks
+    (prisma as any).$transaction = originalPrismaTransaction;
+    stripe.refunds.create = trackedStripeRefundCreate16;
+    stripe.webhooks.constructEvent = originalConstructEvent16;
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBeforeDbErr } });
 
   } catch (err) {
     console.error("Test execution caught unexpected exception:", err);

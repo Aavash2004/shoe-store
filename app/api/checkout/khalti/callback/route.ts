@@ -87,6 +87,8 @@ export async function GET(request: NextRequest) {
                         data: {
                             status: "MANUAL_REVIEW",
                             transactionId: lookupResult.transaction_id || pidx,
+                            stockReserved: true,
+                            manualReviewReason: "KHALTI_AMOUNT_MISMATCH",
                         },
                     });
 
@@ -101,10 +103,11 @@ export async function GET(request: NextRequest) {
 
                 // Dispatch email alert to admin
                 try {
-                    const { sendShippingUpdateEmail } = await import("@/lib/services/email");
-                    await sendShippingUpdateEmail(
-                        order.id,
-                        `🚨 SECURITY ALERT: Order #${order.orderNumber} placed in MANUAL_REVIEW due to Khalti payment amount mismatch. Expected: Rs. ${order.total}, Received: Rs. ${(Number(lookupResult.total_amount) / 100).toFixed(2)}.`
+                    const { sendAdminAlertEmail } = await import("@/lib/services/email");
+                    await sendAdminAlertEmail(
+                        `🚨 SECURITY ALERT: Khalti payment amount mismatch for Order #${order.orderNumber}`,
+                        `Order #${order.orderNumber} placed in MANUAL_REVIEW due to Khalti payment amount mismatch. Expected: Rs. ${order.total}, Received: Rs. ${(Number(lookupResult.total_amount) / 100).toFixed(2)}. Stock and promo code remain reserved.`,
+                        { orderId: order.id, pidx, expected: order.total, received: lookupResult.total_amount }
                     );
                 } catch (emailErr) {
                     console.error("[Khalti Callback] Failed to dispatch admin alert email:", emailErr);
@@ -127,6 +130,8 @@ export async function GET(request: NextRequest) {
                                 status: "PROCESSING",
                                 paymentStatus: "PAID",
                                 transactionId: lookupResult.transaction_id || pidx,
+                                stockReserved: true,
+                                manualReviewReason: null,
                             },
                         });
 
@@ -190,6 +195,8 @@ export async function GET(request: NextRequest) {
                             status: "MANUAL_REVIEW",
                             paymentStatus: "PAID",
                             transactionId: lookupResult.transaction_id || pidx,
+                            stockReserved: false,
+                            manualReviewReason: "LATE_PAYMENT_OUT_OF_STOCK",
                         },
                     });
 
@@ -202,10 +209,11 @@ export async function GET(request: NextRequest) {
                     });
 
                     try {
-                        const { sendShippingUpdateEmail } = await import("@/lib/services/email");
-                        await sendShippingUpdateEmail(
-                            order.id,
-                            `🚨 CRITICAL ALERT: Order #${order.orderNumber} late Khalti payment (${pidx}) arrived after cancellation, but items are OUT OF STOCK. Order placed in MANUAL_REVIEW for manual refund.`
+                        const { sendAdminAlertEmail } = await import("@/lib/services/email");
+                        await sendAdminAlertEmail(
+                            `🚨 CRITICAL ALERT: Late Khalti payment for out-of-stock Order #${order.orderNumber}`,
+                            `Order #${order.orderNumber} late Khalti payment (${pidx}) arrived after cancellation, but items are OUT OF STOCK. Order placed in MANUAL_REVIEW for manual refund.`,
+                            { orderId: order.id, pidx, total: order.total }
                         );
                     } catch (emailErr) {
                         console.error("[Khalti Callback] Failed to dispatch admin alert email on out-of-stock late payment:", emailErr);

@@ -181,6 +181,7 @@ export async function POST(request: NextRequest) {
             shipping: pricing.shipping,
             discount: pricing.discount,
             total: pricing.total,
+            stockReserved: true,
             couponCode: data.couponCode ? data.couponCode.trim().toUpperCase() : null,
             items: {
               create: pricing.orderItems.map((item) => ({
