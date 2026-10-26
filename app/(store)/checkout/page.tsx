@@ -98,6 +98,8 @@ function CheckoutNotice() {
   );
 }
 
+type FormData = CheckoutAddressInput;
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { status } = useSession();

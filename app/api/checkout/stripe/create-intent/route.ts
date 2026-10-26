@@ -31,6 +31,7 @@ function generateOrderNumber(): string {
 }
 
 export async function POST(request: NextRequest) {
+  let paymentIntent: Stripe.PaymentIntent | undefined;
   let body: any;
   try {
     body = await request.json();
@@ -198,7 +199,6 @@ export async function POST(request: NextRequest) {
     );
 
     // 7. Create Stripe PaymentIntent with automatic idempotency fallback
-    let paymentIntent: Stripe.PaymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create(
         {
@@ -249,6 +249,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (!paymentIntent) {
+      throw new Error("PaymentIntent was not created");
+    }
+    const resolvedIntent = paymentIntent;
+
     // 8. Interactive database transaction with DB-level unique constraint
     const order = await prisma.$transaction(
       async (tx) => {
@@ -282,7 +287,7 @@ export async function POST(request: NextRequest) {
             paymentStatus: "PENDING",
             status: "PENDING",
             transactionId: idempotencyKey,
-            stripePaymentIntentId: paymentIntent.id,
+            stripePaymentIntentId: resolvedIntent.id,
             currency: pricing.currency,
             exchangeRate: pricing.exchangeRate,
             tax: pricing.tax,
@@ -305,7 +310,7 @@ export async function POST(request: NextRequest) {
             statusHistory: {
               create: {
                 status: "PENDING",
-                note: `PaymentIntent initialized (${pricing.currency} ${pricing.total}, PI: ${paymentIntent.id})`,
+                note: `PaymentIntent initialized (${pricing.currency} ${pricing.total}, PI: ${resolvedIntent.id})`,
               },
             },
           },
@@ -336,8 +341,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
+        clientSecret: resolvedIntent.client_secret,
+        paymentIntentId: resolvedIntent.id,
         orderId: order.id,
         orderNumber: order.orderNumber,
         amount: Number(order.total),
