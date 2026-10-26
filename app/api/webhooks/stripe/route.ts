@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { prisma } from "@/lib/db/prisma";
 import { stripe } from "@/lib/services/stripe";
 import { releaseOrderStock } from "@/lib/checkout/stock";
+import { releaseCouponUsage } from "@/lib/checkout/coupon";
 
 export async function POST(request: NextRequest) {
   // 1. Next.js App Router MUST read the raw unparsed text for signature verification
@@ -65,13 +66,6 @@ export async function POST(request: NextRequest) {
           });
 
           if (updatedOrder) {
-            if (updatedOrder.couponCode) {
-              await prisma.coupon.updateMany({
-                where: { code: updatedOrder.couponCode },
-                data: { usedCount: { increment: 1 } },
-              });
-            }
-
             await prisma.orderStatusHistory.create({
               data: {
                 orderId: updatedOrder.id,
@@ -108,10 +102,11 @@ export async function POST(request: NextRequest) {
         });
 
         if (order && order.paymentStatus === "PENDING") {
-          // Release reserved inventory idempotently
+          // Release reserved inventory and coupon idempotently
           await prisma.$transaction(async (tx) => {
             const released = await releaseOrderStock(tx, order.id);
             if (released.success) {
+              await releaseCouponUsage(tx, order.couponCode);
               await tx.order.update({
                 where: { id: order.id },
                 data: {
@@ -145,6 +140,7 @@ export async function POST(request: NextRequest) {
           await prisma.$transaction(async (tx) => {
             const released = await releaseOrderStock(tx, order.id);
             if (released.success) {
+              await releaseCouponUsage(tx, order.couponCode);
               await tx.orderStatusHistory.create({
                 data: {
                   orderId: order.id,

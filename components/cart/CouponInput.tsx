@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Ticket, X, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Price } from "@/components/ui/Price";
 
 export interface AppliedCoupon {
   code: string;
@@ -79,7 +80,7 @@ export function CouponInput({
               {appliedCoupon.code}
             </span>
             <span className="ml-2 font-medium text-emerald-700">
-              (-${appliedCoupon.discountAmount.toFixed(2)})
+              (-<Price amount={appliedCoupon.discountAmount} />)
             </span>
           </div>
         </div>

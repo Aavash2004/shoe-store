@@ -12,6 +12,10 @@ import {
     InsufficientStockError,
 } from "@/lib/checkout/stock";
 import {
+    reserveCouponUsage,
+    CouponExhaustedError,
+} from "@/lib/checkout/coupon";
+import {
     initiateKhaltiPayment,
     toKhaltiPaisa,
 } from "@/lib/services/khalti";
@@ -208,10 +212,10 @@ export async function POST(request: NextRequest) {
                 });
 
                 if (data.couponCode?.trim()) {
-                    await tx.coupon.updateMany({
-                        where: { code: data.couponCode.trim().toUpperCase() },
-                        data: { usedCount: { increment: 1 } },
-                    });
+                    const reserved = await reserveCouponUsage(tx, data.couponCode);
+                    if (!reserved) {
+                        throw new CouponExhaustedError();
+                    }
                 }
 
                 if (userId) {
@@ -256,7 +260,12 @@ export async function POST(request: NextRequest) {
             { status: 201 }
         );
     } catch (err: any) {
-        if (err instanceof InsufficientStockError || err instanceof PricingError) {
+        if (
+            err instanceof InsufficientStockError ||
+            err instanceof PricingError ||
+            err instanceof CouponExhaustedError ||
+            err?.code === "COUPON_EXHAUSTED"
+        ) {
             return NextResponse.json(
                 { error: err.message, code: err.code },
                 { status: 400 }

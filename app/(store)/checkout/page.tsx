@@ -233,9 +233,18 @@ export default function CheckoutPage() {
     0
   );
 
+  const baseSubtotalUSD = items.reduce(
+    (sum, i) => sum + i.usdPrice * i.quantity,
+    0
+  );
+
   const shippingQuote = calculateShipping(subtotal, selectedCountryCode);
   const shipping = shippingQuote.shippingCost;
-  const discountAmount = appliedCoupon?.discountAmount ?? 0;
+  const discountAmount = appliedCoupon
+    ? appliedCoupon.discountType === "PERCENTAGE"
+      ? (subtotal * appliedCoupon.discountValue) / 100
+      : toLocalPrice(appliedCoupon.discountAmount)
+    : 0;
   const total = Math.max(0, subtotal + shipping - discountAmount);
 
   async function onSubmit(data: FormData) {
@@ -1038,7 +1047,7 @@ export default function CheckoutPage() {
               {/* Promo Code Input Field */}
               <div className="mt-6 border-t border-[var(--color-sand)] pt-5">
                 <CouponInput
-                  subtotal={subtotal}
+                  subtotal={baseSubtotalUSD}
                   appliedCoupon={appliedCoupon}
                   onApplyCoupon={(coupon) => setAppliedCoupon(coupon)}
                 />

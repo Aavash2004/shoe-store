@@ -101,13 +101,6 @@ export async function GET(
           currentPaymentStatus = "PAID";
           currentStatus = "PROCESSING";
 
-          if (order.couponCode) {
-            await prisma.coupon.updateMany({
-              where: { code: order.couponCode },
-              data: { usedCount: { increment: 1 } },
-            });
-          }
-
           await prisma.orderStatusHistory.create({
             data: {
               orderId: order.id,

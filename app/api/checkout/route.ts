@@ -12,6 +12,10 @@ import {
   decrementStockWithLock,
   InsufficientStockError,
 } from "@/lib/checkout/stock";
+import {
+  reserveCouponUsage,
+  CouponExhaustedError,
+} from "@/lib/checkout/coupon";
 import { checkCheckoutRateLimit, getClientIp } from "@/lib/security/rateLimit";
 
 function generateOrderNumber(): string {
@@ -202,12 +206,12 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Step F: Increment coupon usage if applied
+        // Step F: Increment coupon usage atomically if applied
         if (data.couponCode && data.couponCode.trim()) {
-          await tx.coupon.updateMany({
-            where: { code: data.couponCode.trim().toUpperCase() },
-            data: { usedCount: { increment: 1 } },
-          });
+          const reserved = await reserveCouponUsage(tx, data.couponCode);
+          if (!reserved) {
+            throw new CouponExhaustedError();
+          }
         }
 
         // Step G: Clear logged-in user database cart
@@ -323,6 +327,14 @@ export async function POST(request: NextRequest) {
     if (err instanceof PricingError || err?.name === "PricingError") {
       return NextResponse.json(
         { error: err.message, code: err.code || "PRICING_ERROR" },
+        { status: 400 }
+      );
+    }
+
+    // 9b. Handle Coupon usage limit errors
+    if (err instanceof CouponExhaustedError || err?.code === "COUPON_EXHAUSTED") {
+      return NextResponse.json(
+        { error: err.message, code: "COUPON_EXHAUSTED" },
         { status: 400 }
       );
     }
