@@ -68,7 +68,7 @@ interface AdminOrdersClientProps {
 const SUPPORTED_CURRENCIES = ["USD", "NPR", "EUR", "GBP"] as const;
 type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
 
-type FilterTab = "ALL" | "UNFULFILLED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+type FilterTab = "ALL" | "UNFULFILLED" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "MANUAL_REVIEW";
 
 export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersClientProps) {
   const router = useRouter();
@@ -146,6 +146,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
     const shipped = orders.filter((o) => o.status === "SHIPPED").length;
     const delivered = orders.filter((o) => o.status === "DELIVERED").length;
     const cancelled = orders.filter((o) => o.status === "CANCELLED").length;
+    const manualReview = orders.filter((o) => o.status === "MANUAL_REVIEW").length;
 
     const completedOrders = orders.filter((o) => o.status !== "CANCELLED");
     const totalRevenue = completedOrders.reduce((sum, o) => {
@@ -161,6 +162,7 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
       shipped,
       delivered,
       cancelled,
+      manualReview,
       totalRevenue,
       avgOrderValue,
     };
@@ -180,6 +182,8 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
         if (order.status !== "DELIVERED") return false;
       } else if (selectedTab === "CANCELLED") {
         if (order.status !== "CANCELLED") return false;
+      } else if (selectedTab === "MANUAL_REVIEW") {
+        if (order.status !== "MANUAL_REVIEW") return false;
       }
 
       // Search filter
@@ -594,6 +598,27 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
                 {stats.cancelled}
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedTab("MANUAL_REVIEW")}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
+                selectedTab === "MANUAL_REVIEW"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "bg-purple-50 text-purple-800 hover:bg-purple-100"
+              }`}
+            >
+              <span>Manual Review</span>
+              <span
+                className={`rounded-md px-1.5 py-0.2 text-[10px] ${
+                  selectedTab === "MANUAL_REVIEW"
+                    ? "bg-white/20 text-white"
+                    : "bg-purple-200/80 text-purple-900"
+                }`}
+              >
+                {stats.manualReview}
+              </span>
+            </button>
           </div>
 
           {/* Search Box */}
@@ -823,6 +848,10 @@ export function AdminOrdersClient({ initialOrders, exchangeRates }: AdminOrdersC
                         ) : order.status === "CANCELLED" ? (
                           <span className="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-800">
                             Cancelled
+                          </span>
+                        ) : order.status === "MANUAL_REVIEW" ? (
+                          <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-800">
+                            Manual Review
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">

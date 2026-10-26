@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { prisma } from "@/lib/db/prisma";
 import { stripe } from "@/lib/services/stripe";
 import { releaseOrderStock, decrementStockWithLock } from "@/lib/checkout/stock";
+import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
   // 1. Next.js App Router MUST read the raw unparsed text for signature verification
@@ -103,6 +104,19 @@ export async function POST(request: NextRequest) {
             // Late payment on a CANCELLED order: Try to reinstate if stock allows; otherwise auto-refund
             try {
               await prisma.$transaction(async (tx) => {
+                // Claim the order first with updateMany({ id, status: "CANCELLED" }); continue ONLY if count > 0
+                const claimResult = await tx.order.updateMany({
+                  where: { id: existingOrder.id, status: "CANCELLED" },
+                  data: {
+                    status: "PROCESSING",
+                    paymentStatus: "PAID",
+                  },
+                });
+
+                if (claimResult.count === 0) {
+                  throw new Error("ORDER_ALREADY_CLAIMED");
+                }
+
                 await decrementStockWithLock(
                   tx,
                   existingOrder.items.map((i) => ({
@@ -111,13 +125,15 @@ export async function POST(request: NextRequest) {
                   }))
                 );
 
-                await tx.order.update({
-                  where: { id: existingOrder.id },
-                  data: {
-                    status: "PROCESSING",
-                    paymentStatus: "PAID",
-                  },
-                });
+                // Re-reserve the coupon (force-increment even if maxUses is reached)
+                if (existingOrder.couponId) {
+                  await tx.coupon.update({
+                    where: { id: existingOrder.couponId },
+                    data: {
+                      usedCount: { increment: 1 },
+                    },
+                  });
+                }
 
                 await tx.orderStatusHistory.create({
                   data: {
@@ -139,16 +155,28 @@ export async function POST(request: NextRequest) {
                 console.error("[Stripe Webhook] Failed to dispatch order confirmation email on reinstatement:", emailErr);
               }
             } catch (stockErr: any) {
+              if (stockErr.message === "ORDER_ALREADY_CLAIMED") {
+                console.log(`[Stripe Webhook] Order ${existingOrder.id} was already claimed by concurrent process.`);
+                break;
+              }
+
               console.error(
                 `🚨 [Stripe Webhook - Late Payment OUT OF STOCK] Order ${existingOrder.id} was CANCELLED and payment succeeded (${paymentIntentId}), but items are out of stock. Triggering auto-refund:`,
                 stockErr.message
               );
 
               try {
-                const refund = await stripe.refunds.create({
-                  payment_intent: paymentIntentId,
-                });
+                // Use a Stripe refund idempotency key
+                const refund = await stripe.refunds.create(
+                  {
+                    payment_intent: paymentIntentId,
+                  },
+                  {
+                    idempotencyKey: `ref_${paymentIntentId}_${existingOrder.id}`,
+                  }
+                );
 
+                // Set REFUNDED only after the refund succeeds
                 await prisma.order.update({
                   where: { id: existingOrder.id },
                   data: {
@@ -172,6 +200,42 @@ export async function POST(request: NextRequest) {
                   `🚨 [Stripe Webhook - AUTO-REFUND FAILED] Failed to issue refund for order ${existingOrder.id} (${paymentIntentId}):`,
                   refundErr
                 );
+
+                // On refund failure set MANUAL_REVIEW and alert
+                await prisma.order.update({
+                  where: { id: existingOrder.id },
+                  data: {
+                    status: "MANUAL_REVIEW",
+                    paymentStatus: "PAID",
+                  },
+                });
+
+                await prisma.orderStatusHistory.create({
+                  data: {
+                    orderId: existingOrder.id,
+                    status: "MANUAL_REVIEW",
+                    note: `Late payment received for CANCELLED order, items out of stock, and auto-refund failed (${refundErr.message}). Placed in MANUAL_REVIEW for merchant review.`,
+                  },
+                });
+
+                try {
+                  const { sendShippingUpdateEmail } = await import("@/lib/services/email");
+                  await sendShippingUpdateEmail(
+                    existingOrder.id,
+                    `🚨 CRITICAL ALERT: Order #${existingOrder.orderNumber} auto-refund failed after out-of-stock late Stripe payment (${paymentIntentId}). Placed in MANUAL_REVIEW.`
+                  );
+                } catch (emailErr) {
+                  console.error("[Stripe Webhook] Failed to dispatch admin alert email on refund failure:", emailErr);
+                }
+
+                Sentry.captureException(refundErr, {
+                  extra: {
+                    orderId: existingOrder.id,
+                    orderNumber: existingOrder.orderNumber,
+                    paymentIntentId,
+                    reason: "Auto-refund failed for out-of-stock late Stripe payment",
+                  },
+                });
               }
             }
           }

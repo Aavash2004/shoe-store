@@ -50,14 +50,44 @@ import { calculateShipping } from "@/lib/checkout/shipping";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/services/stripe-client";
 import { StripePaymentForm } from "@/components/checkout/StripePaymentForm";
+import { calculateDiscountAndTotal } from "@/lib/checkout/discount";
+import { getOrderNumber } from "./actions";
+
+const CHECKOUT_ERROR_MESSAGES: Record<string, string> = {
+  ORDER_EXPIRED_OUT_OF_STOCK:
+    "Your order reservation expired and the items are now out of stock. Your payment was safely received and has been placed under manual review by our concierge team for immediate processing or refund.",
+  PAYMENT_AMOUNT_MISMATCH:
+    "A payment amount mismatch was detected for this transaction. Your order has been held for manual verification by our operations team.",
+  MISSING_PAYMENT_TOKEN:
+    "Missing payment confirmation token from the payment gateway. Please try again or select another payment method.",
+  ORDER_NOT_FOUND:
+    "We could not locate an active order corresponding to this transaction. Please contact customer support.",
+  PAYMENT_FAILED:
+    "Payment could not be completed by the provider. Please try again or choose an alternative payment option.",
+};
 
 function CheckoutNotice() {
   const searchParams = useSearchParams();
-  const urlError = searchParams.get("error");
-  const urlOrderNumber = searchParams.get("orderNumber");
-  const urlSupportEmail = searchParams.get("supportEmail");
+  const errorCode = searchParams.get("error");
+  const orderId = searchParams.get("orderId");
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
 
-  if (!urlError) return null;
+  useEffect(() => {
+    if (orderId) {
+      getOrderNumber(orderId).then((num) => {
+        if (num) setOrderNumber(num);
+      });
+    }
+  }, [orderId]);
+
+  if (!errorCode) return null;
+
+  const displayMessage =
+    CHECKOUT_ERROR_MESSAGES[errorCode] ||
+    decodeURIComponent(errorCode);
+
+  const supportEmail =
+    process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@abxv.com";
 
   return (
     <div className="rounded-2xl border border-rose-200 bg-rose-50/95 p-5 shadow-sm text-rose-900 mb-6 animate-in fade-in-50">
@@ -67,31 +97,27 @@ function CheckoutNotice() {
         </div>
         <div className="flex-1 text-sm">
           <h4 className="font-bold text-rose-950 text-base">
-            {urlOrderNumber ? `Action Required: Order #${urlOrderNumber}` : "Payment Notice"}
+            {orderNumber ? `Action Required: Order #${orderNumber}` : "Payment Notice"}
           </h4>
           <p className="mt-1 text-rose-800 leading-relaxed font-medium">
-            {urlError}
+            {displayMessage}
           </p>
-          {(urlOrderNumber || urlSupportEmail) && (
-            <div className="mt-3.5 flex flex-wrap items-center gap-4 text-xs font-semibold">
-              {urlOrderNumber && (
-                <span className="rounded-lg bg-rose-200/80 px-2.5 py-1 text-rose-950">
-                  Order Reference: #{urlOrderNumber}
-                </span>
-              )}
-              {urlSupportEmail && (
-                <span className="text-rose-900">
-                  Support Concierge:{" "}
-                  <a
-                    href={`mailto:${urlSupportEmail}`}
-                    className="underline text-rose-950 font-bold hover:text-rose-700"
-                  >
-                    {urlSupportEmail}
-                  </a>
-                </span>
-              )}
-            </div>
-          )}
+          <div className="mt-3.5 flex flex-wrap items-center gap-4 text-xs font-semibold">
+            {orderNumber && (
+              <span className="rounded-lg bg-rose-200/80 px-2.5 py-1 text-rose-950">
+                Order Reference: #{orderNumber}
+              </span>
+            )}
+            <span className="text-rose-900">
+              Support Concierge:{" "}
+              <a
+                href={`mailto:${supportEmail}`}
+                className="underline text-rose-950 font-bold hover:text-rose-700"
+              >
+                {supportEmail}
+              </a>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -287,12 +313,19 @@ export default function CheckoutPage() {
 
   const shippingQuote = calculateShipping(subtotal, selectedCountryCode);
   const shipping = shippingQuote.shippingCost;
-  const discountAmount = appliedCoupon
+  const rawCouponDiscountValue = appliedCoupon
     ? appliedCoupon.discountType === "PERCENTAGE"
-      ? (subtotal * appliedCoupon.discountValue) / 100
+      ? appliedCoupon.discountValue
       : toLocalPrice(appliedCoupon.discountAmount)
     : 0;
-  const total = Math.max(0, subtotal + shipping - discountAmount);
+
+  const { discount: discountAmount, total } = calculateDiscountAndTotal({
+    subtotal,
+    discountType: appliedCoupon?.discountType,
+    discountValue: rawCouponDiscountValue,
+    currency,
+    shipping,
+  });
 
   async function onSubmit(data: FormData) {
     flushPendingSync();

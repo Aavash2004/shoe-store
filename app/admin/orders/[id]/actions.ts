@@ -66,8 +66,14 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
         };
     }
 
+    let warningNotice: string | undefined;
+
     // Restock inventory and release coupon atomically via releaseOrderStock on transition to CANCELLED
     if (validStatus === "CANCELLED") {
+        if (currentStatus === "MANUAL_REVIEW" && order.paymentStatus === "PAID") {
+            warningNotice = `⚠️ Refund Required: Order #${order.orderNumber} was marked as PAID (${order.paymentMethod || "online"}). Inventory/coupon status has been handled, but a manual refund must be issued via your payment gateway dashboard.`;
+        }
+
         const release = await releaseOrderStock(
             prisma,
             validOrderId,
@@ -79,8 +85,68 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
                 error: release.reason || "Failed to cancel order.",
             };
         }
+    } else if (currentStatus === "MANUAL_REVIEW" && (validStatus === "PROCESSING" || validStatus === "CONFIRMED")) {
+        // Restrict MANUAL_REVIEW -> PROCESSING/CONFIRMED for case (b) (out of stock late payment)
+        // unless stock can be re-reserved atomically right now
+        const history = await prisma.orderStatusHistory.findMany({
+            where: { orderId: validOrderId },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+        });
+
+        const isCaseB =
+            (order as any).stockReserved === false ||
+            history.some(
+                (h) =>
+                    h.fromStatus === "CANCELLED" ||
+                    h.note?.toLowerCase().includes("out of stock") ||
+                    h.note?.toLowerCase().includes("refund failed")
+            );
+
+        if (isCaseB) {
+            try {
+                await prisma.$transaction(async (tx) => {
+                    const { decrementStockWithLock } = await import("@/lib/checkout/stock");
+                    await decrementStockWithLock(
+                        tx,
+                        order.items.map((i) => ({
+                            variantId: i.variantId,
+                            quantity: i.quantity,
+                        }))
+                    );
+
+                    await tx.order.update({
+                        where: { id: validOrderId },
+                        data: { status: validStatus },
+                    });
+                });
+            } catch (stockErr: any) {
+                return {
+                    success: false as const,
+                    error: `Cannot approve order #${order.orderNumber} from MANUAL_REVIEW: items are currently out of stock. Stock must be replenished before re-activating a late payment order. (${stockErr.message})`,
+                };
+            }
+        } else {
+            // Case (a): stock was already held on order placement
+            const updateResult = await prisma.order.updateMany({
+                where: {
+                    id: validOrderId,
+                    status: currentStatus,
+                },
+                data: {
+                    status: validStatus,
+                },
+            });
+
+            if (updateResult.count === 0) {
+                return {
+                    success: false as const,
+                    error: `Order status was concurrently modified by another user or is no longer in "${currentStatus}". Please refresh.`,
+                };
+            }
+        }
     } else {
-        // Race-safe atomic update for non-cancellation transitions
+        // Race-safe atomic update for other non-cancellation transitions
         const updateResult = await prisma.order.updateMany({
             where: {
                 id: validOrderId,

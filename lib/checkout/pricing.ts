@@ -4,6 +4,7 @@ import { CURRENCIES } from "@/lib/constants/currencies";
 import { calculateShipping, ShippingQuote } from "@/lib/checkout/shipping";
 import { getExchangeRates } from "@/lib/services/exchangeRates";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { calculateDiscountAndTotal } from "@/lib/checkout/discount";
 
 export interface PricingOrderItem {
   variantId: string;
@@ -151,17 +152,19 @@ export async function calculateOrderPricing(
     ) {
       const minSub = Number(coupon.minSubtotal) * exchangeRate;
       if (subtotal >= minSub) {
-        if (coupon.discountType === "PERCENTAGE") {
-          const pct = Number(coupon.discountValue);
-          discount = (subtotal * pct) / 100;
-        } else {
-          discount = Number(coupon.discountValue) * exchangeRate;
-        }
-        discount = Math.min(discount, subtotal);
-        discount =
-          currencyCode === "NPR"
-            ? Math.round(discount)
-            : Math.round(discount * 100) / 100;
+        const rawDiscountValue =
+          coupon.discountType === "PERCENTAGE"
+            ? Number(coupon.discountValue)
+            : Number(coupon.discountValue) * exchangeRate;
+
+        const calc = calculateDiscountAndTotal({
+          subtotal,
+          discountType: coupon.discountType,
+          discountValue: rawDiscountValue,
+          currency: currencyCode,
+          shipping,
+        });
+        discount = calc.discount;
       }
     }
   }
@@ -177,11 +180,13 @@ export async function calculateOrderPricing(
     tax = 0;
   }
 
-  const rawTotal = Math.max(0, subtotal - discount + shipping);
-  const total =
-    currencyCode === "NPR"
-      ? Math.round(rawTotal)
-      : Math.round(rawTotal * 100) / 100;
+  const { total } = calculateDiscountAndTotal({
+    subtotal,
+    discountType: discount > 0 ? "FIXED" : undefined,
+    discountValue: discount,
+    currency: currencyCode,
+    shipping,
+  });
 
   return {
     currency: currencyCode,

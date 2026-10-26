@@ -203,6 +203,7 @@ function TrackOrderInner() {
     : 0;
 
   const isCancelled = result?.status === "CANCELLED";
+  const isManualReview = result?.status === "MANUAL_REVIEW";
 
   const invoiceOrder: InvoiceOrder | null = result
     ? {
@@ -394,16 +395,20 @@ function TrackOrderInner() {
                   <div>
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wider backdrop-blur-sm">
                       <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-                      {isCancelled ? "Order Status" : "Estimated Delivery"}
+                      {isCancelled ? "Order Status" : isManualReview ? "Verification Review" : "Estimated Delivery"}
                     </span>
                     <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight sm:text-3xl text-white">
                       {isCancelled
                         ? "Order Cancelled"
+                        : isManualReview
+                        ? "Held for Manual Review"
                         : getEstimatedDelivery(result.createdAt, result.status)}
                     </h2>
                     <p className="mt-1 text-xs text-white/70">
                       {isCancelled
                         ? "This order has been cancelled and refunded."
+                        : isManualReview
+                        ? "Our concierge team is verifying transaction details. We will notify you via email shortly."
                         : `Standard Express Delivery · Carrier dispatch on schedule`}
                     </p>
                   </div>
@@ -435,8 +440,32 @@ function TrackOrderInner() {
                 </div>
               </div>
 
-              {/* Visual Synchronized Progress Stepper */}
-              {!isCancelled ? (
+              {/* Visual Synchronized Progress Stepper or Manual Review Banner */}
+              {isManualReview ? (
+                <div className="p-6 sm:p-8 bg-purple-50/60 border-t border-[var(--color-sand)]/60">
+                  <div className="flex items-start gap-4">
+                    <div className="rounded-2xl bg-purple-100 p-3 text-purple-700 shrink-0">
+                      <Clock className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-[var(--color-navy)] text-base">
+                        Order Under Verification Review
+                      </h3>
+                      <p className="mt-1 text-xs text-[var(--color-navy)]/70 leading-relaxed max-w-xl">
+                        Your payment has been received, but requires manual confirmation by our operations desk before packaging and dispatch. You do not need to take any action; our team will update the order status once review is complete.
+                      </p>
+                      <div className="mt-3 flex items-center gap-3 text-xs">
+                        <a
+                          href="mailto:support@abxv.com"
+                          className="font-semibold text-purple-800 underline hover:text-purple-950"
+                        >
+                          Contact Support Concierge
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : !isCancelled ? (
                 <div className="p-6 sm:p-8">
                   <div className="relative">
                     {/* Background track line */}

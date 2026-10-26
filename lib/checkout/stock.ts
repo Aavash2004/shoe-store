@@ -109,6 +109,7 @@ export interface ReleaseStockResult {
 
 export interface ReleaseOrderStockOptions {
   requireNonPaid?: boolean;
+  stockReserved?: boolean;
 }
 
 /**
@@ -148,12 +149,38 @@ export async function releaseOrderStock(
     };
   }
 
-  // 1b. Release coupon usage exactly once when order transitions to CANCELLED
+  // 1b. Determine whether inventory stock and coupon were actually reserved.
+  // MANUAL_REVIEW has two distinct origins:
+  // (a) Amount mismatch: Stock and coupon were reserved on order creation -> release both.
+  // (b) Out-of-stock late payment / refund failure: Stock was never held -> do NOT restock or decrement coupon.
   const orderRecord = await tx.order.findUnique({
     where: { id: orderId },
-    select: { couponCode: true },
+    select: {
+      couponCode: true,
+      statusHistory: {
+        select: { note: true, fromStatus: true, status: true },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
+    },
   });
-  if (orderRecord?.couponCode) {
+
+  const isCaseB =
+    options?.stockReserved === false ||
+    (orderRecord as any)?.stockReserved === false ||
+    Boolean(
+      orderRecord?.statusHistory?.some(
+        (h) =>
+          h.fromStatus === "CANCELLED" ||
+          h.note?.toLowerCase().includes("out of stock") ||
+          h.note?.toLowerCase().includes("refund failed") ||
+          h.note?.toLowerCase().includes("no stock")
+      )
+    );
+
+  const shouldRelease = options?.stockReserved ?? !isCaseB;
+
+  if (shouldRelease && orderRecord?.couponCode) {
     await releaseCouponUsage(tx, orderRecord.couponCode);
   }
 
@@ -162,9 +189,20 @@ export async function releaseOrderStock(
     data: {
       orderId,
       status: "CANCELLED",
-      note: `Stock and promo code released: ${reason}`,
+      note: shouldRelease
+        ? `Stock and promo code released: ${reason}`
+        : `Order cancelled from MANUAL_REVIEW without stock/coupon release (none were reserved): ${reason}`,
     },
   });
+
+  // If stock was not reserved (case b), finish without restocking variants
+  if (!shouldRelease) {
+    return {
+      success: true,
+      restockedItemsCount: 0,
+      reason: "No stock or coupon was reserved for this order.",
+    };
+  }
 
   // 3. Fetch order items to restock
   const orderItems = await tx.orderItem.findMany({

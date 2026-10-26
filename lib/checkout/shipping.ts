@@ -19,7 +19,7 @@ interface CountryShippingRule {
   maxEstimatedDays: number;
 }
 
-const SHIPPING_RULES: Record<string, CountryShippingRule> = {
+export const SHIPPING_RULES: Record<string, CountryShippingRule> = {
   NP: {
     freeThreshold: 3000,
     flatRate: 150,
@@ -43,14 +43,6 @@ const SHIPPING_RULES: Record<string, CountryShippingRule> = {
     estimatedDeliveryTime: "4-6 business days",
     minEstimatedDays: 4,
     maxEstimatedDays: 6,
-  },
-  DE: {
-    freeThreshold: 140,
-    flatRate: 14,
-    carrierName: "DHL Express Europe",
-    estimatedDeliveryTime: "3-5 business days",
-    minEstimatedDays: 3,
-    maxEstimatedDays: 5,
   },
 };
 

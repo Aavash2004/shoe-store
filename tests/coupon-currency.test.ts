@@ -6,11 +6,16 @@ import { releaseOrderStock, decrementStockWithLock } from "../lib/checkout/stock
 import { stripe, toStripeSmallestUnit } from "../lib/services/stripe";
 import { toKhaltiPaisa } from "../lib/services/khalti";
 
+import { COUNTRIES } from "../lib/constants/countries";
+import { SHIPPING_RULES } from "../lib/checkout/shipping";
+import { calculateDiscountAndTotal } from "../lib/checkout/discount";
+
 // Real route handlers
 import { POST as stripeCreateIntentHandler } from "../app/api/checkout/stripe/create-intent/route";
 import { POST as khaltiInitiateHandler } from "../app/api/checkout/khalti/initiate/route";
 import { GET as khaltiCallbackHandler } from "../app/api/checkout/khalti/callback/route";
 import { POST as codCheckoutHandler } from "../app/api/checkout/route";
+import { POST as stripeWebhookHandler } from "../app/api/webhooks/stripe/route";
 
 async function runTests() {
   console.log("=== Running Extended Route-Handler Parity & Payment Lifecycle Test Suite ===\n");
@@ -50,6 +55,61 @@ async function runTests() {
 
   const createdOrderIds: string[] = [];
   const createdCouponCodes: string[] = [];
+
+  // Cleanup any leftover test coupons from previous aborted runs (Item 7)
+  await prisma.coupon.deleteMany({
+    where: {
+      OR: [
+        { code: { startsWith: "CONCURRENCY_" } },
+        { code: { startsWith: "E2E_" } },
+        { code: { startsWith: "TEST_" } },
+      ],
+    },
+  });
+
+  // =========================================================================
+  // TEST 0: Shared Pure Discount & Total Calculation (Item 8)
+  // =========================================================================
+  console.log("--- TEST 0: Pure Discount & Total Calculation with NPR Rounding ---");
+  const nprCalc1 = calculateDiscountAndTotal({
+    subtotal: 3999,
+    discountType: "PERCENTAGE",
+    discountValue: 15,
+    currency: "NPR",
+    shipping: 0,
+  });
+  assert(nprCalc1.discount === 600, "NPR 15% on 3999 rounds discount to 600 NPR");
+  assert(nprCalc1.total === 3399, "NPR total rounds to 3399 NPR");
+
+  const nprCalc2 = calculateDiscountAndTotal({
+    subtotal: 1234,
+    discountType: "PERCENTAGE",
+    discountValue: 7.5,
+    currency: "NPR",
+    shipping: 0,
+  });
+  assert(nprCalc2.discount === 93, "NPR 7.5% on 1234 rounds discount to 93 NPR");
+  assert(nprCalc2.total === 1141, "NPR total rounds to 1141 NPR");
+
+  const usdCalc = calculateDiscountAndTotal({
+    subtotal: 49.99,
+    discountType: "PERCENTAGE",
+    discountValue: 15,
+    currency: "USD",
+    shipping: 0,
+  });
+  assert(usdCalc.discount === 7.50, "USD 15% on 49.99 rounds discount to 7.50 USD");
+  assert(usdCalc.total === 42.49, "USD total rounds to 42.49 USD");
+
+  const cappedCalc = calculateDiscountAndTotal({
+    subtotal: 500,
+    discountType: "FIXED",
+    discountValue: 800,
+    currency: "NPR",
+    shipping: 100,
+  });
+  assert(cappedCalc.discount === 500, "Discount capped at subtotal");
+  assert(cappedCalc.total === 100, "Total equals shipping when discount equals subtotal");
 
   // =========================================================================
   // Stripe Mocking & Payload Capture
@@ -285,6 +345,27 @@ async function runTests() {
     // TEST 4: Real Route Handler - Stripe Intent with EUR & Percentage Coupon
     // =========================================================================
     console.log("\n--- TEST 4: Real Route Handler - Stripe Intent (EUR Currency, 20% Percentage Coupon) ---");
+    // Dynamically inject test configuration for DE / EUR
+    COUNTRIES.DE = {
+      code: "DE",
+      name: "Germany",
+      flag: "🇩🇪",
+      dialCode: "+49",
+      currency: "EUR",
+      postalCodeRegex: /^\d{5}$/,
+      postalCodePlaceholder: "e.g. 10115",
+      allowedPaymentMethods: ["STRIPE"],
+      isCheckoutEnabled: true,
+    };
+    SHIPPING_RULES.DE = {
+      freeThreshold: 140,
+      flatRate: 14,
+      carrierName: "DHL Express Europe",
+      estimatedDeliveryTime: "3-5 business days",
+      minEstimatedDays: 3,
+      maxEstimatedDays: 5,
+    };
+
     const testCodeEurPct = `EUR_PCT_${Date.now()}`;
     createdCouponCodes.push(testCodeEurPct);
 
@@ -604,20 +685,181 @@ async function runTests() {
     );
 
     const oosOrderAfterCallback = await prisma.order.findUnique({ where: { id: lateOrderOutOfStock.id } });
-    assert(oosOrderAfterCallback?.paymentStatus === "REFUNDED", "Order marked as REFUNDED when stock unavailable");
+    assert(
+      oosOrderAfterCallback?.status === "MANUAL_REVIEW" && oosOrderAfterCallback?.paymentStatus === "PAID",
+      "Late payment on out-of-stock CANCELLED order placed in MANUAL_REVIEW with paymentStatus PAID (Item 4)"
+    );
 
     // Restore variant stock back
     await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: originalStock } });
+
+    // =========================================================================
+    // TEST 8: Admin cancel from MANUAL_REVIEW releases stock & coupon (Item 5)
+    // =========================================================================
+    console.log("\n--- TEST 8: Admin cancel from MANUAL_REVIEW releases stock and coupon ---");
+    const mrCouponCode = `TEST_COUPON_MR_${Date.now()}`;
+    const mrCoupon = await prisma.coupon.create({
+      data: {
+        code: mrCouponCode,
+        discountType: "FIXED_AMOUNT",
+        discountValue: 10,
+        minSubtotal: 0,
+        maxUses: 5,
+        usedCount: 1, // Currently counted as used
+        isActive: true,
+      },
+    });
+    createdCouponCodes.push(mrCoupon.code);
+
+    const initialStock = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 10;
+
+    const mrOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-MR-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 10,
+        total: 40,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PAID",
+        status: "MANUAL_REVIEW",
+        couponCode: mrCoupon.code,
+        couponId: mrCoupon.id,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(mrOrder.id);
+
+    // Call releaseOrderStock simulating admin cancellation from MANUAL_REVIEW
+    const mrReleaseResult = await releaseOrderStock(
+      prisma,
+      mrOrder.id,
+      "Admin cancelled order from MANUAL_REVIEW"
+    );
+
+    assert(mrReleaseResult.success, "releaseOrderStock succeeds from MANUAL_REVIEW status");
+    const mrOrderAfterCancel = await prisma.order.findUnique({ where: { id: mrOrder.id } });
+    assert(mrOrderAfterCancel?.status === "CANCELLED", "Order status successfully transitioned to CANCELLED");
+
+    const stockAfterMrCancel = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock;
+    assert(stockAfterMrCancel === initialStock + 1, "Stock was restored by 1 upon admin cancel from MANUAL_REVIEW");
+
+    const couponAfterMrCancel = await prisma.coupon.findUnique({ where: { id: mrCoupon.id } });
+    assert(couponAfterMrCancel?.usedCount === 0, "Coupon usedCount was released (decremented from 1 to 0)");
+
+    // Restore variant stock back
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: initialStock } });
+
+    // =========================================================================
+    // TEST 9: Concurrent late-payment duplicate webhook deliveries (Item 8)
+    // =========================================================================
+    console.log("\n--- TEST 9: Concurrent duplicate webhook deliveries on CANCELLED order ---");
+    const stockBeforeLate = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 10;
+    const lateStripePi = `pi_late_concurrent_${Date.now()}`;
+
+    const lateCancelledOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-LATE-STRIPE-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "CANCELLED",
+        stripePaymentIntentId: lateStripePi,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(lateCancelledOrder.id);
+
+    // Mock constructEvent to return payment_intent.succeeded
+    const originalConstructEvent = stripe.webhooks.constructEvent;
+    stripe.webhooks.constructEvent = ((body: any) => JSON.parse(body)) as any;
+
+    const webhookPayload = JSON.stringify({
+      id: `evt_mock_${Date.now()}`,
+      type: "payment_intent.succeeded",
+      data: {
+        object: {
+          id: lateStripePi,
+          amount: 5000,
+          currency: "usd",
+          status: "succeeded",
+          metadata: { orderId: lateCancelledOrder.id },
+        },
+      },
+    });
+
+    const createWebhookReq = () =>
+      new NextRequest("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "stripe-signature": "mock_sig",
+        },
+        body: webhookPayload,
+      });
+
+    // Deliver 2 webhook calls concurrently
+    const [res1, res2] = await Promise.all([
+      stripeWebhookHandler(createWebhookReq()),
+      stripeWebhookHandler(createWebhookReq()),
+    ]);
+
+    assert(res1.status === 200 && res2.status === 200, "Both duplicate webhook deliveries handled with 200 OK");
+
+    const orderAfterConcurrentLate = await prisma.order.findUnique({ where: { id: lateCancelledOrder.id } });
+    assert(orderAfterConcurrentLate?.status === "PROCESSING", "Late order claimed and reinstated to PROCESSING");
+    assert(orderAfterConcurrentLate?.paymentStatus === "PAID", "Late order payment status set to PAID");
+
+    const stockAfterConcurrentLate = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 0;
+    assert(
+      stockAfterConcurrentLate === stockBeforeLate - 1,
+      `Stock decremented EXACTLY ONCE (${stockBeforeLate} -> ${stockAfterConcurrentLate}) despite duplicate deliveries`
+    );
+
+    // Restore stock and mocks
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBeforeLate } });
+    stripe.webhooks.constructEvent = originalConstructEvent;
 
   } catch (err) {
     console.error("Test execution caught unexpected exception:", err);
     failed++;
   } finally {
-    // Restore mocks
+    // Restore mocks and dynamic config
     stripe.paymentIntents.create = originalStripeCreate;
     global.fetch = originalFetch;
+    delete COUNTRIES.DE;
+    delete SHIPPING_RULES.DE;
 
-    // Cleanup test data
+    // Cleanup test data (Item 7)
     console.log("\nCleaning up test artifacts...");
     if (createdOrderIds.length > 0) {
       await prisma.orderItem.deleteMany({ where: { orderId: { in: createdOrderIds } } });
@@ -625,9 +867,16 @@ async function runTests() {
       await prisma.address.deleteMany({ where: { orders: { some: { id: { in: createdOrderIds } } } } });
       await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } });
     }
-    if (createdCouponCodes.length > 0) {
-      await prisma.coupon.deleteMany({ where: { code: { in: createdCouponCodes } } });
-    }
+    await prisma.coupon.deleteMany({
+      where: {
+        OR: [
+          { code: { in: createdCouponCodes } },
+          { code: { startsWith: "CONCURRENCY_" } },
+          { code: { startsWith: "E2E_" } },
+          { code: { startsWith: "TEST_" } },
+        ],
+      },
+    });
     await prisma.$disconnect();
   }
 

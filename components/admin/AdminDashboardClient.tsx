@@ -69,6 +69,7 @@ function statusDot(status: string) {
     PROCESSING: "bg-amber-500",
     PENDING: "bg-[var(--color-navy)]/30",
     CANCELLED: "bg-rose-500",
+    MANUAL_REVIEW: "bg-purple-500",
   };
   return colors[status] ?? "bg-[var(--color-navy)]/30";
 }
@@ -80,6 +81,7 @@ function statusLabel(status: string) {
     PROCESSING: "Processing",
     PENDING: "Pending",
     CANCELLED: "Cancelled",
+    MANUAL_REVIEW: "Manual Review",
   };
   return map[status] ?? status;
 }

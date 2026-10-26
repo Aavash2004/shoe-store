@@ -40,6 +40,12 @@ async function handleCleanup(request: NextRequest) {
     take: 50, // Batch limit per cron tick
   });
 
+  if (expiredOrders.length === 50) {
+    console.warn(
+      "⚠️ [Cleanup Cron Warning] Expired orders batch reached the 50 limit. Additional expired orders may be pending next run."
+    );
+  }
+
   const results = {
     evaluated: expiredOrders.length,
     cancelled: 0,

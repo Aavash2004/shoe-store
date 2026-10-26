@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     if (!pidx) {
         return NextResponse.redirect(
-            `${baseUrl}/checkout?error=${encodeURIComponent("Missing payment token from Khalti.")}`
+            `${baseUrl}/checkout?error=MISSING_PAYMENT_TOKEN`
         );
     }
 
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     if (!order) {
         return NextResponse.redirect(
-            `${baseUrl}/checkout?error=${encodeURIComponent("Order not found.")}`
+            `${baseUrl}/checkout?error=ORDER_NOT_FOUND`
         );
     }
 
@@ -111,17 +111,29 @@ export async function GET(request: NextRequest) {
                 }
 
                 return NextResponse.redirect(
-                    `${baseUrl}/checkout?error=${encodeURIComponent(
-                        `Payment amount mismatch detected. Order #${order.orderNumber} is held for manual review. Please contact support at ${supportEmail}.`
-                    )}&orderNumber=${encodeURIComponent(order.orderNumber)}&supportEmail=${encodeURIComponent(supportEmail)}`
+                    `${baseUrl}/checkout?error=PAYMENT_AMOUNT_MISMATCH&orderId=${order.id}`
                 );
             }
 
             // Check if the order was previously CANCELLED (e.g. 30-min TTL expired)
             if (order.status === "CANCELLED") {
-                // Late payment on a CANCELLED order: Try to reinstate if stock allows; otherwise auto-refund
+                // Late payment on a CANCELLED order: Try to reinstate if stock allows; otherwise hold in MANUAL_REVIEW
                 try {
                     await prisma.$transaction(async (tx) => {
+                        // Atomically claim the cancelled order first; continue only if count > 0
+                        const claimResult = await tx.order.updateMany({
+                            where: { id: order.id, status: "CANCELLED" },
+                            data: {
+                                status: "PROCESSING",
+                                paymentStatus: "PAID",
+                                transactionId: lookupResult.transaction_id || pidx,
+                            },
+                        });
+
+                        if (claimResult.count === 0) {
+                            throw new Error("ORDER_ALREADY_CLAIMED");
+                        }
+
                         await decrementStockWithLock(
                             tx,
                             order.items.map((i) => ({
@@ -130,14 +142,13 @@ export async function GET(request: NextRequest) {
                             }))
                         );
 
-                        await tx.order.update({
-                            where: { id: order.id },
-                            data: {
-                                status: "PROCESSING",
-                                paymentStatus: "PAID",
-                                transactionId: lookupResult.transaction_id || pidx,
-                            },
-                        });
+                        // Re-reserve coupon if attached (force-increment even if maxUses reached)
+                        if (order.couponId) {
+                            await tx.coupon.update({
+                                where: { id: order.couponId },
+                                data: { usedCount: { increment: 1 } },
+                            });
+                        }
 
                         await tx.orderStatusHistory.create({
                             data: {
@@ -163,17 +174,21 @@ export async function GET(request: NextRequest) {
                         `${baseUrl}/order-confirmation/${order.id}`
                     );
                 } catch (stockErr: any) {
+                    if (stockErr.message === "ORDER_ALREADY_CLAIMED") {
+                        console.log(`[Khalti Callback] Order ${order.id} was already claimed by concurrent process.`);
+                        return NextResponse.redirect(`${baseUrl}/order-confirmation/${order.id}`);
+                    }
+
                     console.error(
-                        `🚨 [Khalti Callback - Late Payment OUT OF STOCK] Order ${order.id} was CANCELLED and payment succeeded (${pidx}), but items are out of stock. Triggering auto-refund:`,
+                        `🚨 [Khalti Callback - Late Payment OUT OF STOCK] Order ${order.id} was CANCELLED and payment succeeded (${pidx}), but items are out of stock. Placing in MANUAL_REVIEW with admin alert:`,
                         stockErr.message
                     );
-
-                    const refundRes = await refundKhaltiPayment(pidx);
 
                     await prisma.order.update({
                         where: { id: order.id },
                         data: {
-                            paymentStatus: "REFUNDED",
+                            status: "MANUAL_REVIEW",
+                            paymentStatus: "PAID",
                             transactionId: lookupResult.transaction_id || pidx,
                         },
                     });
@@ -181,15 +196,31 @@ export async function GET(request: NextRequest) {
                     await prisma.orderStatusHistory.create({
                         data: {
                             orderId: order.id,
-                            status: "CANCELLED",
-                            note: `Late payment received for CANCELLED order, but stock was no longer available. Auto-refund requested via Khalti API (${refundRes.success ? "Refund successful" : refundRes.error}).`,
+                            status: "MANUAL_REVIEW",
+                            note: `Late payment received via Khalti (${lookupResult.transaction_id || pidx}) for CANCELLED order, but stock was no longer available. Held in MANUAL_REVIEW for merchant review and manual refund.`,
                         },
                     });
 
+                    try {
+                        const { sendShippingUpdateEmail } = await import("@/lib/services/email");
+                        await sendShippingUpdateEmail(
+                            order.id,
+                            `🚨 CRITICAL ALERT: Order #${order.orderNumber} late Khalti payment (${pidx}) arrived after cancellation, but items are OUT OF STOCK. Order placed in MANUAL_REVIEW for manual refund.`
+                        );
+                    } catch (emailErr) {
+                        console.error("[Khalti Callback] Failed to dispatch admin alert email on out-of-stock late payment:", emailErr);
+                    }
+
+                    Sentry.captureMessage(
+                        `Khalti late payment for out-of-stock cancelled order #${order.orderNumber} placed in MANUAL_REVIEW`,
+                        {
+                            level: "warning",
+                            extra: { orderId: order.id, pidx, total: order.total },
+                        }
+                    );
+
                     return NextResponse.redirect(
-                        `${baseUrl}/checkout?error=${encodeURIComponent(
-                            `Order #${order.orderNumber} was previously expired and items are now out of stock. A refund has been issued to your Khalti wallet.`
-                        )}&orderNumber=${encodeURIComponent(order.orderNumber)}&supportEmail=${encodeURIComponent(supportEmail)}`
+                        `${baseUrl}/checkout?error=ORDER_EXPIRED_OUT_OF_STOCK&orderId=${order.id}`
                     );
                 }
             }
@@ -253,17 +284,13 @@ export async function GET(request: NextRequest) {
             });
 
             return NextResponse.redirect(
-                `${baseUrl}/checkout?error=${encodeURIComponent(
-                    `Khalti payment was not completed (${lookupResult.status}).`
-                )}`
+                `${baseUrl}/checkout?error=PAYMENT_FAILED&orderId=${order.id}`
             );
         }
     } catch (err: any) {
         console.error("[Khalti Callback Verification Error]:", err);
         return NextResponse.redirect(
-            `${baseUrl}/checkout?error=${encodeURIComponent(
-                "Could not verify payment with Khalti. Please contact support."
-            )}`
+            `${baseUrl}/checkout?error=PAYMENT_FAILED`
         );
     }
 }
