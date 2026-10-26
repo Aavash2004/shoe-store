@@ -55,7 +55,7 @@ import { getOrderNumber } from "./actions";
 
 const CHECKOUT_ERROR_MESSAGES: Record<string, string> = {
   ORDER_EXPIRED_OUT_OF_STOCK:
-    "Your order reservation expired and the items are now out of stock. Your payment was safely received and has been placed under manual review by our concierge team for immediate processing or refund.",
+    "Your order reservation expired before checkout completed and the selected items are out of stock. Your payment was safely received and placed under priority review. For Khalti payments, our operations team will issue your full refund directly to your Khalti wallet within 1 business day.",
   PAYMENT_AMOUNT_MISMATCH:
     "A payment amount mismatch was detected for this transaction. Your order has been held for manual verification by our operations team.",
   MISSING_PAYMENT_TOKEN:

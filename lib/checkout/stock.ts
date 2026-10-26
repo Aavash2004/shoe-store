@@ -173,12 +173,16 @@ export async function releaseOrderStock(
         (h) =>
           h.fromStatus === "CANCELLED" ||
           h.note?.toLowerCase().includes("out of stock") ||
+          h.note?.toLowerCase().includes("out-of-stock") ||
+          h.note?.toLowerCase().includes("no longer available") ||
+          h.note?.toLowerCase().includes("not available") ||
+          h.note?.toLowerCase().includes("late payment") ||
           h.note?.toLowerCase().includes("refund failed") ||
           h.note?.toLowerCase().includes("no stock")
       )
     );
 
-  const shouldRelease = options?.stockReserved ?? !isCaseB;
+  const shouldRelease = options?.stockReserved !== undefined ? options.stockReserved : !isCaseB;
 
   if (shouldRelease && orderRecord?.couponCode) {
     await releaseCouponUsage(tx, orderRecord.couponCode);

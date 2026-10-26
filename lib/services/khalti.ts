@@ -178,44 +178,16 @@ export async function lookupKhaltiPayment(
 }
 
 /**
- * Issues a refund for a Khalti payment via Khalti ePayment v2 API.
+ * Khalti ePayment v2 does not provide a public automated API refund endpoint.
+ * Automated API refunds cannot be issued.
+ * Merchants must execute customer refunds manually via the Khalti Merchant Dashboard:
+ * https://admin.khalti.com (Production) or https://test-admin.khalti.com (Sandbox).
  */
 export async function refundKhaltiPayment(
-    pidx: string
-): Promise<{ success: boolean; data?: any; error?: string }> {
-    const secretKey = getKhaltiSecretKey();
-    if (!secretKey) {
-        throw new Error("Missing KHALTI_SECRET_KEY in server environment variables. Please ensure KHALTI_SECRET_KEY is set in your .env file.");
-    }
-
-    const apiUrl = getKhaltiApiUrl();
-    const authHeader = secretKey.startsWith("Key ")
-        ? secretKey
-        : `Key ${secretKey}`;
-
-    try {
-        const response = await fetch(`${apiUrl}/epayment/refund/`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: authHeader,
-            },
-            body: JSON.stringify({ pidx }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error("[Khalti Refund Error]:", data);
-            return {
-                success: false,
-                error: data.detail || data.error_key || "Failed to process Khalti refund.",
-            };
-        }
-
-        return { success: true, data };
-    } catch (err: any) {
-        console.error("[Khalti Refund Exception]:", err);
-        return { success: false, error: err.message || "Failed to connect to Khalti refund API." };
-    }
+    _pidx: string
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+    return {
+        success: false,
+        error: "Khalti ePayment v2 does not support automated API refunds. Refunds must be processed manually via the Khalti Merchant Dashboard (https://admin.khalti.com).",
+    };
 }

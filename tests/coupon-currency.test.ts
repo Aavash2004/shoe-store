@@ -1,3 +1,4 @@
+import "./setup-test-db";
 import { NextRequest } from "next/server";
 import { prisma } from "../lib/db/prisma";
 import { reserveCouponUsage, releaseCouponUsage } from "../lib/checkout/coupon";
@@ -10,12 +11,14 @@ import { COUNTRIES } from "../lib/constants/countries";
 import { SHIPPING_RULES } from "../lib/checkout/shipping";
 import { calculateDiscountAndTotal } from "../lib/checkout/discount";
 
-// Real route handlers
+// Real route handlers & actions
 import { POST as stripeCreateIntentHandler } from "../app/api/checkout/stripe/create-intent/route";
 import { POST as khaltiInitiateHandler } from "../app/api/checkout/khalti/initiate/route";
 import { GET as khaltiCallbackHandler } from "../app/api/checkout/khalti/callback/route";
 import { POST as codCheckoutHandler } from "../app/api/checkout/route";
 import { POST as stripeWebhookHandler } from "../app/api/webhooks/stripe/route";
+import { GET as cleanupCronHandler } from "../app/api/cron/cleanup-expired-orders/route";
+import { updateOrderStatus } from "../app/admin/orders/[id]/actions";
 
 async function runTests() {
   console.log("=== Running Extended Route-Handler Parity & Payment Lifecycle Test Suite ===\n");
@@ -31,6 +34,15 @@ async function runTests() {
       failed++;
     }
   }
+
+  // Verify connected database is neondb_test to enforce absolute isolation
+  const dbInfo = await prisma.$queryRaw<Array<{ current_database: string }>>`SELECT current_database()::text;`;
+  const connectedDb = dbInfo[0]?.current_database;
+  console.log(`[Test Environment] Connected to database: ${connectedDb}`);
+  if (connectedDb !== "neondb_test") {
+    throw new Error(`CRITICAL ISOLATION ERROR: Test suite is connected to '${connectedDb}' instead of 'neondb_test'. Aborting!`);
+  }
+  assert(connectedDb === "neondb_test", "Test suite is running against isolated neondb_test database");
 
   // 1. Locate an active product variant with ample stock
   const variant = await prisma.productVariant.findFirst({
@@ -53,19 +65,14 @@ async function runTests() {
     throw new Error("No active product variant with sufficient stock found for testing.");
   }
 
+  // Ensure ample stock in test database for all sequential checkout and concurrency tests
+  await prisma.productVariant.update({
+    where: { id: variant.id },
+    data: { stock: 100 },
+  });
+
   const createdOrderIds: string[] = [];
   const createdCouponCodes: string[] = [];
-
-  // Cleanup any leftover test coupons from previous aborted runs (Item 7)
-  await prisma.coupon.deleteMany({
-    where: {
-      OR: [
-        { code: { startsWith: "CONCURRENCY_" } },
-        { code: { startsWith: "E2E_" } },
-        { code: { startsWith: "TEST_" } },
-      ],
-    },
-  });
 
   // =========================================================================
   // TEST 0: Shared Pure Discount & Total Calculation (Item 8)
@@ -334,7 +341,8 @@ async function runTests() {
 
     const expectedDiscount = Math.round(Number(variant.price) * 0.15 * 100) / 100;
     assert(Number(usdOrderInDb?.discount) === expectedDiscount, `15% Discount calculated correctly ($${expectedDiscount})`);
-    assert(Number(usdOrderInDb?.shipping) === 15, "Flat-rate shipping ($15) applied when subtotal < free threshold");
+    const expectedShipping = Number(variant.price) >= 150 ? 0 : 15;
+    assert(Number(usdOrderInDb?.shipping) === expectedShipping, `Shipping ($${expectedShipping}) applied based on $150 threshold`);
     assert(capturedStripePayload.currency === "usd", "Payload currency sent to Stripe is 'usd'");
     assert(
       capturedStripePayload.amount === Math.round(Number(usdOrderInDb?.total) * 100),
@@ -760,8 +768,8 @@ async function runTests() {
     const couponAfterMrCancel = await prisma.coupon.findUnique({ where: { id: mrCoupon.id } });
     assert(couponAfterMrCancel?.usedCount === 0, "Coupon usedCount was released (decremented from 1 to 0)");
 
-    // Restore variant stock back
-    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: initialStock } });
+    // Restore variant stock back with ample quantity for subsequent concurrency tests
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: Math.max(initialStock, 10) } });
 
     // =========================================================================
     // TEST 9: Concurrent late-payment duplicate webhook deliveries (Item 8)
@@ -849,6 +857,377 @@ async function runTests() {
     await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBeforeLate } });
     stripe.webhooks.constructEvent = originalConstructEvent;
 
+    // =========================================================================
+    // TEST 10: MANUAL_REVIEW Causes (a) vs (b) Stock and Coupon Release (Item 1)
+    // =========================================================================
+    console.log("\n--- TEST 10: MANUAL_REVIEW Causes (a) vs (b) Stock and Coupon Release ---");
+
+    // Case (a): Amount mismatch — stock and coupon WERE reserved
+    const couponA = await prisma.coupon.create({
+      data: {
+        code: `MR_A_${Date.now()}`,
+        discountType: "FIXED_AMOUNT",
+        discountValue: 10,
+        minSubtotal: 0,
+        usedCount: 1,
+        isActive: true,
+      },
+    });
+    createdCouponCodes.push(couponA.code);
+
+    const stockBeforeCancelA = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 10;
+
+    const orderA = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-MR-A-${Date.now()}`,
+        currency: "NPR",
+        subtotal: 1000,
+        shipping: 0,
+        discount: 10,
+        total: 990,
+        paymentMethod: "KHALTI",
+        paymentStatus: "PENDING",
+        status: "MANUAL_REVIEW",
+        coupon: { connect: { id: couponA.id } },
+        couponCode: couponA.code,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 1000,
+              quantity: 1,
+            },
+          ],
+        },
+        statusHistory: {
+          create: [
+            {
+              status: "MANUAL_REVIEW",
+              note: "🚨 Payment amount mismatch: expected 99000 paisa, received 50000 paisa. Stock and promo code remain reserved.",
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(orderA.id);
+
+    const releaseResultA = await releaseOrderStock(prisma, orderA.id, "Admin cancel case (a)");
+    assert(releaseResultA.success, "Case (a) order cancellation succeeded");
+
+    const stockAfterCancelA = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock;
+    assert(
+      stockAfterCancelA === stockBeforeCancelA + 1,
+      `Case (a): Stock was restored (${stockBeforeCancelA} -> ${stockAfterCancelA})`
+    );
+
+    const couponAfterCancelA = await prisma.coupon.findUnique({ where: { id: couponA.id } });
+    assert(
+      couponAfterCancelA?.usedCount === 0,
+      `Case (a): Coupon usedCount was released (decremented 1 -> ${couponAfterCancelA?.usedCount})`
+    );
+
+    // Reset stock
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBeforeCancelA } });
+
+    // Case (b): Late payment out-of-stock / refund failure — stock was NOT held
+    const couponB = await prisma.coupon.create({
+      data: {
+        code: `MR_B_${Date.now()}`,
+        discountType: "FIXED_AMOUNT",
+        discountValue: 10,
+        minSubtotal: 0,
+        usedCount: 1,
+        isActive: true,
+      },
+    });
+    createdCouponCodes.push(couponB.code);
+
+    const stockBeforeCancelB = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock ?? 10;
+
+    const orderB = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-MR-B-${Date.now()}`,
+        currency: "NPR",
+        subtotal: 1000,
+        shipping: 0,
+        discount: 10,
+        total: 990,
+        paymentMethod: "KHALTI",
+        paymentStatus: "PAID",
+        status: "MANUAL_REVIEW",
+        coupon: { connect: { id: couponB.id } },
+        couponCode: couponB.code,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 1000,
+              quantity: 1,
+            },
+          ],
+        },
+        statusHistory: {
+          create: [
+            {
+              status: "MANUAL_REVIEW",
+              note: "Late payment received via Khalti for CANCELLED order, but stock was no longer available. Held in MANUAL_REVIEW for merchant review and manual refund.",
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(orderB.id);
+
+    const releaseResultB = await releaseOrderStock(prisma, orderB.id, "Admin cancel case (b)");
+    assert(releaseResultB.success, "Case (b) order cancellation succeeded");
+
+    const stockAfterCancelB = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock;
+    assert(
+      stockAfterCancelB === stockBeforeCancelB,
+      `Case (b): Stock remained UNCHANGED (${stockBeforeCancelB} -> ${stockAfterCancelB})`
+    );
+
+    const couponAfterCancelB = await prisma.coupon.findUnique({ where: { id: couponB.id } });
+    assert(
+      couponAfterCancelB?.usedCount === 1,
+      `Case (b): Coupon usedCount remained UNCHANGED (1 -> ${couponAfterCancelB?.usedCount})`
+    );
+
+    // =========================================================================
+    // TEST 11: Restrict MANUAL_REVIEW -> PROCESSING for Case (b) unless stock re-reserved
+    // =========================================================================
+    console.log("\n--- TEST 11: Restrict MANUAL_REVIEW -> PROCESSING for Case (b) unless stock re-reserved ---");
+    const orderB2 = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-MR-B2-${Date.now()}`,
+        currency: "NPR",
+        subtotal: 1000,
+        shipping: 0,
+        discount: 0,
+        total: 1000,
+        paymentMethod: "KHALTI",
+        paymentStatus: "PAID",
+        status: "MANUAL_REVIEW",
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 1000,
+              quantity: 1,
+            },
+          ],
+        },
+        statusHistory: {
+          create: [
+            {
+              status: "MANUAL_REVIEW",
+              note: "Late payment received via Khalti for CANCELLED order, but stock was no longer available. Held in MANUAL_REVIEW.",
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(orderB2.id);
+
+    // Deplete stock to 0
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: 0 } });
+
+    const blockedResult = await updateOrderStatus(orderB2.id, "PROCESSING");
+    assert(!blockedResult.success && blockedResult.error?.includes("Cannot confirm order"), "Admin cannot transition Case (b) MANUAL_REVIEW -> PROCESSING when out of stock");
+
+    // Replenish stock to 5
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: 5 } });
+
+    const allowedResult = await updateOrderStatus(orderB2.id, "PROCESSING");
+    assert(allowedResult.success, "Admin transition Case (b) MANUAL_REVIEW -> PROCESSING succeeds when stock available");
+
+    const stockAfterReReserve = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock;
+    assert(stockAfterReReserve === 4, `Stock decremented from 5 to 4 upon confirming Case (b) order`);
+
+    // Reset stock back
+    await prisma.productVariant.update({ where: { id: variant.id }, data: { stock: stockBeforeCancelB } });
+
+    // =========================================================================
+    // TEST 12: Cleanup Cron - Paid-but-tab-closed Khalti Order (Item 2)
+    // =========================================================================
+    console.log("\n--- TEST 12: Cleanup Cron - Paid-but-tab-closed Khalti Order ---");
+    const cronSecret = process.env.CRON_SECRET || "shoes_store_cron_secret_key_2026";
+    const cronReq = () =>
+      new NextRequest("http://localhost:3000/api/cron/cleanup-expired-orders", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${cronSecret}`,
+        },
+      });
+
+    const khaltiTabClosedPidx = `pidx_tab_closed_${Date.now()}`;
+    const khaltiTabClosedOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-TAB-CLOSED-${Date.now()}`,
+        currency: "NPR",
+        subtotal: 2500,
+        shipping: 0,
+        discount: 0,
+        total: 2500,
+        paymentMethod: "KHALTI",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        khaltiPidx: khaltiTabClosedPidx,
+        createdAt: new Date(Date.now() - 35 * 60 * 1000), // 35 mins ago
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 2500,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(khaltiTabClosedOrder.id);
+
+    // Mock fetch for Khalti lookup
+    const savedFetch = global.fetch;
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlStr = typeof input === "string" ? input : (input as Request).url || input.toString();
+      if (urlStr.includes("/epayment/lookup/")) {
+        return new Response(
+          JSON.stringify({
+            pidx: khaltiTabClosedPidx,
+            total_amount: 250000,
+            status: "Completed",
+            transaction_id: `txn_tab_closed_${Date.now()}`,
+            fee: 0,
+            refunded: false,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      return savedFetch(input, init);
+    }) as any;
+
+    const cronRes12 = await cleanupCronHandler(cronReq());
+    const cronData12 = await cronRes12.json();
+
+    const orderAfterCron12 = await prisma.order.findUnique({ where: { id: khaltiTabClosedOrder.id } });
+    assert(orderAfterCron12?.status === "PROCESSING", "Paid-but-tab-closed Khalti order confirmed to PROCESSING by cleanup cron");
+    assert(orderAfterCron12?.paymentStatus === "PAID", "Paid-but-tab-closed Khalti order marked as PAID by cleanup cron");
+    assert(cronData12.results.confirmed >= 1, "Cron reported confirmed >= 1");
+    global.fetch = savedFetch;
+
+    // =========================================================================
+    // TEST 13: Cleanup Cron - Stripe Retrieve Failure (Item 2)
+    // =========================================================================
+    console.log("\n--- TEST 13: Cleanup Cron - Stripe Retrieve Failure ---");
+    const stripeFailPi = `pi_fail_${Date.now()}`;
+    const stripeFailOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-STRIPE-FAIL-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        stripePaymentIntentId: stripeFailPi,
+        createdAt: new Date(Date.now() - 35 * 60 * 1000),
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(stripeFailOrder.id);
+
+    const savedStripeRetrieve = stripe.paymentIntents.retrieve;
+    stripe.paymentIntents.retrieve = (async () => {
+      throw new Error("Stripe network error: Connection timeout");
+    }) as any;
+
+    const cronRes13 = await cleanupCronHandler(cronReq());
+    const cronData13 = await cronRes13.json();
+
+    const orderAfterCron13 = await prisma.order.findUnique({ where: { id: stripeFailOrder.id } });
+    assert(orderAfterCron13?.status === "PENDING", "Order remains PENDING (skipped) when Stripe retrieve fails");
+    assert(cronData13.results.errors.some((e: string) => e.includes("Connection timeout")), "Cron logged the Stripe retrieve error for retry");
+    stripe.paymentIntents.retrieve = savedStripeRetrieve;
+
+    // =========================================================================
+    // TEST 14: Cleanup Cron - Racing a Payment (Item 2)
+    // =========================================================================
+    console.log("\n--- TEST 14: Cleanup Cron - Racing a Payment ---");
+    const stripeRacingPi = `pi_racing_${Date.now()}`;
+    const stripeRacingOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-STRIPE-RACING-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        stripePaymentIntentId: stripeRacingPi,
+        createdAt: new Date(Date.now() - 35 * 60 * 1000),
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(stripeRacingOrder.id);
+
+    stripe.paymentIntents.retrieve = (async () => ({
+      id: stripeRacingPi,
+      status: "processing",
+    })) as any;
+
+    const cronRes14 = await cleanupCronHandler(cronReq());
+    const cronData14 = await cronRes14.json();
+
+    const orderAfterCron14 = await prisma.order.findUnique({ where: { id: stripeRacingOrder.id } });
+    assert(orderAfterCron14?.status === "PENDING", "Order with in-flight payment ('processing') is skipped and NOT cancelled");
+    assert(orderAfterCron14?.paymentStatus === "PENDING", "Order paymentStatus remains PENDING");
+    stripe.paymentIntents.retrieve = savedStripeRetrieve;
+
   } catch (err) {
     console.error("Test execution caught unexpected exception:", err);
     failed++;
@@ -859,24 +1238,22 @@ async function runTests() {
     delete COUNTRIES.DE;
     delete SHIPPING_RULES.DE;
 
-    // Cleanup test data (Item 7)
+    // Cleanup test data strictly by ID (No prefix-based bulk deletes)
     console.log("\nCleaning up test artifacts...");
-    if (createdOrderIds.length > 0) {
-      await prisma.orderItem.deleteMany({ where: { orderId: { in: createdOrderIds } } });
-      await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: createdOrderIds } } });
-      await prisma.address.deleteMany({ where: { orders: { some: { id: { in: createdOrderIds } } } } });
-      await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } });
+    const validOrderIds = createdOrderIds.filter((id): id is string => Boolean(id));
+    if (validOrderIds.length > 0) {
+      await prisma.orderItem.deleteMany({ where: { orderId: { in: validOrderIds } } });
+      await prisma.orderStatusHistory.deleteMany({ where: { orderId: { in: validOrderIds } } });
+      await prisma.address.deleteMany({ where: { orders: { some: { id: { in: validOrderIds } } } } });
+      await prisma.order.deleteMany({ where: { id: { in: validOrderIds } } });
     }
-    await prisma.coupon.deleteMany({
-      where: {
-        OR: [
-          { code: { in: createdCouponCodes } },
-          { code: { startsWith: "CONCURRENCY_" } },
-          { code: { startsWith: "E2E_" } },
-          { code: { startsWith: "TEST_" } },
-        ],
-      },
-    });
+    if (createdCouponCodes.length > 0) {
+      await prisma.coupon.deleteMany({
+        where: {
+          code: { in: createdCouponCodes },
+        },
+      });
+    }
     await prisma.$disconnect();
   }
 

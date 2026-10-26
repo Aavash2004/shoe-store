@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { stripe } from "@/lib/services/stripe";
+import { lookupKhaltiPayment } from "@/lib/services/khalti";
 import { releaseOrderStock } from "@/lib/checkout/stock";
 
 export const dynamic = "force-dynamic";
 
 /**
  * 30-Minute Reservation TTL Cleanup Worker
- * Identifies abandoned Stripe checkout sessions, cancels the PaymentIntent,
- * and atomically releases reserved stock back into inventory.
+ * Identifies abandoned Stripe and Khalti checkout sessions, verifies gateway state,
+ * confirms completed payments, and atomically releases reserved stock back into inventory
+ * for genuinely expired or abandoned orders.
  */
 async function handleCleanup(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -50,6 +52,7 @@ async function handleCleanup(request: NextRequest) {
     evaluated: expiredOrders.length,
     cancelled: 0,
     skippedOrRaced: 0,
+    confirmed: 0,
     errors: [] as string[],
   };
 
@@ -85,25 +88,106 @@ async function handleCleanup(request: NextRequest) {
             });
           }
         } catch (stripeErr: any) {
-          // If already canceled, proceed; otherwise warn and skip
+          // If already canceled, proceed; otherwise skip and retry next run
           if (
             stripeErr.code !== "resource_missing" &&
             !stripeErr.message?.includes("already been canceled")
           ) {
             console.warn(
-              `[Stripe Cleanup] Failed to cancel intent ${order.stripePaymentIntentId}:`,
+              `[Stripe Cleanup] Failed to retrieve/cancel intent ${order.stripePaymentIntentId}:`,
               stripeErr.message
             );
             isCancellable = false;
+            results.skippedOrRaced++;
             results.errors.push(`Order ${order.id}: ${stripeErr.message}`);
             continue;
           }
         }
-      } else if (order.paymentMethod === "KHALTI") {
-        // Khalti ePayment v2 pidx expires on Khalti's gateway; treating expired Khalti pidx as dead
-        console.log(
-          `[Khalti Cleanup] Order ${order.id} (pidx: ${order.khaltiPidx || "N/A"}) expired. Treating pidx as dead.`
-        );
+      } else if (order.paymentMethod === "KHALTI" && order.khaltiPidx) {
+        // 2. Call Khalti Lookup API on pidx before expiring
+        try {
+          const lookupResult = await lookupKhaltiPayment(order.khaltiPidx);
+
+          if (lookupResult.status === "Completed") {
+            const expectedPaisa = Math.round(Number(order.total) * 100);
+
+            // Verify payment amount matches order total exactly
+            if (Number(lookupResult.total_amount) !== expectedPaisa) {
+              console.error(
+                `🚨 [Cleanup Cron] Khalti payment amount mismatch detected for order ${order.id} (${order.orderNumber})!\n` +
+                `Expected: ${expectedPaisa} paisa, Received: ${lookupResult.total_amount} paisa.`
+              );
+
+              await prisma.$transaction(async (tx) => {
+                await tx.order.update({
+                  where: { id: order.id },
+                  data: {
+                    status: "MANUAL_REVIEW",
+                    transactionId: lookupResult.transaction_id || order.khaltiPidx,
+                  },
+                });
+
+                await tx.orderStatusHistory.create({
+                  data: {
+                    orderId: order.id,
+                    status: "MANUAL_REVIEW",
+                    note: `🚨 Payment amount mismatch detected during cleanup cron: expected ${expectedPaisa} paisa, received ${lookupResult.total_amount} paisa. Order held for manual review. Stock and promo code remain reserved.`,
+                  },
+                });
+              });
+
+              results.skippedOrRaced++;
+              continue;
+            }
+
+            // Normal confirmation path for completed Khalti payment
+            const updateCount = await prisma.$transaction(async (tx) => {
+              const res = await tx.order.updateMany({
+                where: { id: order.id, paymentStatus: { not: "PAID" } },
+                data: {
+                  paymentStatus: "PAID",
+                  status: "PROCESSING",
+                  transactionId: lookupResult.transaction_id || order.khaltiPidx,
+                },
+              });
+
+              if (res.count > 0) {
+                await tx.orderStatusHistory.create({
+                  data: {
+                    orderId: order.id,
+                    status: "PAID",
+                    note: `Payment verified by cleanup worker via Khalti (Txn ID: ${lookupResult.transaction_id}, Amount: NPR ${(
+                      lookupResult.total_amount / 100
+                    ).toFixed(2)})`,
+                  },
+                });
+              }
+              return res.count;
+            });
+
+            if (updateCount > 0) {
+              try {
+                const { sendOrderConfirmationEmail } = await import("@/lib/services/email");
+                await sendOrderConfirmationEmail(order.id);
+              } catch (emailErr) {
+                console.error(`[Cleanup Cron] Failed to dispatch confirmation email for order ${order.id}:`, emailErr);
+              }
+              results.confirmed++;
+            }
+
+            results.skippedOrRaced++;
+            continue;
+          }
+        } catch (khaltiErr: any) {
+          // If lookup fails, skip the order and retry next run
+          console.warn(
+            `[Khalti Cleanup] Lookup failed for pidx ${order.khaltiPidx}:`,
+            khaltiErr.message
+          );
+          results.skippedOrRaced++;
+          results.errors.push(`Order ${order.id} Khalti lookup failed: ${khaltiErr.message}`);
+          continue;
+        }
       }
 
       if (!isCancellable) {

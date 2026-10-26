@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { lookupKhaltiPayment, refundKhaltiPayment } from "@/lib/services/khalti";
+import { lookupKhaltiPayment } from "@/lib/services/khalti";
 import { releaseOrderStock, decrementStockWithLock } from "@/lib/checkout/stock";
 import * as Sentry from "@sentry/nextjs";
 
