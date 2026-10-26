@@ -4,14 +4,26 @@ import { convertCurrency, formatCurrency, CURRENCIES } from "@/lib/constants/cur
 
 export type SupportedCurrency = "USD" | "NPR" | "EUR" | "GBP";
 
+const readCookieCurrency = (): SupportedCurrency | undefined => {
+  if (typeof document === "undefined") return undefined;
+  try {
+    const rawCookies = document.cookie.split(";").map((c) => c.trim());
+    for (let i = rawCookies.length - 1; i >= 0; i--) {
+      const parts = rawCookies[i].split("=");
+      if (parts[0] === "shoe_currency" && ["USD", "NPR", "EUR", "GBP"].includes(parts[1])) {
+        return parts[1] as SupportedCurrency;
+      }
+    }
+  } catch {}
+  return undefined;
+};
+
 const getInitialCurrency = (): SupportedCurrency => {
   if (typeof window !== "undefined") {
     try {
       // 1. Primary source of truth: cookie shared with SSR
-      const match = document.cookie.match(/(?:^|;\s*)shoe_currency=([A-Z]{3})/);
-      if (match && ["USD", "NPR", "EUR", "GBP"].includes(match[1])) {
-        return match[1] as SupportedCurrency;
-      }
+      const cookieCur = readCookieCurrency();
+      if (cookieCur) return cookieCur;
 
       // 2. Persisted Zustand state in localStorage
       const persisted = localStorage.getItem("shoe-store-currency");
@@ -109,15 +121,7 @@ export const useCurrencyStore = create<CurrencyState>()(
       name: "shoe-store-currency",
       partialize: (state) => ({ currency: state.currency }),
       merge: (persistedState: any, currentState) => {
-        let cookieCurrency: SupportedCurrency | undefined;
-        if (typeof window !== "undefined") {
-          try {
-            const match = document.cookie.match(/(?:^|;\s*)shoe_currency=([A-Z]{3})/);
-            if (match && ["USD", "NPR", "EUR", "GBP"].includes(match[1])) {
-              cookieCurrency = match[1] as SupportedCurrency;
-            }
-          } catch {}
-        }
+        const cookieCurrency = readCookieCurrency();
         return {
           ...currentState,
           ...(persistedState || {}),

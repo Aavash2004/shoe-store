@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect, useSyncExternalStore } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, Check } from "lucide-react";
 import { useCurrencyStore, type SupportedCurrency } from "@/stores/currency-store";
 import { CURRENCIES } from "@/lib/constants/currencies";
 import { FlagIcon } from "@/components/ui/FlagIcon";
-
-const emptySubscribe = () => () => {};
 
 const CURRENCY_OPTIONS: { code: SupportedCurrency; name: string; symbol: string }[] = [
   { code: "USD", name: "US Dollar", symbol: "$" },
@@ -26,17 +25,21 @@ export function CurrencySwitcher({
   className = "",
   initialCurrency,
 }: CurrencySwitcherProps) {
-  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { currency, setCurrency, syncRatesFromServer, ratesLoaded } = useCurrencyStore();
 
-  // If server provided an initialCurrency that differs from client store, sync it
   useEffect(() => {
-    if (initialCurrency && currency !== initialCurrency) {
-      setCurrency(initialCurrency);
-    }
-  }, [initialCurrency, currency, setCurrency]);
+    setMounted(true);
+  }, []);
+
+  const handleSelectCurrency = (newCode: SupportedCurrency) => {
+    setCurrency(newCode);
+    setOpen(false);
+    router.refresh();
+  };
 
   useEffect(() => {
     if (!ratesLoaded) {
@@ -81,7 +84,7 @@ export function CurrencySwitcher({
             <button
               key={opt.code}
               type="button"
-              onClick={() => setCurrency(opt.code)}
+              onClick={() => handleSelectCurrency(opt.code)}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200 cursor-pointer ${
                 isActive
                   ? "bg-[var(--color-navy)] text-white shadow-xs"
@@ -141,10 +144,7 @@ export function CurrencySwitcher({
                   role="option"
                   aria-selected={isActive}
                   type="button"
-                  onClick={() => {
-                    setCurrency(opt.code);
-                    setOpen(false);
-                  }}
+                  onClick={() => handleSelectCurrency(opt.code)}
                   className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs transition-colors duration-150 cursor-pointer ${
                     isActive
                       ? "bg-[var(--color-navy)] text-white font-bold"
