@@ -327,6 +327,7 @@ model Order {
 
   stockReserved      Boolean @default(true)
   manualReviewReason String?
+  cancelReason       String?
 
   items         OrderItem[]
   statusHistory OrderStatusHistory[]

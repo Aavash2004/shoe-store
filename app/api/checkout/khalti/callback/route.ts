@@ -118,14 +118,58 @@ export async function GET(request: NextRequest) {
                 );
             }
 
-            // Check if the order was previously CANCELLED (e.g. 30-min TTL expired)
+            // Check if the order was previously CANCELLED
             if (order.status === "CANCELLED") {
-                // Late payment on a CANCELLED order: Try to reinstate if stock allows; otherwise hold in MANUAL_REVIEW
+                // Rule 3: Late payment reinstates ONLY if cancelReason is strictly 'EXPIRED'.
+                // If cancelReason is null/undefined, 'CUSTOMER', or 'ADMIN', never reinstate; send to MANUAL_REVIEW!
+                if (order.cancelReason !== "EXPIRED") {
+                    console.warn(
+                        `[Khalti Callback - Late Payment NON-EXPIRED] Order ${order.id} was cancelled with reason "${order.cancelReason || "null"}". Moving to MANUAL_REVIEW for manual merchant refund.`
+                    );
+
+                    await prisma.order.update({
+                        where: { id: order.id },
+                        data: {
+                            status: "MANUAL_REVIEW",
+                            paymentStatus: "PAID",
+                            transactionId: lookupResult.transaction_id || pidx,
+                            stockReserved: false,
+                            manualReviewReason: "LATE_PAYMENT_NON_EXPIRED",
+                        },
+                    });
+
+                    await prisma.orderStatusHistory.create({
+                        data: {
+                            orderId: order.id,
+                            status: "MANUAL_REVIEW",
+                            note: `Late payment received via Khalti (${lookupResult.transaction_id || pidx}) for cancelled order with reason "${order.cancelReason || "null"}" (non-expired). Placed in MANUAL_REVIEW for merchant refund.`,
+                        },
+                    });
+
+                    try {
+                        const { sendAdminAlertEmail } = await import("@/lib/services/email");
+                        await sendAdminAlertEmail(
+                            `Late Khalti Payment on Cancelled Order #${order.orderNumber}`,
+                            `A late Khalti payment (${pidx}) arrived for cancelled order #${order.orderNumber} (cancelReason: ${order.cancelReason || "null"}). Placed in MANUAL_REVIEW for merchant refund.`,
+                            { orderId: order.id, pidx }
+                        );
+                    } catch {}
+
+                    return NextResponse.redirect(
+                        `${baseUrl}/order-confirmation/${order.id}`
+                    );
+                }
+
+                // Late payment on an EXPIRED order: Try to reinstate if stock allows; otherwise hold in MANUAL_REVIEW
                 try {
                     await prisma.$transaction(async (tx) => {
                         // Atomically claim the cancelled order first; continue only if count > 0
                         const claimResult = await tx.order.updateMany({
-                            where: { id: order.id, status: "CANCELLED" },
+                            where: {
+                                id: order.id,
+                                status: "CANCELLED",
+                                paymentStatus: { notIn: ["PAID", "REFUNDED"] },
+                            },
                             data: {
                                 status: "PROCESSING",
                                 paymentStatus: "PAID",

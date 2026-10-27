@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { stripe } from "@/lib/services/stripe";
+import { stripe, confirmStripePayment } from "@/lib/services/stripe";
 import { lookupKhaltiPayment } from "@/lib/services/khalti";
 import { releaseOrderStock } from "@/lib/checkout/stock";
 
@@ -67,8 +67,23 @@ async function handleCleanup(request: NextRequest) {
             order.stripePaymentIntentId
           );
 
-          // If the intent has already succeeded or processing, do not cancel
-          if (intent.status === "succeeded" || intent.status === "processing") {
+          // If the intent has succeeded, confirm payment (e.g. if webhook was delayed/missed)
+          if (intent.status === "succeeded") {
+            const confirmRes = await confirmStripePayment(order.id, {
+              paymentIntentId: order.stripePaymentIntentId,
+              amount: intent.amount,
+              currency: intent.currency,
+              source: "cleanup_cron",
+            });
+            if (confirmRes.count > 0) {
+              results.confirmed++;
+            }
+            isCancellable = false;
+            results.skippedOrRaced++;
+            continue;
+          }
+
+          if (intent.status === "processing") {
             isCancellable = false;
             results.skippedOrRaced++;
             continue;
@@ -215,7 +230,7 @@ async function handleCleanup(request: NextRequest) {
           tx,
           order.id,
           "Reservation expired (30-min TTL). Order cancelled and stock restored.",
-          { requireNonPaid: true }
+          { requireNonPaid: true, cancelReason: "EXPIRED" }
         );
 
         if (release.success) {

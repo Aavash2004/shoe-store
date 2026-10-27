@@ -81,6 +81,7 @@ export default function OrderConfirmationPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pollingFinished, setPollingFinished] = useState(false);
 
   // Clear local cart drawer when order is completed
   useEffect(() => {
@@ -98,12 +99,38 @@ export default function OrderConfirmationPage({
   }, [orderId]);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
     let isCancelled = false;
+    let pollCount = 0;
+    const maxPolls = 15; // Max 15 attempts (~40-60s)
+    let currentInterval = 2500; // 2.5s base interval
 
     async function checkStatus() {
+      if (isCancelled) return;
+
       try {
-        const res = await fetch(`/api/orders/${orderId}/status`);
+        const storedEmail = typeof window !== "undefined" ? sessionStorage.getItem(`order_email_${orderId}`) : null;
+        const headers: Record<string, string> = {};
+        if (storedEmail) {
+          headers["x-order-email"] = storedEmail;
+        }
+
+        const res = await fetch(`/api/orders/${orderId}/status`, { headers });
+
+        if (res.status === 429) {
+          // HTTP 429 Rate Limit: Back off exponentially or use Retry-After without clearing current status
+          const retryAfterHeader = res.headers.get("Retry-After");
+          const retrySeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
+          const backoffDelay = Math.max(5000, (isNaN(retrySeconds) ? 5 : retrySeconds) * 1000);
+          console.warn(`[Order Status] Rate limited (429). Backing off for ${backoffDelay}ms while keeping last known status.`);
+
+          if (!isCancelled && pollCount < maxPolls) {
+            pollCount++;
+            timeoutId = setTimeout(checkStatus, backoffDelay);
+          }
+          return;
+        }
+
         if (!res.ok) {
           if (res.status === 404) {
             setError("Order not found.");
@@ -124,13 +151,24 @@ export default function OrderConfirmationPage({
             data.order.paymentStatus === "FAILED" ||
             data.order.paymentMethod === "COD"
           ) {
-            if (intervalId) clearInterval(intervalId);
+            return;
+          }
+
+          // Otherwise continue polling up to maxPolls
+          if (pollCount < maxPolls) {
+            pollCount++;
+            timeoutId = setTimeout(checkStatus, currentInterval);
+          } else {
+            setPollingFinished(true);
           }
         }
       } catch (err: unknown) {
         if (!isCancelled) {
+          // On network errors, keep existing order state if already loaded
           const message = err instanceof Error ? err.message : "Failed to query status";
-          setError(message);
+          if (!order) {
+            setError(message);
+          }
           setLoading(false);
         }
       }
@@ -139,20 +177,9 @@ export default function OrderConfirmationPage({
     // Initial check
     checkStatus();
 
-    // Poll every 2.5s for pending payments (up to 15 intervals = ~37s)
-    let count = 0;
-    intervalId = setInterval(() => {
-      count++;
-      if (count >= 15) {
-        if (intervalId) clearInterval(intervalId);
-        return;
-      }
-      checkStatus();
-    }, 2500);
-
     return () => {
       isCancelled = true;
-      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [orderId]);
 
@@ -304,13 +331,16 @@ export default function OrderConfirmationPage({
           {isPending && (
             <>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3.5 py-1 text-xs font-bold text-amber-800 uppercase tracking-wider mb-3">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Verifying Payment Status
+                <RefreshCw className={`h-3.5 w-3.5 ${pollingFinished ? "" : "animate-spin"}`} />
+                {pollingFinished ? "Confirmation In Progress" : "Verifying Payment Status"}
               </span>
               <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-[var(--color-navy)] md:text-3xl">
-                Finalizing Payment...
+                {pollingFinished ? "Payment Confirmation In Progress" : "Finalizing Payment..."}
               </h1>
               <p className="mt-2 text-sm text-[var(--color-navy)]/70">
-                We are receiving the confirmation from the payment provider. This page will update automatically once verified.
+                {pollingFinished
+                  ? "We have securely received your payment transaction. Your confirmation is currently being finalized with the payment provider. You will receive an official order confirmation and receipt via email shortly."
+                  : "We are receiving the confirmation from the payment provider. This page will update automatically once verified."}
               </p>
             </>
           )}

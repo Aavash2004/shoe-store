@@ -63,10 +63,10 @@ function fallbackRateLimit(
 ): { success: boolean; limit: number; remaining: number; reset: number } {
   const now = Date.now();
 
-  // Periodic pruning of stale entries
-  if (inMemoryCache.size > 5_000) {
-    for (const [key, val] of inMemoryCache.entries()) {
-      if (val.resetTime < now) inMemoryCache.delete(key);
+  // Expire in-memory entries that have passed their reset time
+  for (const [key, val] of inMemoryCache.entries()) {
+    if (val.resetTime <= now) {
+      inMemoryCache.delete(key);
     }
   }
 
@@ -106,19 +106,86 @@ export type RateLimitResult = {
   reset: number;
 };
 
+export type TrustedIpHeaderSource =
+  | "x-vercel-forwarded-for"
+  | "cf-connecting-ip"
+  | "xff-rightmost";
+
+export function getTrustedIpHeader(): TrustedIpHeaderSource {
+  const envSource = process.env.TRUSTED_IP_HEADER?.trim().toLowerCase();
+  if (
+    envSource === "cf-connecting-ip" ||
+    envSource === "xff-rightmost" ||
+    envSource === "x-vercel-forwarded-for"
+  ) {
+    return envSource;
+  }
+  return "x-vercel-forwarded-for";
+}
+
 /**
- * Extracts client IP safely from request headers (first entry of x-forwarded-for or x-real-ip).
+ * Resolves the client IP address strictly from the single configured trusted source.
+ * Ignores all other client-supplied headers to prevent spoofing or multi-header confusion.
+ *
+ * Configured via `TRUSTED_IP_HEADER`:
+ * - 'x-vercel-forwarded-for': platform header on Vercel edge
+ * - 'cf-connecting-ip': platform header on Cloudflare
+ * - 'xff-rightmost': rightmost trusted hop from X-Forwarded-For based on TRUSTED_PROXY_HOPS
+ *
+ * If the configured header is missing or empty, falls back to "anonymous-client"
+ * and logs a Sentry warning in production.
  */
 export function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
+  const trustedSource = getTrustedIpHeader();
+  let resolvedIp: string | null = null;
+
+  if (trustedSource === "x-vercel-forwarded-for") {
+    const header = request.headers.get("x-vercel-forwarded-for");
+    if (header?.trim()) {
+      resolvedIp = header.split(",")[0].trim();
+    }
+  } else if (trustedSource === "cf-connecting-ip") {
+    const header = request.headers.get("cf-connecting-ip");
+    if (header?.trim()) {
+      resolvedIp = header.trim();
+    }
+  } else if (trustedSource === "xff-rightmost") {
+    const forwarded = request.headers.get("x-forwarded-for");
+    if (forwarded) {
+      const parts = forwarded
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (parts.length > 0) {
+        const rawHops = parseInt(process.env.TRUSTED_PROXY_HOPS || "1", 10);
+        const trustedHops = Number.isFinite(rawHops) && rawHops > 0 ? rawHops : 1;
+        const targetIndex = Math.max(0, parts.length - trustedHops);
+        resolvedIp = parts[targetIndex];
+      }
+    }
   }
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) {
-    return realIp.trim();
+
+  if (resolvedIp) {
+    return resolvedIp;
   }
-  return "127.0.0.1";
+
+  // Fallback for unidentifiable clients
+  if (process.env.NODE_ENV === "production") {
+    try {
+      Sentry.captureMessage(
+        `[RateLimit] Fallback to anonymous-client: missing or empty trusted IP header "${trustedSource}"`,
+        {
+          level: "warning",
+          extra: {
+            configuredSource: trustedSource,
+            path: request.nextUrl?.pathname || request.url,
+          },
+        }
+      );
+    } catch {}
+  }
+
+  return process.env.NODE_ENV === "development" ? "127.0.0.1" : "anonymous-client";
 }
 
 /**
@@ -185,3 +252,63 @@ export async function checkAuthRateLimit(identifier: string): Promise<RateLimitR
 
   return fallbackRateLimit(`auth:${identifier}`, 5, 60_000);
 }
+
+export function getRateLimitPerOrder(): number {
+  const val = process.env.RATE_LIMIT_PER_ORDER;
+  if (!val) return 30;
+  const parsed = parseInt(val, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+}
+
+export function getRateLimitGlobalPerIp(): number {
+  const val = process.env.RATE_LIMIT_GLOBAL_PER_IP;
+  if (!val) return 100;
+  const parsed = parseInt(val, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 100;
+}
+
+/**
+ * Global per-IP rate limit across all order lookups (default: 100 req / 60s, env-configurable).
+ * Accommodates legitimate multi-device polling while preventing brute-force enumeration.
+ */
+export async function checkGlobalOrderStatusRateLimit(identifier: string): Promise<RateLimitResult> {
+  const maxLimit = getRateLimitGlobalPerIp();
+  if (identifier === "test-bypass") {
+    return { success: true, limit: maxLimit, remaining: maxLimit, reset: Date.now() + 60_000 };
+  }
+
+  if (generalLimiter) {
+    try {
+      const res = await generalLimiter.limit(`global_status:${identifier}`);
+      return { success: res.success, limit: res.limit, remaining: res.remaining, reset: res.reset };
+    } catch (err) {
+      console.warn("[RateLimit] Upstash error, failing open to memory fallback:", err);
+    }
+  }
+
+  return fallbackRateLimit(`global_status:${identifier}`, maxLimit, 60_000);
+}
+
+/**
+ * Per-order rate limit (default: 30 req / 60s per order per IP, env-configurable).
+ * Specifically matches the client polling allowance.
+ */
+export async function checkPerOrderRateLimit(identifier: string): Promise<RateLimitResult> {
+  const maxLimit = getRateLimitPerOrder();
+  if (identifier === "test-bypass") {
+    return { success: true, limit: maxLimit, remaining: maxLimit, reset: Date.now() + 60_000 };
+  }
+
+  if (generalLimiter) {
+    try {
+      const res = await generalLimiter.limit(`per_order:${identifier}`);
+      return { success: res.success, limit: res.limit, remaining: res.remaining, reset: res.reset };
+    } catch (err) {
+      console.warn("[RateLimit] Upstash error, failing open to memory fallback:", err);
+    }
+  }
+
+  return fallbackRateLimit(`per_order:${identifier}`, maxLimit, 60_000);
+}
+
+

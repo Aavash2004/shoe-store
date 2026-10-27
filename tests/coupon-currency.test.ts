@@ -4,7 +4,7 @@ import { prisma } from "../lib/db/prisma";
 import { reserveCouponUsage, releaseCouponUsage } from "../lib/checkout/coupon";
 import { calculateOrderPricing } from "../lib/checkout/pricing";
 import { releaseOrderStock, decrementStockWithLock } from "../lib/checkout/stock";
-import { stripe, toStripeSmallestUnit } from "../lib/services/stripe";
+import { stripe, toStripeSmallestUnit, confirmStripePayment } from "../lib/services/stripe";
 import { toKhaltiPaisa } from "../lib/services/khalti";
 
 import { COUNTRIES } from "../lib/constants/countries";
@@ -18,8 +18,12 @@ import { GET as khaltiCallbackHandler } from "../app/api/checkout/khalti/callbac
 import { POST as codCheckoutHandler } from "../app/api/checkout/route";
 import { POST as stripeWebhookHandler } from "../app/api/webhooks/stripe/route";
 import { GET as cleanupCronHandler } from "../app/api/cron/cleanup-expired-orders/route";
+import { GET as reconcileStripeCronHandler } from "../app/api/cron/reconcile-stripe/route";
 import { updateOrderStatus } from "../app/admin/orders/[id]/actions";
+import { cancelCustomerOrder } from "../app/account/orders/[id]/actions";
 import { GET as orderStatusHandler } from "../app/api/orders/[id]/status/route";
+import * as emailService from "../lib/services/email";
+import { register as bootRegister } from "../instrumentation";
 
 async function runTests() {
   console.log("=== Running Extended Route-Handler Parity & Payment Lifecycle Test Suite ===\n");
@@ -611,6 +615,7 @@ async function runTests() {
         paymentMethod: "KHALTI",
         paymentStatus: "PENDING",
         status: "CANCELLED", // Already cancelled by timeout
+        cancelReason: "EXPIRED",
         khaltiPidx: `pidx_late_avail_${Date.now()}`,
         items: {
           create: [
@@ -664,6 +669,7 @@ async function runTests() {
         paymentMethod: "KHALTI",
         paymentStatus: "PENDING",
         status: "CANCELLED",
+        cancelReason: "EXPIRED",
         khaltiPidx: `pidx_late_oos_${Date.now()}`,
         items: {
           create: [
@@ -790,6 +796,7 @@ async function runTests() {
         paymentMethod: "STRIPE",
         paymentStatus: "PENDING",
         status: "CANCELLED",
+        cancelReason: "EXPIRED",
         stripePaymentIntentId: lateStripePi,
         items: {
           create: [
@@ -1282,6 +1289,7 @@ async function runTests() {
         paymentMethod: "STRIPE",
         paymentStatus: "PENDING",
         status: "CANCELLED",
+        cancelReason: "EXPIRED",
         stockReserved: false,
         stripePaymentIntentId: e2eStripePi,
         couponId: e2eCoupon.id,
@@ -1381,6 +1389,7 @@ async function runTests() {
         paymentMethod: "STRIPE",
         paymentStatus: "PENDING",
         status: "CANCELLED",
+        cancelReason: "EXPIRED",
         stockReserved: false,
         stripePaymentIntentId: dbErrStripePi,
         items: {
@@ -1546,33 +1555,48 @@ async function runTests() {
     assert(!publicData.order?.items, "Public response REDACTS items purchased (no PII leak)");
     assert(publicData.order?.total === undefined, "Public response REDACTS pricing totals");
 
-    // 2. Request with incorrect email
-    const wrongEmailReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status?email=intruder@attacker.com`, {
+    // 2. Request with ?email= query param (Removed support: MUST NOT unlock PII)
+    const queryEmailReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status?email=${encodeURIComponent(testSecretEmail)}`, {
       method: "GET",
       headers: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}` },
     });
-    const wrongEmailRes = await orderStatusHandler(wrongEmailReq, { params: Promise.resolve({ id: piiOrder.id }) });
-    const wrongEmailData = await wrongEmailRes.json();
-    assert(!wrongEmailData.order?.address && !wrongEmailData.order?.items, "Request with non-matching email REDACTS all PII");
+    const queryEmailRes = await orderStatusHandler(queryEmailReq, { params: Promise.resolve({ id: piiOrder.id }) });
+    const queryEmailData = await queryEmailRes.json();
+    assert(!queryEmailData.order?.address && !queryEmailData.order?.items, "Query param ?email= does NOT unlock PII (support removed for header-only auth)");
 
-    // 3. Request with MATCHING email
-    const matchingEmailReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status?email=${encodeURIComponent(testSecretEmail)}`, {
+    // 3. Request with non-matching x-order-email header
+    const wrongHeaderReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status`, {
       method: "GET",
-      headers: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}` },
+      headers: {
+        "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}`,
+        "x-order-email": "intruder@attacker.com",
+      },
     });
-    const matchingEmailRes = await orderStatusHandler(matchingEmailReq, { params: Promise.resolve({ id: piiOrder.id }) });
-    assert(matchingEmailRes.status === 200, "Matching email request returns 200 OK");
-    const matchingData = await matchingEmailRes.json();
-    assert(Boolean(matchingData.order?.address), "Matching email request successfully retrieves address");
-    assert(matchingData.order?.address?.line1 === "123 Classified St", "Matching email retrieves shipping line1");
-    assert(matchingData.order?.address?.phone === "***-***-0000", "Matching email masks recipient phone number");
-    assert(matchingData.order?.items?.length === 1, "Matching email retrieves order items");
-    assert(matchingData.order?.total === 110, "Matching email retrieves order total");
+    const wrongHeaderRes = await orderStatusHandler(wrongHeaderReq, { params: Promise.resolve({ id: piiOrder.id }) });
+    const wrongHeaderData = await wrongHeaderRes.json();
+    assert(!wrongHeaderData.order?.address && !wrongHeaderData.order?.items, "Non-matching x-order-email header REDACTS all PII");
 
-    // 4. Rate-limiting verification
+    // 4. Request with MATCHING x-order-email header
+    const matchingHeaderReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status`, {
+      method: "GET",
+      headers: {
+        "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}`,
+        "x-order-email": testSecretEmail,
+      },
+    });
+    const matchingHeaderRes = await orderStatusHandler(matchingHeaderReq, { params: Promise.resolve({ id: piiOrder.id }) });
+    assert(matchingHeaderRes.status === 200, "Matching x-order-email header returns 200 OK");
+    const matchingData = await matchingHeaderRes.json();
+    assert(Boolean(matchingData.order?.address), "Matching x-order-email successfully retrieves address");
+    assert(matchingData.order?.address?.line1 === "123 Classified St", "Matching x-order-email retrieves shipping line1");
+    assert(matchingData.order?.address?.phone === "***-***-0000", "Matching x-order-email masks recipient phone number");
+    assert(matchingData.order?.items?.length === 1, "Matching x-order-email retrieves order items");
+    assert(matchingData.order?.total === 110, "Matching x-order-email retrieves order total");
+
+    // 5. Rate-limiting verification (keyed on IP + Order ID)
     const spamIp = `203.0.113.${Date.now() % 250}`;
     let hitRateLimit = false;
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 35; i++) {
       const spamReq = new NextRequest(`http://localhost:3000/api/orders/${piiOrder.id}/status`, {
         method: "GET",
         headers: { "x-forwarded-for": spamIp },
@@ -1583,7 +1607,895 @@ async function runTests() {
         break;
       }
     }
-    assert(hitRateLimit, "Status endpoint rate-limits excessive queries per IP with HTTP 429");
+    assert(hitRateLimit, "Status endpoint rate-limits excessive queries for an order per IP with HTTP 429");
+
+    // Verify rate limit is keyed on IP + Order ID: A second order from the same IP is NOT blocked
+    const otherOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-OTHER-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "COD",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+      },
+    });
+    createdOrderIds.push(otherOrder.id);
+
+    const otherOrderReq = new NextRequest(`http://localhost:3000/api/orders/${otherOrder.id}/status`, {
+      method: "GET",
+      headers: { "x-forwarded-for": spamIp },
+    });
+    const otherOrderRes = await orderStatusHandler(otherOrderReq, { params: Promise.resolve({ id: otherOrder.id }) });
+    assert(otherOrderRes.status === 200, "Different order ID from the same IP is NOT blocked (rate limit keyed on IP + order ID)");
+
+    // =========================================================================
+    // TEST 18: Webhook Never Arrives -> Cleanup Cron Confirms Stripe Order
+    // =========================================================================
+    console.log("\n--- TEST 18: Webhook Never Arrives -> Cleanup Cron Confirms Stripe Order ---");
+    const missedWebhookPi = `pi_missed_webhook_${Date.now()}`;
+    const missedWebhookOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-MISSED-WH-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        stripePaymentIntentId: missedWebhookPi,
+        createdAt: new Date(Date.now() - 35 * 60 * 1000), // 35 min old
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku,
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(missedWebhookOrder.id);
+
+    // Mock stripe.paymentIntents.retrieve returning succeeded
+    const savedStripeRetrieve18 = stripe.paymentIntents.retrieve;
+    stripe.paymentIntents.retrieve = (async () => ({
+      id: missedWebhookPi,
+      status: "succeeded",
+      amount: 5000,
+      currency: "usd",
+    })) as any;
+
+    const cronRes18 = await cleanupCronHandler(cronReq());
+    const cronData18 = await cronRes18.json();
+
+    const orderAfterCron18 = await prisma.order.findUnique({
+      where: { id: missedWebhookOrder.id },
+      include: { statusHistory: true },
+    });
+
+    assert(orderAfterCron18?.status === "PROCESSING", "Order transitioned to PROCESSING by cleanup cron");
+    assert(orderAfterCron18?.paymentStatus === "PAID", "Order marked as PAID by cleanup cron via confirmStripePayment");
+    assert(cronData18.results.confirmed >= 1, "Cron reported confirmed >= 1 for recovered Stripe order");
+    assert(
+      Boolean(orderAfterCron18?.statusHistory.some((h) => h.note?.includes("cleanup_cron"))),
+      "Status history records payment confirmed via cleanup_cron"
+    );
+
+    stripe.paymentIntents.retrieve = savedStripeRetrieve18;
+
+    // --- TEST 19: confirmStripePayment - Concurrent Callers ---
+    console.log("\n--- TEST 19: confirmStripePayment - Concurrent Callers Parity ---");
+    const concurrentPi = `pi_concurrent_${Date.now()}`;
+    const concurrentOrder = await prisma.order.create({
+      data: {
+        orderNumber: `TEST-ORD-CONCUR-${Date.now()}`,
+        status: "PENDING",
+        paymentStatus: "PENDING",
+        paymentMethod: "STRIPE",
+        stripePaymentIntentId: concurrentPi,
+        currency: "USD",
+        subtotal: 75.0,
+        shipping: 0.0,
+        tax: 0.0,
+        discount: 0.0,
+        total: 75.0,
+        stockReserved: true,
+        guestEmail: "concurrent_customer@example.com",
+      },
+    });
+    createdOrderIds.push(concurrentOrder.id);
+
+    // Spy on email dispatch to assert exactly one email is sent
+    let emailSentCount19 = 0;
+    (global as any).__onEmailSent = (type: string, id: string) => {
+      if (type === "order_confirmation" && id === concurrentOrder.id) {
+        emailSentCount19++;
+      }
+    };
+
+    // Launch 5 concurrent calls to confirmStripePayment for the exact same order
+    const concurrentResults = await Promise.all([
+      confirmStripePayment(concurrentOrder.id, {
+        paymentIntentId: concurrentPi,
+        amount: 7500,
+        currency: "usd",
+        source: "Worker-1",
+      }),
+      confirmStripePayment(concurrentOrder.id, {
+        paymentIntentId: concurrentPi,
+        amount: 7500,
+        currency: "usd",
+        source: "Worker-2",
+      }),
+      confirmStripePayment(concurrentOrder.id, {
+        paymentIntentId: concurrentPi,
+        amount: 7500,
+        currency: "usd",
+        source: "Worker-3",
+      }),
+      confirmStripePayment(concurrentOrder.id, {
+        paymentIntentId: concurrentPi,
+        amount: 7500,
+        currency: "usd",
+        source: "Worker-4",
+      }),
+      confirmStripePayment(concurrentOrder.id, {
+        paymentIntentId: concurrentPi,
+        amount: 7500,
+        currency: "usd",
+        source: "Worker-5",
+      }),
+    ]);
+
+    delete (global as any).__onEmailSent;
+
+    const winnerCount = concurrentResults.filter((r) => r.success && r.count === 1).length;
+    const loserCount = concurrentResults.filter((r) => !r.success && r.count === 0).length;
+
+    assert(winnerCount === 1, "Exactly one concurrent caller receives count = 1");
+    assert(loserCount === 4, "Remaining 4 concurrent callers receive count = 0");
+    assert(emailSentCount19 === 1, "Concurrent test asserts EXACTLY ONE customer confirmation email dispatched");
+
+    const concurrentOrderAfter = await prisma.order.findUnique({
+      where: { id: concurrentOrder.id },
+      include: { statusHistory: true },
+    });
+
+    assert(concurrentOrderAfter?.status === "PROCESSING", "Order transitioned to PROCESSING exactly once");
+    assert(concurrentOrderAfter?.paymentStatus === "PAID", "Order paymentStatus transitioned to PAID");
+    assert(
+      concurrentOrderAfter?.statusHistory.length === 1,
+      "OrderStatusHistory has exactly ONE entry despite 5 concurrent callers"
+    );
+
+    // --- TEST 20: confirmStripePayment - Amount & Currency Mismatch ---
+    console.log("\n--- TEST 20: confirmStripePayment - Amount & Currency Mismatch ---");
+    const mismatchPi = `pi_mismatch_${Date.now()}`;
+    const mismatchOrder = await prisma.order.create({
+      data: {
+        orderNumber: `TEST-ORD-MISMATCH-${Date.now()}`,
+        status: "PENDING",
+        paymentStatus: "PENDING",
+        paymentMethod: "STRIPE",
+        stripePaymentIntentId: mismatchPi,
+        currency: "USD",
+        subtotal: 100.0,
+        shipping: 0.0,
+        tax: 0.0,
+        discount: 0.0,
+        total: 100.0, // Expected smallest unit: 10000
+        stockReserved: true,
+      },
+    });
+    createdOrderIds.push(mismatchOrder.id);
+
+    // Simulate PaymentIntent delivering 5000 cents ($50.00) instead of 10000 ($100.00)
+    const mismatchResult = await confirmStripePayment(mismatchOrder.id, {
+      paymentIntentId: mismatchPi,
+      amount: 5000,
+      currency: "usd",
+      source: "Webhook",
+    });
+
+    assert(mismatchResult.success === false, "confirmStripePayment returns success: false on amount mismatch");
+    assert(mismatchResult.status === "MANUAL_REVIEW", "confirmStripePayment returns status: MANUAL_REVIEW");
+    assert(mismatchResult.reason === "STRIPE_AMOUNT_MISMATCH", "confirmStripePayment records reason: STRIPE_AMOUNT_MISMATCH");
+
+    const mismatchOrderAfter = await prisma.order.findUnique({
+      where: { id: mismatchOrder.id },
+    });
+    assert(mismatchOrderAfter?.status === "MANUAL_REVIEW", "Order transitioned to MANUAL_REVIEW on amount mismatch");
+    assert(mismatchOrderAfter?.manualReviewReason === "STRIPE_AMOUNT_MISMATCH", "Order records manualReviewReason: STRIPE_AMOUNT_MISMATCH");
+    assert(mismatchOrderAfter?.stockReserved === true, "Stock remains reserved (case a) on amount mismatch");
+
+    // --- TEST 21: Customer/Admin Cancelled Order Late Payment Auto-Refunds (Does Not Reinstate) ---
+    console.log("\n--- TEST 21: Cancelled Order Late Payment: Customer/Admin Cancel Auto-Refunds ---");
+    const custCancelPi = `pi_cust_cancel_${Date.now()}`;
+    const custCancelOrder = await prisma.order.create({
+      data: {
+        orderNumber: `TEST-ORD-CUSTCANCEL-${Date.now()}`,
+        status: "PENDING",
+        paymentStatus: "PENDING",
+        paymentMethod: "STRIPE",
+        stripePaymentIntentId: custCancelPi,
+        currency: "USD",
+        subtotal: 60.0,
+        shipping: 0.0,
+        tax: 0.0,
+        discount: 0.0,
+        total: 60.0,
+        stockReserved: true,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              quantity: 1,
+              price: 60.0,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-TEST-CUST",
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(custCancelOrder.id);
+
+    // Customer cancels order via releaseOrderStock with cancelReason: "CUSTOMER"
+    await releaseOrderStock(
+      prisma,
+      custCancelOrder.id,
+      "Customer cancelled order",
+      { cancelReason: "CUSTOMER" }
+    );
+
+    const stockBeforeLatePayment = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock || 0;
+
+    // Simulate mock Stripe refund
+    let refundCreatedForPi = "";
+    const savedStripeRefundCreate = stripe.refunds.create;
+    stripe.refunds.create = (async (params: any) => {
+      refundCreatedForPi = params.payment_intent;
+      return { id: `re_mock_${Date.now()}`, status: "succeeded" };
+    }) as any;
+
+    // Now late payment arrives for the customer-cancelled order
+    const lateCustResult = await confirmStripePayment(custCancelOrder.id, {
+      paymentIntentId: custCancelPi,
+      amount: 6000,
+      currency: "usd",
+      source: "Webhook",
+    });
+
+    stripe.refunds.create = savedStripeRefundCreate;
+
+    const custCancelOrderAfter = await prisma.order.findUnique({
+      where: { id: custCancelOrder.id },
+    });
+    const stockAfterLatePayment = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock || 0;
+
+    assert(refundCreatedForPi === custCancelPi, "Auto-refund was issued via Stripe for customer-cancelled order");
+    assert(custCancelOrderAfter?.status === "CANCELLED", "Order remains CANCELLED (not reinstated to PROCESSING)");
+    assert(custCancelOrderAfter?.paymentStatus === "REFUNDED", "Order paymentStatus updated to REFUNDED");
+    assert(stockAfterLatePayment === stockBeforeLatePayment, "Stock was NOT decremented for customer-cancelled late payment");
+
+    // --- TEST 22: Rate Limiting: Scanning Many Order IDs from One IP Gets HTTP 429 ---
+    console.log("\n--- TEST 22: Rate Limiting: Global Scanning Many Order IDs Gets HTTP 429 ---");
+    const savedGlobalEnv22 = process.env.RATE_LIMIT_GLOBAL_PER_IP;
+    process.env.RATE_LIMIT_GLOBAL_PER_IP = "40"; // Validate env-configurability
+
+    const scannerIp = "198.51.100.88";
+    let hit429 = false;
+    let retryAfterHeaderFound = false;
+
+    // Attempt 45 rapid queries to different order IDs from the same IP (global limit: 40)
+    for (let i = 1; i <= 45; i++) {
+      const scanReq = new NextRequest(`https://shoestore.com/api/orders/scan-order-id-${i}/status`, {
+        headers: { "x-forwarded-for": scannerIp },
+      });
+      const scanRes = await orderStatusHandler(scanReq, { params: Promise.resolve({ id: `scan-order-id-${i}` }) });
+
+      if (scanRes.status === 429) {
+        hit429 = true;
+        if (scanRes.headers.get("Retry-After")) {
+          retryAfterHeaderFound = true;
+        }
+        break;
+      }
+    }
+
+    if (savedGlobalEnv22) {
+      process.env.RATE_LIMIT_GLOBAL_PER_IP = savedGlobalEnv22;
+    } else {
+      delete process.env.RATE_LIMIT_GLOBAL_PER_IP;
+    }
+
+    assert(hit429, "Scanning many order IDs from a single IP triggers global HTTP 429 rate limit");
+    assert(retryAfterHeaderFound, "Global 429 rate limit response includes Retry-After header");
+
+    // =========================================================================
+    // TEST 23: confirmStripePayment - Late payment + wrong amount + EXPIRED order -> MANUAL_REVIEW (Item 5)
+    // =========================================================================
+    console.log("\n--- TEST 23: confirmStripePayment - Late payment + wrong amount + EXPIRED order -> MANUAL_REVIEW ---");
+    const lateMismatchPi = `pi_late_mismatch_${Date.now()}`;
+    const lateMismatchOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-LATE-MISMATCH-${Date.now()}`,
+        currency: "USD",
+        subtotal: 80,
+        shipping: 0,
+        discount: 0,
+        total: 80, // expected: 8000 cents
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "CANCELLED",
+        cancelReason: "EXPIRED",
+        stockReserved: false,
+        stripePaymentIntentId: lateMismatchPi,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-MISMATCH",
+              price: 80,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(lateMismatchOrder.id);
+
+    const stockBeforeMismatch = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock || 0;
+
+    // Payment arrives with 4000 cents ($40) instead of 8000 ($80)
+    const mismatchRes = await confirmStripePayment(lateMismatchOrder.id, {
+      paymentIntentId: lateMismatchPi,
+      amount: 4000,
+      currency: "usd",
+      source: "Webhook",
+    });
+
+    assert(mismatchRes.success === false, "confirmStripePayment returns success: false on late payment amount mismatch");
+    assert(mismatchRes.status === "MANUAL_REVIEW", "confirmStripePayment returns status: MANUAL_REVIEW");
+    assert(mismatchRes.reason === "STRIPE_AMOUNT_MISMATCH", "confirmStripePayment records reason: STRIPE_AMOUNT_MISMATCH");
+
+    const lateMismatchOrderAfter = await prisma.order.findUnique({ where: { id: lateMismatchOrder.id } });
+    assert(lateMismatchOrderAfter?.status === "MANUAL_REVIEW", "Late mismatched order transitioned to MANUAL_REVIEW");
+    assert(lateMismatchOrderAfter?.manualReviewReason === "STRIPE_AMOUNT_MISMATCH", "Order records manualReviewReason: STRIPE_AMOUNT_MISMATCH");
+
+    const stockAfterMismatch = (await prisma.productVariant.findUnique({ where: { id: variant.id } }))?.stock || 0;
+    assert(stockAfterMismatch === stockBeforeMismatch, "Stock was NOT decremented for late payment with amount mismatch");
+
+    // =========================================================================
+    // TEST 24: handleLatePayment with cancelReason: null - Stripe Auto-Refund & Khalti MANUAL_REVIEW (Item 3)
+    // =========================================================================
+    console.log("\n--- TEST 24: handleLatePayment with cancelReason: null (Never Reinstate) ---");
+    // 24a. Stripe late payment with cancelReason: null -> Auto-refund
+    const nullReasonStripePi = `pi_null_reason_${Date.now()}`;
+    const nullReasonOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-NULL-REASON-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "CANCELLED",
+        cancelReason: null, // cancelReason is explicitly null
+        stockReserved: false,
+        stripePaymentIntentId: nullReasonStripePi,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-NULL-REASON",
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(nullReasonOrder.id);
+
+    let stripeRefundPi24 = "";
+    const savedStripeRefund24 = stripe.refunds.create;
+    stripe.refunds.create = (async (params: any) => {
+      stripeRefundPi24 = params.payment_intent;
+      return { id: `ref_null_${Date.now()}`, status: "succeeded" };
+    }) as any;
+
+    const nullReasonResult = await confirmStripePayment(nullReasonOrder.id, {
+      paymentIntentId: nullReasonStripePi,
+      amount: 5000,
+      currency: "usd",
+      source: "Webhook",
+    });
+
+    stripe.refunds.create = savedStripeRefund24;
+
+    const nullReasonOrderAfter = await prisma.order.findUnique({ where: { id: nullReasonOrder.id } });
+    assert(stripeRefundPi24 === nullReasonStripePi, "Stripe auto-refund was issued when cancelReason is null");
+    assert(nullReasonOrderAfter?.status === "CANCELLED", "Order remains CANCELLED (never reinstated when cancelReason is null)");
+    assert(nullReasonOrderAfter?.paymentStatus === "REFUNDED", "Order paymentStatus updated to REFUNDED");
+
+    // 24b. Khalti late payment with cancelReason: null -> MANUAL_REVIEW
+    const nullReasonKhaltiPidx = `pidx_null_khalti_${Date.now()}`;
+    const nullReasonKhaltiOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-KHALTI-NULL-${Date.now()}`,
+        currency: "NPR",
+        subtotal: 2500,
+        shipping: 0,
+        discount: 0,
+        total: 2500,
+        paymentMethod: "KHALTI",
+        paymentStatus: "PENDING",
+        status: "CANCELLED",
+        cancelReason: null, // cancelReason is explicitly null
+        stockReserved: false,
+        khaltiPidx: nullReasonKhaltiPidx,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-KHALTI-NULL",
+              price: 2500,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(nullReasonKhaltiOrder.id);
+
+    mockKhaltiLookupStatus = "Completed";
+    mockKhaltiLookupAmountOverride = 250000;
+
+    const khaltiNullReq = new NextRequest(
+      `http://localhost:3000/api/checkout/khalti/callback?pidx=${nullReasonKhaltiPidx}&purchase_order_id=${nullReasonKhaltiOrder.id}`,
+      { method: "GET" }
+    );
+    await khaltiCallbackHandler(khaltiNullReq);
+
+    const khaltiNullOrderAfter = await prisma.order.findUnique({ where: { id: nullReasonKhaltiOrder.id } });
+    assert(khaltiNullOrderAfter?.status === "MANUAL_REVIEW", "Khalti late payment with cancelReason null moved to MANUAL_REVIEW");
+    assert(khaltiNullOrderAfter?.paymentStatus === "PAID", "Khalti late payment with cancelReason null marked as PAID");
+    assert(khaltiNullOrderAfter?.manualReviewReason === "LATE_PAYMENT_NON_EXPIRED", "Khalti late payment records manualReviewReason: LATE_PAYMENT_NON_EXPIRED");
+    assert(khaltiNullOrderAfter?.stockReserved === false, "Khalti late payment with cancelReason null leaves stockReserved: false");
+
+    // =========================================================================
+    // TEST 25: payment_intent.canceled - Derives cancelReason & Never Overwrites (Item 3)
+    // =========================================================================
+    console.log("\n--- TEST 25: payment_intent.canceled - Derives cancelReason & Never Overwrites ---");
+    // 25a. Order with no cancelReason receives abandoned cancellation -> derives EXPIRED
+    const piCancelExpired = `pi_cancel_exp_${Date.now()}`;
+    const orderCancelExpired = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-CANCEL-EXP-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        stockReserved: true,
+        stripePaymentIntentId: piCancelExpired,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-PI-CANCEL-EXP",
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(orderCancelExpired.id);
+
+    const originalConstructEvent25 = stripe.webhooks.constructEvent;
+    stripe.webhooks.constructEvent = ((body: any) => JSON.parse(body)) as any;
+
+    const cancelExpiredReq = new NextRequest("http://localhost:3000/api/webhooks/stripe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": "mock_sig" },
+      body: JSON.stringify({
+        id: `evt_cancel_exp_${Date.now()}`,
+        type: "payment_intent.canceled",
+        data: {
+          object: {
+            id: piCancelExpired,
+            cancellation_reason: "abandoned",
+          },
+        },
+      }),
+    });
+    const cancelExpiredRes = await stripeWebhookHandler(cancelExpiredReq);
+    assert(cancelExpiredRes.status === 200, "payment_intent.canceled webhook processed successfully");
+
+    const orderCancelExpiredAfter = await prisma.order.findUnique({ where: { id: orderCancelExpired.id } });
+    assert(orderCancelExpiredAfter?.status === "CANCELLED", "Order transitioned to CANCELLED on payment_intent.canceled");
+    assert(orderCancelExpiredAfter?.cancelReason === "EXPIRED", "cancelReason derived as EXPIRED from abandoned cancellation_reason");
+
+    // 25b. Order with existing cancelReason CUSTOMER is never overwritten
+    const piCancelKeepReason = `pi_cancel_keep_${Date.now()}`;
+    const orderCancelKeepReason = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-CANCEL-KEEP-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "CANCELLED",
+        cancelReason: "CUSTOMER", // Existing reason set by customer cancellation
+        stockReserved: false,
+        stripePaymentIntentId: piCancelKeepReason,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-PI-CANCEL-KEEP",
+              price: 50,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(orderCancelKeepReason.id);
+
+    const cancelKeepReq = new NextRequest("http://localhost:3000/api/webhooks/stripe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": "mock_sig" },
+      body: JSON.stringify({
+        id: `evt_cancel_keep_${Date.now()}`,
+        type: "payment_intent.canceled",
+        data: {
+          object: {
+            id: piCancelKeepReason,
+            cancellation_reason: "abandoned", // Stripe says abandoned, but customer already cancelled
+          },
+        },
+      }),
+    });
+    await stripeWebhookHandler(cancelKeepReq);
+
+    const orderCancelKeepAfter = await prisma.order.findUnique({ where: { id: orderCancelKeepReason.id } });
+    assert(orderCancelKeepAfter?.cancelReason === "CUSTOMER", "Existing cancelReason CUSTOMER is NEVER overwritten by webhook");
+    stripe.webhooks.constructEvent = originalConstructEvent25;
+
+    // =========================================================================
+    // TEST 26: cancelCustomerOrder - Unpaid Orders Only & Succeeded Intent Abort (Item 4)
+    // =========================================================================
+    console.log("\n--- TEST 26: cancelCustomerOrder - Unpaid Orders Only & Succeeded Intent Abort ---");
+    const testUser26 = await prisma.user.create({
+      data: {
+        email: `cust_${Date.now()}@example.com`,
+        name: "Test Customer User",
+        role: "USER",
+      },
+    });
+    const testUserId = testUser26.id;
+    (global as any).__mockCustomerSession = { user: { id: testUserId } };
+
+    // 26a. Unpaid pending order where PaymentIntent has already succeeded -> Abort!
+    const piSuccCust = `pi_succ_cust_${Date.now()}`;
+    const orderSuccCust = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-CUST-SUCC-${Date.now()}`,
+        userId: testUserId,
+        currency: "USD",
+        subtotal: 70,
+        shipping: 0,
+        discount: 0,
+        total: 70,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        stockReserved: true,
+        stripePaymentIntentId: piSuccCust,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-CUST-SUCC",
+              price: 70,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(orderSuccCust.id);
+
+    const savedRetrieve26 = stripe.paymentIntents.retrieve;
+    stripe.paymentIntents.retrieve = (async (id: string) => {
+      return { id, status: "succeeded" };
+    }) as any;
+
+    const cancelCustSuccRes = await cancelCustomerOrder(orderSuccCust.id);
+    assert(cancelCustSuccRes.success === false, "cancelCustomerOrder aborts when PaymentIntent has already succeeded");
+    assert(Boolean(cancelCustSuccRes.error?.includes("already been processed")), "Error informs user that payment already succeeded");
+
+    const orderSuccCustAfter = await prisma.order.findUnique({ where: { id: orderSuccCust.id } });
+    assert(orderSuccCustAfter?.status === "PENDING", "Order remains PENDING (untouched) when payment already succeeded");
+    assert(orderSuccCustAfter?.stockReserved === true, "Stock remains reserved on aborted customer cancellation");
+
+    // 26b. Unpaid pending order where PaymentIntent requires_payment_method -> Cancels PI first then order
+    const piUnpaidCust = `pi_unpaid_cust_${Date.now()}`;
+    const orderUnpaidCust = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-CUST-UNPAID-${Date.now()}`,
+        userId: testUserId,
+        currency: "USD",
+        subtotal: 70,
+        shipping: 0,
+        discount: 0,
+        total: 70,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        stockReserved: true,
+        stripePaymentIntentId: piUnpaidCust,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-CUST-UNPAID",
+              price: 70,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(orderUnpaidCust.id);
+
+    stripe.paymentIntents.retrieve = (async (id: string) => {
+      return { id, status: "requires_payment_method" };
+    }) as any;
+
+    let stripeCancelPiCalled = "";
+    const savedCancel26 = stripe.paymentIntents.cancel;
+    stripe.paymentIntents.cancel = (async (id: string) => {
+      stripeCancelPiCalled = id;
+      return { id, status: "canceled" };
+    }) as any;
+
+    const cancelCustUnpaidRes = await cancelCustomerOrder(orderUnpaidCust.id);
+    assert(cancelCustUnpaidRes.success === true, "cancelCustomerOrder succeeds for unpaid order");
+    assert(stripeCancelPiCalled === piUnpaidCust, "cancelCustomerOrder cancelled the Stripe PaymentIntent with Stripe first");
+
+    const orderUnpaidCustAfter = await prisma.order.findUnique({ where: { id: orderUnpaidCust.id } });
+    assert(orderUnpaidCustAfter?.status === "CANCELLED", "Order transitioned to CANCELLED");
+    assert(orderUnpaidCustAfter?.cancelReason === "CUSTOMER", "Order cancelReason set to CUSTOMER");
+    assert(orderUnpaidCustAfter?.stockReserved === false, "stockReserved set to false on customer cancellation");
+
+    stripe.paymentIntents.retrieve = savedRetrieve26;
+    stripe.paymentIntents.cancel = savedCancel26;
+    delete (global as any).__mockCustomerSession;
+    await prisma.user.delete({ where: { id: testUserId } });
+
+    // =========================================================================
+    // TEST 27: getClientIp - Rotating X-Forwarded-For per Request Still Hits HTTP 429 (Item 1)
+    // =========================================================================
+    console.log("\n--- TEST 27: getClientIp - Rotating X-Forwarded-For per Request Still Hits 429 ---");
+    const targetOrderForIpTest = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-IPTEST-${Date.now()}`,
+        currency: "USD",
+        subtotal: 50,
+        shipping: 0,
+        discount: 0,
+        total: 50,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+      },
+    });
+    createdOrderIds.push(targetOrderForIpTest.id);
+
+    const trustedGatewayIp = "198.51.100.77";
+    let rotatingHit429 = false;
+
+    // Attacker rotates the client IP (leftmost) on each request, but trusted hop (rightmost) is constant:
+    for (let i = 1; i <= 35; i++) {
+      const spoofedClientIp = `10.0.${Math.floor(i / 250)}.${i % 250}`;
+      const rotReq = new NextRequest(`https://shoestore.com/api/orders/${targetOrderForIpTest.id}/status`, {
+        headers: {
+          "x-forwarded-for": `${spoofedClientIp}, ${trustedGatewayIp}`,
+        },
+      });
+      const rotRes = await orderStatusHandler(rotReq, { params: Promise.resolve({ id: targetOrderForIpTest.id }) });
+      if (rotRes.status === 429) {
+        rotatingHit429 = true;
+        break;
+      }
+    }
+
+    assert(rotatingHit429, "Attacker rotating leftmost X-Forwarded-For STILL gets HTTP 429 (trusted rightmost hop enforced)");
+
+    // =========================================================================
+    // TEST 28: Reconciliation Sweep as a Real Cron Route (Item 2)
+    // =========================================================================
+    console.log("\n--- TEST 28: Reconciliation Sweep Cron Route ---");
+    const sweepOrder = await prisma.order.create({
+      data: {
+        orderNumber: `ORD-SWEEP-${Date.now()}`,
+        currency: "USD",
+        subtotal: 65,
+        shipping: 0,
+        discount: 0,
+        total: 65,
+        paymentMethod: "STRIPE",
+        paymentStatus: "PENDING",
+        status: "PENDING",
+        stripePaymentIntentId: `pi_sweep_matched_${Date.now()}`,
+        stockReserved: true,
+        items: {
+          create: [
+            {
+              variantId: variant.id,
+              productName: variant.product.name,
+              size: variant.size,
+              color: variant.color,
+              sku: variant.sku || "SKU-SWEEP",
+              price: 65,
+              quantity: 1,
+            },
+          ],
+        },
+      },
+    });
+    createdOrderIds.push(sweepOrder.id);
+
+    const savedStripePiList = stripe.paymentIntents.list;
+    stripe.paymentIntents.list = (async () => {
+      return {
+        data: [
+          // 1. Succeeded intent carrying our store metadata for unpaid sweepOrder
+          {
+            id: sweepOrder.stripePaymentIntentId!,
+            status: "succeeded",
+            amount: 6500,
+            currency: "usd",
+            metadata: {
+              orderId: sweepOrder.id,
+              orderNumber: sweepOrder.orderNumber,
+              store: "shoe-store",
+            },
+          },
+          // 2. Foreign intent belonging to another application (no shoe-store metadata)
+          {
+            id: `pi_foreign_${Date.now()}`,
+            status: "succeeded",
+            amount: 9999,
+            currency: "usd",
+            metadata: { service: "other-app" },
+          },
+          // 3. Orphan intent: has shoe-store metadata, but no matching order in DB
+          {
+            id: `pi_orphan_${Date.now()}`,
+            status: "succeeded",
+            amount: 5500,
+            currency: "usd",
+            metadata: {
+              orderId: "non_existent_order_id_orphan",
+              orderNumber: "ORD-NONEXISTENT",
+              store: "shoe-store",
+            },
+          },
+        ],
+      };
+    }) as any;
+
+    const reconcileCronReq = new NextRequest("http://localhost:3000/api/cron/reconcile-stripe", {
+      method: "GET",
+    });
+    const reconcileCronRes = await reconcileStripeCronHandler(reconcileCronReq);
+    const reconcileData = await reconcileCronRes.json();
+
+    assert(reconcileCronRes.status === 200, "Reconciliation sweep cron route returns HTTP 200");
+    assert(reconcileData.results.scanned === 3, "Cron scanned all 3 returned PaymentIntents");
+    assert(reconcileData.results.matchedIntents === 2, "Cron filtered for only 2 intents carrying store metadata (ignored foreign intent)");
+    assert(reconcileData.results.orphaned === 1, "Cron detected and alerted on exactly 1 orphan PaymentIntent");
+    assert(reconcileData.results.confirmed >= 1, "Cron confirmed the unpaid store order");
+
+    const sweepOrderAfter = await prisma.order.findUnique({ where: { id: sweepOrder.id } });
+    assert(sweepOrderAfter?.status === "PROCESSING", "Unpaid order transitioned to PROCESSING by reconciliation sweep");
+    assert(sweepOrderAfter?.paymentStatus === "PAID", "Unpaid order marked as PAID by reconciliation sweep");
+
+    stripe.paymentIntents.list = savedStripePiList;
+
+    // =========================================================================
+    // TEST 29: Production Boot Check (Item 7)
+    // =========================================================================
+    console.log("\n--- TEST 29: Production Boot Check - Production Only & Sentry Initialized First ---");
+    const savedNodeEnv = process.env.NODE_ENV;
+    const savedAdminEmail = process.env.ADMIN_EMAIL;
+    const savedSentryDsn = process.env.SENTRY_DSN;
+    const savedUpstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const savedUpstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    // 29a. Development mode: Boot check is skipped (no fatal alert even if ADMIN_EMAIL is missing)
+    (process.env as any).NODE_ENV = "development";
+    delete process.env.ADMIN_EMAIL;
+    let devBootErrorLogged = false;
+    const savedConsoleError29 = console.error;
+    console.error = (...args: any[]) => {
+      if (args.some((a) => typeof a === "string" && a.includes("[CRITICAL BOOT CONFIG ERROR]"))) {
+        devBootErrorLogged = true;
+      }
+      savedConsoleError29(...args);
+    };
+
+    await bootRegister();
+    assert(!devBootErrorLogged, "Boot check is skipped in development mode (no fatal boot error logged)");
+
+    // 29b. Production mode: Missing env variables trigger critical alert
+    (process.env as any).NODE_ENV = "production";
+    delete process.env.ADMIN_EMAIL;
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    let prodBootErrorLogged = false;
+    console.error = (...args: any[]) => {
+      if (args.some((a) => typeof a === "string" && a.includes("[CRITICAL BOOT CONFIG ERROR]"))) {
+        prodBootErrorLogged = true;
+      }
+      savedConsoleError29(...args);
+    };
+
+    await bootRegister();
+    assert(prodBootErrorLogged, "Boot check enforces required environment variables in production mode");
+
+    console.error = savedConsoleError29;
+    (process.env as any).NODE_ENV = savedNodeEnv;
+    if (savedAdminEmail) process.env.ADMIN_EMAIL = savedAdminEmail;
+    if (savedSentryDsn) process.env.SENTRY_DSN = savedSentryDsn;
+    if (savedUpstashUrl) process.env.UPSTASH_REDIS_REST_URL = savedUpstashUrl;
+    if (savedUpstashToken) process.env.UPSTASH_REDIS_REST_TOKEN = savedUpstashToken;
 
   } catch (err) {
     console.error("Test execution caught unexpected exception:", err);

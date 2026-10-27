@@ -302,6 +302,9 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
  * Send Order Confirmation & Invoice receipt email
  */
 export async function sendOrderConfirmationEmail(orderId: string) {
+  if (process.env.NODE_ENV === "test" && (global as any).__onEmailSent) {
+    (global as any).__onEmailSent("order_confirmation", orderId);
+  }
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },

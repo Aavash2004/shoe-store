@@ -84,7 +84,8 @@ export async function PATCH(
     const release = await releaseOrderStock(
       prisma,
       id,
-      note || "Order cancelled via Admin API"
+      note || "Order cancelled via Admin API",
+      { cancelReason: "ADMIN" }
     );
     if (!release.success) {
       return NextResponse.json(

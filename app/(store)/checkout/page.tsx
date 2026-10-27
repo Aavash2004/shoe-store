@@ -366,6 +366,13 @@ export default function CheckoutPage() {
           return;
         }
 
+        if (typeof window !== "undefined") {
+          const orderEmail = (data.guestEmail || (data as any).email || "").trim();
+          if (orderEmail && result.orderId) {
+            sessionStorage.setItem(`order_email_${result.orderId}`, orderEmail);
+          }
+        }
+
         setStripeData({
           clientSecret: result.clientSecret,
           orderId: result.orderId,
@@ -435,6 +442,13 @@ export default function CheckoutPage() {
         refreshIdempotencyKey();
         setError(result.error ?? "Checkout could not be completed. Please try again.");
         return;
+      }
+
+      if (typeof window !== "undefined") {
+        const orderEmail = (data.guestEmail || (data as any).email || "").trim();
+        if (orderEmail && result.order?.id) {
+          sessionStorage.setItem(`order_email_${result.order.id}`, orderEmail);
+        }
       }
 
       clearCart();

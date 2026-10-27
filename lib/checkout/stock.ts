@@ -107,9 +107,12 @@ export interface ReleaseStockResult {
   reason?: string;
 }
 
+export type CancelReasonType = "EXPIRED" | "CUSTOMER" | "ADMIN";
+
 export interface ReleaseOrderStockOptions {
   requireNonPaid?: boolean;
   stockReserved?: boolean;
+  cancelReason?: CancelReasonType;
 }
 
 /**
@@ -129,6 +132,7 @@ export async function releaseOrderStock(
     select: {
       couponCode: true,
       stockReserved: true,
+      cancelReason: true,
     },
   });
 
@@ -149,11 +153,15 @@ export async function releaseOrderStock(
     whereClause.paymentStatus = { not: "PAID" };
   }
 
+  // Never overwrite an existing cancelReason
+  const finalCancelReason = orderRecord?.cancelReason || options?.cancelReason;
+
   const updateResult = await tx.order.updateMany({
     where: whereClause,
     data: {
       status: "CANCELLED",
       stockReserved: false,
+      ...(finalCancelReason ? { cancelReason: finalCancelReason } : {}),
     },
   });
 

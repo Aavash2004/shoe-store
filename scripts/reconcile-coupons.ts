@@ -97,20 +97,23 @@ async function main() {
   }
 
   if (isApply && isConfirmed) {
-    // Safety guard: refuse to reconcile if any order was created within the last 5 minutes (in-flight checkout protection)
+    // Safety guard: refuse to reconcile if any order was created or updated within the last 5 minutes (in-flight checkout protection)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const recentOrdersCount = await prisma.order.count({
       where: {
-        createdAt: { gte: fiveMinutesAgo },
+        OR: [
+          { createdAt: { gte: fiveMinutesAgo } },
+          { updatedAt: { gte: fiveMinutesAgo } },
+        ],
       },
     });
 
     if (recentOrdersCount > 0) {
       console.warn(
-        `\n⚠️  SAFETY LOCK REFUSAL: Found ${recentOrdersCount} order(s) created in the last 5 minutes.`
+        `\n⚠️  SAFETY LOCK REFUSAL: Found ${recentOrdersCount} order(s) created or updated in the last 5 minutes.`
       );
       console.warn(
-        `To protect in-flight customer checkouts, coupon reconciliation refuses to commit changes when orders were created recently.`
+        `To protect in-flight customer checkouts, coupon reconciliation refuses to commit changes when orders were created or modified recently.`
       );
       console.warn(`Please wait for active checkouts to settle before running with '--apply --confirm'.\n`);
       await prisma.$disconnect();
@@ -122,10 +125,15 @@ async function main() {
       await prisma.$transaction(async (tx) => {
         // Re-verify recent orders inside the transaction
         const inTxRecentOrders = await tx.order.count({
-          where: { createdAt: { gte: fiveMinutesAgo } },
+          where: {
+            OR: [
+              { createdAt: { gte: fiveMinutesAgo } },
+              { updatedAt: { gte: fiveMinutesAgo } },
+            ],
+          },
         });
         if (inTxRecentOrders > 0) {
-          throw new Error(`Transaction aborted: ${inTxRecentOrders} order(s) created in the last 5 minutes.`);
+          throw new Error(`Transaction aborted: ${inTxRecentOrders} order(s) created or updated in the last 5 minutes.`);
         }
 
         for (const row of rows) {

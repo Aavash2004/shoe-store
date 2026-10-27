@@ -77,7 +77,8 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
         const release = await releaseOrderStock(
             prisma,
             validOrderId,
-            validNote || "Admin cancelled order"
+            validNote || "Admin cancelled order",
+            { cancelReason: "ADMIN" }
         );
         if (!release.success) {
             return {
@@ -114,6 +115,7 @@ export async function updateOrderStatus(orderId: string, status: string, note?: 
                         where: {
                             id: validOrderId,
                             status: currentStatus,
+                            stockReserved: false,
                         },
                         data: {
                             status: validStatus,
@@ -276,7 +278,8 @@ export async function refundOrder(orderId: string, reason?: string) {
         await releaseOrderStock(
             prisma,
             orderId,
-            `Order refunded (${refundIdentifier})${reason ? `: ${reason}` : ""}`
+            `Order refunded (${refundIdentifier})${reason ? `: ${reason}` : ""}`,
+            { cancelReason: "ADMIN" }
         );
 
         await prisma.order.update({

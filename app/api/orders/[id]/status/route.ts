@@ -1,16 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
-import { checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
+import { checkGlobalOrderStatusRateLimit, checkPerOrderRateLimit, getClientIp } from "@/lib/security/rateLimit";
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 1. IP-based rate limiting to prevent enumeration / IDOR probing
+    const { id } = await context.params;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Missing order ID parameter" },
+        { status: 400 }
+      );
+    }
+
+    // 1. Rate limiting:
     const clientIp = getClientIp(request);
-    const rateLimitResult = await checkRateLimit(`order-status:${clientIp}`);
+
+    // 1a. Global per-IP rate limit across all orders (protects against ID scanning/enumeration across the catalog)
+    const globalRateLimitResult = await checkGlobalOrderStatusRateLimit(`order-status-global:${clientIp}`);
+    if (!globalRateLimitResult.success) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((globalRateLimitResult.reset - Date.now()) / 1000)
+      );
+      return NextResponse.json(
+        { error: "Too many status queries. Please wait a minute before trying again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfter),
+            "X-RateLimit-Limit": String(globalRateLimitResult.limit),
+            "X-RateLimit-Remaining": String(globalRateLimitResult.remaining),
+          },
+        }
+      );
+    }
+
+    // 1b. Per-order rate limit (keyed on IP + specific order ID)
+    const rateLimitResult = await checkPerOrderRateLimit(`order-status:${clientIp}:${id}`);
     if (!rateLimitResult.success) {
       const retryAfter = Math.max(
         1,
@@ -26,15 +57,6 @@ export async function GET(
             "X-RateLimit-Remaining": String(rateLimitResult.remaining),
           },
         }
-      );
-    }
-
-    const { id } = await context.params;
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Missing order ID parameter" },
-        { status: 400 }
       );
     }
 
@@ -72,7 +94,7 @@ export async function GET(
       );
     }
 
-    // 3. Authorization check: owner, admin, or caller with matching email
+    // 3. Authorization check: owner, admin, or matching email via x-order-email header only (no ?email= URL param)
     let session = null;
     try {
       session = await auth();
@@ -80,10 +102,7 @@ export async function GET(
       // In isolated test runner or outside App Router context
     }
 
-    const { searchParams } = new URL(request.url);
-    const emailParam = (
-      searchParams.get("email") || request.headers.get("x-order-email")
-    )?.trim().toLowerCase();
+    const emailHeader = request.headers.get("x-order-email")?.trim().toLowerCase();
 
     const orderCustomerEmail = (
       order.user?.email || order.guestEmail || ""
@@ -94,7 +113,7 @@ export async function GET(
     );
     const isAdmin = Boolean(session?.user?.role === "ADMIN");
     const isMatchingEmail = Boolean(
-      emailParam && orderCustomerEmail && emailParam === orderCustomerEmail
+      emailHeader && orderCustomerEmail && emailHeader === orderCustomerEmail
     );
 
     const isAuthorized = isOwner || isAdmin || isMatchingEmail;
