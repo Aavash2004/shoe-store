@@ -55,6 +55,7 @@ const showStockToast = (stock: number) => {
 };
 
 const debouncedSyncMap = new Map<string, DebouncedFunction<(quantity: number) => void>>();
+const inFlightSyncs = new Set<string>();
 
 export function flushPendingSync() {
   debouncedSyncMap.forEach((debounced) => debounced.flush());
@@ -62,6 +63,7 @@ export function flushPendingSync() {
 
 function syncQuantityToServer(variantId: string, quantity: number) {
   if (typeof window === "undefined") return;
+  inFlightSyncs.add(variantId);
   let debounced = debouncedSyncMap.get(variantId);
   if (!debounced) {
     debounced = debounce(async (qty: number) => {
@@ -80,7 +82,10 @@ function syncQuantityToServer(variantId: string, quantity: number) {
           }
           useCartStore.getState().fetchCart(true);
         }
-      } catch {}
+      } catch {
+      } finally {
+        inFlightSyncs.delete(variantId);
+      }
     }, 400);
     debouncedSyncMap.set(variantId, debounced);
   }
@@ -94,6 +99,7 @@ async function syncRemoveToServer(variantId: string) {
     debounced.cancel();
     debouncedSyncMap.delete(variantId);
   }
+  inFlightSyncs.add(variantId);
   try {
     const res = await fetch(`/api/cart?variantId=${encodeURIComponent(variantId)}`, {
       method: "DELETE",
@@ -101,11 +107,15 @@ async function syncRemoveToServer(variantId: string) {
     if (!res.ok && res.status !== 401) {
       useCartStore.getState().fetchCart(true);
     }
-  } catch {}
+  } catch {
+  } finally {
+    inFlightSyncs.delete(variantId);
+  }
 }
 
 async function syncAddToServer(variantId: string, quantity: number) {
   if (typeof window === "undefined") return;
+  inFlightSyncs.add(variantId);
   try {
     const res = await fetch("/api/cart", {
       method: "POST",
@@ -121,13 +131,17 @@ async function syncAddToServer(variantId: string, quantity: number) {
       }
       useCartStore.getState().fetchCart(true);
     }
-  } catch {}
+  } catch {
+  } finally {
+    inFlightSyncs.delete(variantId);
+  }
 }
 
 function syncClearToServer() {
   if (typeof window === "undefined") return;
   debouncedSyncMap.forEach((debounced) => debounced.cancel());
   debouncedSyncMap.clear();
+  inFlightSyncs.clear();
   fetch("/api/cart?clear=true", {
     method: "DELETE",
   }).catch(() => {});
@@ -154,7 +168,7 @@ export const useCartStore = create<CartState>()(
           debouncedSyncMap.forEach((d) => {
             if (d.isPending()) hasPending = true;
           });
-          if (hasPending) return;
+          if (hasPending || inFlightSyncs.size > 0) return;
         }
 
         try {
@@ -180,7 +194,27 @@ export const useCartStore = create<CartState>()(
                 quantity: Math.max(1, i.quantity),
                 stock: i.variant?.stock ?? i.stock ?? 999,
               }));
-              set({ items: mapped, hasFetchedInitial: true });
+
+              // Reconciliation: Preserve locally pending items that the server hasn't committed yet
+              const currentItems = get().items;
+              const serverVariantIds = new Set(mapped.map((i) => i.variantId));
+
+              const pendingItems = currentItems.filter(
+                (item) => !serverVariantIds.has(item.variantId) && inFlightSyncs.has(item.variantId)
+              );
+
+              // Merge quantities for any items still in flight
+              const reconciledMapped = mapped.map((serverItem) => {
+                if (inFlightSyncs.has(serverItem.variantId)) {
+                  const local = currentItems.find((l) => l.variantId === serverItem.variantId);
+                  if (local && local.quantity > serverItem.quantity) {
+                    return { ...serverItem, quantity: local.quantity };
+                  }
+                }
+                return serverItem;
+              });
+
+              set({ items: [...reconciledMapped, ...pendingItems], hasFetchedInitial: true });
             }
           }
         } catch {
@@ -189,7 +223,9 @@ export const useCartStore = create<CartState>()(
         }
       },
       addItem: (item) => {
-        const existing = get().items.find((i) => i.variantId === item.variantId);
+        if (!item || !item.variantId) return;
+        const currentItems = get().items;
+        const existing = currentItems.find((i) => i.variantId === item.variantId);
         const maxStock = typeof item.stock === "number" ? item.stock : (existing?.stock ?? 999);
 
         if (existing) {
@@ -201,7 +237,7 @@ export const useCartStore = create<CartState>()(
             // Cap to maxStock if current is less, otherwise leave at current
             if (currentQty < maxStock) {
               set({
-                items: get().items.map((i) =>
+                items: currentItems.map((i) =>
                   i.variantId === item.variantId
                     ? { ...i, quantity: maxStock, stock: maxStock }
                     : i
@@ -214,7 +250,7 @@ export const useCartStore = create<CartState>()(
           }
 
           set({
-            items: get().items.map((i) =>
+            items: currentItems.map((i) =>
               i.variantId === item.variantId
                 ? { ...i, quantity: targetQty, stock: maxStock }
                 : i
@@ -227,7 +263,7 @@ export const useCartStore = create<CartState>()(
             showStockToast(maxStock);
             if (maxStock > 0) {
               set({
-                items: [...get().items, { ...item, quantity: maxStock, stock: maxStock }],
+                items: [...currentItems, { ...item, quantity: maxStock, stock: maxStock }],
               });
               notifyCartUpdated();
               syncAddToServer(item.variantId, maxStock);
@@ -235,7 +271,7 @@ export const useCartStore = create<CartState>()(
             return;
           }
 
-          set({ items: [...get().items, { ...item, stock: maxStock }] });
+          set({ items: [...currentItems, { ...item, stock: maxStock }] });
           notifyCartUpdated();
           syncAddToServer(item.variantId, item.quantity);
         }

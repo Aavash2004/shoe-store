@@ -82,7 +82,7 @@ function CustomerLoginForm() {
             })),
           }),
         });
-        clearCart();
+        await useCartStore.getState().fetchCart(true);
       } catch (err) {
         console.error("Cart merge error:", err);
       }

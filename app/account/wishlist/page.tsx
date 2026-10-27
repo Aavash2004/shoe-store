@@ -65,19 +65,24 @@ export default function WishlistPage() {
 
   const handleAddToCart = (product: WishlistProduct) => {
     const firstVariant = product.variants?.[0];
-    const variantId = firstVariant?.id || product.productId;
+    if (!firstVariant?.id) {
+      window.dispatchEvent(
+        new CustomEvent("show-toast", { detail: "Please select size and color on product page" })
+      );
+      return;
+    }
 
     addItemToCart({
-      variantId,
+      variantId: firstVariant.id,
       productId: product.productId,
       productName: product.name,
       slug: product.slug,
-      price: product.price,
+      price: Number(firstVariant.price ?? product.price),
       image: product.image,
-      size: firstVariant?.size || "40",
-      color: firstVariant?.color || "Default",
+      size: firstVariant.size || "40",
+      color: firstVariant.color || "Default",
       quantity: 1,
-      stock: firstVariant?.stock ?? 999,
+      stock: firstVariant.stock ?? 999,
     });
     window.dispatchEvent(new CustomEvent("show-toast", { detail: "Added to cart" }));
   };

@@ -13,7 +13,12 @@ async function main() {
   console.log("=== DB PRODUCTS CHECK ===");
   console.log("Total Products in DB:", allProducts.length);
   allProducts.forEach((p) => {
-    console.log(`- ID: ${p.id} | Name: ${p.name} | Slug: ${p.slug} | Active: ${p.isActive}`);
+    if (p.isActive) {
+      console.log(`- Product: ${p.name} (ID: ${p.id})`);
+      p.variants.forEach((v) => {
+        console.log(`    Variant ID: ${v.id} | Size: ${v.size} | Color: ${v.color} | SKU: ${v.sku} | Price: ${v.price}`);
+      });
+    }
   });
 }
 

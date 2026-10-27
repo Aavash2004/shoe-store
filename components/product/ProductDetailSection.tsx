@@ -29,13 +29,15 @@ export function ProductDetailSection({
 
   const [selectedColor, setSelectedColor] = useState<string | null>(defaultColor);
 
-  // Sync if URL search params change externally
+  // Sync if product changes or URL search params change externally
   useEffect(() => {
-    const currentUrlColor = searchParams.get("color");
-    if (currentUrlColor && currentUrlColor !== selectedColor) {
-      setSelectedColor(currentUrlColor);
-    }
-  }, [searchParams]);
+    const nextColor =
+      searchParams.get("color") ||
+      initialColor ||
+      product.colors[0] ||
+      null;
+    setSelectedColor(nextColor);
+  }, [product.id, searchParams, initialColor]);
 
   function handleColorChange(newColor: string) {
     setSelectedColor(newColor);

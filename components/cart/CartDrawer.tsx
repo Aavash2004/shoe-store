@@ -62,10 +62,10 @@ export function CartDrawer() {
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (isLoggedIn && (isDrawerOpen || !hasFetchedInitial)) {
+    if (isLoggedIn && !hasFetchedInitial) {
       fetchCart();
     }
-  }, [isLoggedIn, isDrawerOpen, hasFetchedInitial, fetchCart]);
+  }, [isLoggedIn, hasFetchedInitial, fetchCart]);
 
   // Fetch store catalog recommendations when drawer opens
   useEffect(() => {
@@ -421,10 +421,17 @@ export function CartDrawer() {
 
                         {/* Price & Quantity Stepper */}
                         <div className="mt-2.5 flex items-center justify-between">
-                          <Price
-                            amount={item.price * item.quantity}
-                            className="text-sm font-bold text-[var(--color-navy)]"
-                          />
+                          <div className="flex flex-col">
+                            <Price
+                              amount={item.price * item.quantity}
+                              className="text-sm font-bold text-[var(--color-navy)]"
+                            />
+                            {item.quantity > 1 && (
+                              <span className="text-[11px] text-[var(--color-navy)]/60 font-medium">
+                                <Price amount={item.price} /> each
+                              </span>
+                            )}
+                          </div>
 
                           {/* Stepper */}
                           <div className="flex items-center rounded-md border border-[var(--color-sand)] bg-[var(--color-cream-alt)] p-0.5">

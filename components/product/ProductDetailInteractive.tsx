@@ -60,8 +60,20 @@ export function ProductDetailInteractive({
 }: ProductDetailInteractiveProps) {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [internalColor, setInternalColor] = useState<string | null>(null);
-  const selectedColor =
+
+  // Reset local state if product changes
+  useEffect(() => {
+    setSelectedSize(null);
+    setAdded(false);
+  }, [product.id]);
+
+  const rawColor =
     externalSelectedColor !== undefined ? externalSelectedColor : internalColor;
+  // Guard: ensure selected color is valid for current product colors
+  const selectedColor =
+    rawColor && product.colors.includes(rawColor)
+      ? rawColor
+      : (product.colors[0] || null);
 
   function handleColorSelect(color: string) {
     if (onColorChange) {
@@ -80,7 +92,7 @@ export function ProductDetailInteractive({
   const openDrawer = useCartStore((state) => state.openDrawer);
   const { status } = useSession();
   const isLoggedIn = status === "authenticated";
-  const canAddToCart = selectedSize && selectedColor;
+  const canAddToCart = Boolean(selectedSize && selectedColor);
 
   const matchedVariant = product.variants.find(
     (v) => v.size === selectedSize && v.color === selectedColor

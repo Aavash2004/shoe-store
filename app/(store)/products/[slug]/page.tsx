@@ -139,6 +139,7 @@ export default async function ProductDetailPage({
     <div className="mx-auto max-w-6xl px-6 py-12">
       {/* Product Main Detail Grid with Synchronized Color Gallery */}
       <ProductDetailSection
+        key={product.id}
         product={{
           id: product.id,
           name: product.name,
