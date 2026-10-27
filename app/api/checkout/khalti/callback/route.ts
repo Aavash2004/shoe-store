@@ -10,8 +10,9 @@ export async function GET(request: NextRequest) {
     const purchaseOrderId = searchParams.get("purchase_order_id");
 
     const baseUrl =
+        (request.nextUrl.host ? `${request.nextUrl.protocol}//${request.nextUrl.host}` : null) ||
         process.env.NEXT_PUBLIC_APP_URL ||
-        `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+        "http://localhost:3000";
     const supportEmail = process.env.SUPPORT_EMAIL || "support@abxv.com";
 
     if (!pidx) {

@@ -337,13 +337,13 @@ function TrackOrderInner() {
                   <button
                     type="button"
                     onClick={() => {
-                      setOrderNumber("SH-MU54B9OV-6601");
-                      setEmail("proto@gmail.com");
-                      fetchOrder("SH-MU54B9OV-6601", "proto@gmail.com");
+                      setOrderNumber("SH-MVP0W7CG-2134");
+                      setEmail("admin@shoestore.com");
+                      fetchOrder("SH-MVP0W7CG-2134", "admin@shoestore.com");
                     }}
-                    className="text-xs font-semibold text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] underline transition-colors"
+                    className="text-xs font-semibold text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] underline transition-colors cursor-pointer"
                   >
-                    Quick Test: Load Sample Order (SH-MU54B9OV-6601)
+                    Quick Demo: Load Sample Order (SH-MVP0W7CG-2134)
                   </button>
                 </div>
               )}

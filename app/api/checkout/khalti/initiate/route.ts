@@ -150,8 +150,9 @@ export async function POST(request: NextRequest) {
 
         const orderNumber = generateOrderNumber();
         const appUrl =
+            (request.nextUrl.host ? `${request.nextUrl.protocol}//${request.nextUrl.host}` : null) ||
             process.env.NEXT_PUBLIC_APP_URL ||
-            `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+            "http://localhost:3000";
 
         // 6. Database Transaction: Decrement stock & create order
         const order = await prisma.$transaction(
