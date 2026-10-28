@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Bell,
   Check,
@@ -46,6 +47,8 @@ export function NotificationBell() {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const { status } = useSession();
+  const isLoggedIn = status === "authenticated";
 
   const {
     notifications,
@@ -59,8 +62,9 @@ export function NotificationBell() {
     readIds,
   } = useNotificationStore();
 
-  // Initial fetch and 30-second live polling
+  // Initial fetch and 30-second live polling (only when logged in)
   useEffect(() => {
+    if (!isLoggedIn) return;
     fetchNotifications();
 
     const interval = setInterval(() => {
@@ -81,7 +85,7 @@ export function NotificationBell() {
       window.removeEventListener("order-updated", handleOrderEvent);
       window.removeEventListener("focus", handleOrderEvent);
     };
-  }, [fetchNotifications]);
+  }, [isLoggedIn, fetchNotifications]);
 
   // Click outside to close
   useEffect(() => {
@@ -154,7 +158,7 @@ export function NotificationBell() {
         className="relative rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1 transition-transform active:scale-95"
       >
         <Bell className="h-5 w-5" strokeWidth={1.5} />
-        {unreadCount > 0 && (
+        {isLoggedIn && unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs animate-in zoom-in-50">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -8,6 +9,11 @@ import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
 import { publicProductWhere, publicCategoryWhere } from "@/lib/visibility";
 import { getImagesForColor } from "@/lib/utils/gallery";
+
+export const metadata: Metadata = {
+  title: "Shop All Shoes — Running, Lifestyle & Sneakers",
+  description: "Browse the complete ABXV collection of premium running shoes, lifestyle sneakers, and high-performance footwear.",
+};
 
 export const revalidate = 60;
 
@@ -21,7 +27,6 @@ type SearchParams = {
   minPrice?: string;
   maxPrice?: string;
   inStock?: string;
-  gender?: string;
   sort?: string;
   q?: string;
   page?: string;
@@ -123,7 +128,6 @@ export default async function ShopPage({
     minPrice,
     maxPrice,
     inStock,
-    gender,
     sort,
     q,
     page,
@@ -131,6 +135,13 @@ export default async function ShopPage({
 
   const currentPage = Math.max(1, parseInt(page || "1") || 1);
   const skip = (currentPage - 1) * PAGE_SIZE;
+
+  const brandList = brand
+    ? brand.split(",").map((b) => b.trim()).filter(Boolean)
+    : [];
+  const sizeList = size
+    ? size.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 
   // Build high-performance composite WHERE query
   const whereClause: any = {
@@ -145,11 +156,8 @@ export default async function ShopPage({
     ...(category && {
       category: { slug: category.toLowerCase(), isActive: true },
     }),
-    ...(brand && {
-      brand: { equals: brand, mode: "insensitive" },
-    }),
-    ...(gender && {
-      gender: { equals: gender.toUpperCase() },
+    ...(brandList.length > 0 && {
+      OR: brandList.map((b) => ({ brand: { equals: b, mode: "insensitive" } })),
     }),
   };
 
@@ -157,14 +165,14 @@ export default async function ShopPage({
   const variantConditions: any = {
     isActive: true,
     deletedAt: null,
-    ...(size && { size }),
+    ...(sizeList.length > 0 && { size: { in: sizeList } }),
     ...(color && { color: { equals: color, mode: "insensitive" } }),
     ...(minPrice && { price: { gte: parseFloat(minPrice) } }),
     ...(maxPrice && { price: { lte: parseFloat(maxPrice) } }),
     ...(inStock === "true" && { stock: { gt: 0 } }),
   };
 
-  if (size || color || minPrice || maxPrice || inStock === "true") {
+  if (sizeList.length > 0 || color || minPrice || maxPrice || inStock === "true") {
     whereClause.variants = {
       some: variantConditions,
     };
@@ -205,9 +213,8 @@ export default async function ShopPage({
 
   const activeFilterCount = [
     category,
-    brand,
-    gender,
-    size,
+    brandList.length > 0 ? "brand" : undefined,
+    sizeList.length > 0 ? "size" : undefined,
     color,
     minPrice || maxPrice ? "price" : undefined,
     inStock === "true" ? "inStock" : undefined,
@@ -218,7 +225,6 @@ export default async function ShopPage({
     remove?:
       | "category"
       | "brand"
-      | "gender"
       | "size"
       | "color"
       | "price"
@@ -229,7 +235,6 @@ export default async function ShopPage({
     if (q && remove !== "q") params.set("q", q);
     if (category && remove !== "category") params.set("category", category);
     if (brand && remove !== "brand") params.set("brand", brand);
-    if (gender && remove !== "gender") params.set("gender", gender);
     if (size && remove !== "size") params.set("size", size);
     if (color && remove !== "color") params.set("color", color);
     if (minPrice && remove !== "price") params.set("minPrice", minPrice);
@@ -240,12 +245,35 @@ export default async function ShopPage({
     return qs ? `/shop?${qs}` : "/shop";
   }
 
+  function buildRemoveParam(type: "brand" | "size", value: string) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (category) params.set("category", category);
+    if (color) params.set("color", color);
+    if (minPrice) params.set("minPrice", minPrice);
+    if (maxPrice) params.set("maxPrice", maxPrice);
+    if (inStock) params.set("inStock", inStock);
+    if (sort) params.set("sort", sort);
+
+    if (type === "brand") {
+      const remaining = brandList.filter((b) => b.toLowerCase() !== value.toLowerCase());
+      if (remaining.length > 0) params.set("brand", remaining.join(","));
+      if (size) params.set("size", size);
+    } else if (type === "size") {
+      const remaining = sizeList.filter((s) => s !== value);
+      if (remaining.length > 0) params.set("size", remaining.join(","));
+      if (brand) params.set("brand", brand);
+    }
+
+    const qs = params.toString();
+    return qs ? `/shop?${qs}` : "/shop";
+  }
+
   function buildPageHref(targetPage: number) {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (category) params.set("category", category);
     if (brand) params.set("brand", brand);
-    if (gender) params.set("gender", gender);
     if (size) params.set("size", size);
     if (color) params.set("color", color);
     if (minPrice) params.set("minPrice", minPrice);
@@ -311,7 +339,6 @@ export default async function ShopPage({
               activeMinPrice={minPrice}
               activeMaxPrice={maxPrice}
               activeInStock={inStock}
-              activeGender={gender}
               activeSort={sort}
               totalProducts={totalCount}
               catalogMinPrice={catalogMinPrice}
@@ -337,25 +364,16 @@ export default async function ShopPage({
               </Link>
             )}
 
-            {brand && (
+            {brandList.map((b) => (
               <Link
-                href={buildHref("brand") as any}
+                key={`chip-brand-${b}`}
+                href={buildRemoveParam("brand", b) as any}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
-                <span>Brand: {brand}</span>
+                <span>Brand: {b}</span>
                 <span className="text-[#1E2A38]/50 text-xs">×</span>
               </Link>
-            )}
-
-            {gender && (
-              <Link
-                href={buildHref("gender") as any}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
-              >
-                <span>Gender: {gender}</span>
-                <span className="text-[#1E2A38]/50 text-xs">×</span>
-              </Link>
-            )}
+            ))}
 
             {category && (
               <Link
@@ -367,15 +385,16 @@ export default async function ShopPage({
               </Link>
             )}
 
-            {size && (
+            {sizeList.map((sz) => (
               <Link
-                href={buildHref("size") as any}
+                key={`chip-size-${sz}`}
+                href={buildRemoveParam("size", sz) as any}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-cream-alt)] border border-[#1E2A38]/15 text-[#1E2A38] text-xs font-medium hover:border-[#1E2A38]/40 transition-colors"
               >
-                <span>Size: {size}</span>
+                <span>Size: {sz}</span>
                 <span className="text-[#1E2A38]/50 text-xs">×</span>
               </Link>
-            )}
+            ))}
 
             {color && (
               <Link

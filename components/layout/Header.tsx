@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useCartStore, useCartHydrated } from "@/stores/cart-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
+import { useNotificationStore } from "@/stores/notification-store";
 import { useDebouncedValue } from "@/hooks/use-debounce";
 import { CurrencySwitcher } from "@/components/layout/CurrencySwitcher";
 import type { SupportedCurrency } from "@/stores/currency-store";
@@ -203,7 +204,11 @@ function HeaderInner({ initialCurrency }: HeaderProps) {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn) {
+      useWishlistStore.getState().clearWishlist();
+      useNotificationStore.getState().resetNotifications();
+      return;
+    }
 
     // Fetch initial wishlist state
     useWishlistStore.getState().fetchWishlist();
@@ -499,7 +504,7 @@ function HeaderInner({ initialCurrency }: HeaderProps) {
               aria-label={`Wishlist${wishlistCount ? `, ${wishlistCount} items` : ""}`}
             >
               <Heart className="h-5 w-5" strokeWidth={1.5} />
-              {wishlistCount > 0 && (
+              {isLoggedIn && wishlistCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs">
                   {wishlistCount > 99 ? "99+" : wishlistCount}
                 </span>

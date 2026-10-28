@@ -18,8 +18,27 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "ABXV",
-  description: "ABXV — Premium shoes, thoughtfully made.",
+  title: {
+    default: "ABXV — Premium Footwear & Designer Sneakers",
+    template: "%s | ABXV",
+  },
+  description:
+    "ABXV — Premium sneakers, running shoes, and lifestyle footwear, thoughtfully crafted for comfort and bold performance.",
+  keywords: [
+    "shoes",
+    "sneakers",
+    "running shoes",
+    "footwear",
+    "ABXV",
+    "lifestyle sneakers",
+  ],
+  openGraph: {
+    title: "ABXV — Premium Footwear & Designer Sneakers",
+    description:
+      "Discover curated sneakers, athletic running shoes, and lifestyle footwear at ABXV.",
+    siteName: "ABXV Footwear",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

@@ -1,7 +1,9 @@
-﻿"use client";
+"use client";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { useWishlistStore } from "@/stores/wishlist-store";
+import { useNotificationStore } from "@/stores/notification-store";
 
 export function LogoutButton() {
   const [open, setOpen] = useState(false);
@@ -9,6 +11,10 @@ export function LogoutButton() {
 
   async function handleConfirm() {
     setLoading(true);
+    try {
+      useWishlistStore.getState().clearWishlist();
+      useNotificationStore.getState().resetNotifications();
+    } catch {}
     await signOut({ callbackUrl: "/" });
   }
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { auth } from "@/lib/auth/auth";
@@ -6,6 +7,12 @@ import { Footer } from "@/components/layout/Footer";
 import { AccountNav } from "@/components/account/AccountNav";
 import { Toast } from "@/components/ui/Toast";  
 import type { SupportedCurrency } from "@/stores/currency-store";
+
+export const metadata: Metadata = {
+  title: "My Account",
+  description:
+    "Manage your ABXV profile, delivery addresses, order history, and saved wishlist items.",
+};
 
 export default async function AccountLayout({
   children,

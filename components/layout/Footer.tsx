@@ -154,14 +154,6 @@ export function Footer() {
             <ul className="space-y-1.5 text-xs">
               <li>
                 <Link
-                  href={"/contact" as any}
-                  className="text-neutral-300 transition-colors duration-200 hover:text-white"
-                >
-                  Contact
-                </Link>
-              </li>
-              <li>
-                <Link
                   href={"/shipping-policy" as any}
                   className="text-neutral-300 transition-colors duration-200 hover:text-white"
                 >

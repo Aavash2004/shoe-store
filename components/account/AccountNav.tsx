@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useWishlistStore } from "@/stores/wishlist-store";
+import { useNotificationStore } from "@/stores/notification-store";
 
 import type { Route } from "next";
 
@@ -37,6 +38,10 @@ export function AccountNav() {
 
   async function handleLogout() {
     setLoading(true);
+    try {
+      useWishlistStore.getState().clearWishlist();
+      useNotificationStore.getState().resetNotifications();
+    } catch {}
     await signOut({ callbackUrl: "/" });
   }
 

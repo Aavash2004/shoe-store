@@ -1,8 +1,21 @@
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth/auth";
 import { isAdminSession, evaluateAdminRouteAccess } from "@/lib/auth/authorization";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { redirect, notFound } from "next/navigation";
 import { headers } from "next/headers";
+
+export const metadata: Metadata = {
+  title: {
+    default: "Admin Portal",
+    template: "%s | ABXV Admin",
+  },
+  description: "ABXV Store Management and Administration Portal.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function AdminLayout({
   children,

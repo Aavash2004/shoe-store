@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight } from "lucide-react";
@@ -7,6 +8,12 @@ import { ProductGrid } from "@/components/product/ProductGrid";
 import { ScrollReveal } from "@/components/product/ScrollReveal";
 import { prisma } from "@/lib/db/prisma";
 import { publicProductWhere, publicCategoryWhere } from "@/lib/visibility";
+
+export const metadata: Metadata = {
+  title: "ABXV — Premium Footwear & Designer Sneakers",
+  description:
+    "Shop premium handcrafted sneakers, running shoes, and lifestyle footwear. Experience comfort, bold designs, and fast worldwide shipping.",
+};
 
 export const revalidate = 60;
 

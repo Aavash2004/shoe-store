@@ -18,12 +18,14 @@ interface ShopFiltersProps {
   activeMinPrice?: string;
   activeMaxPrice?: string;
   activeInStock?: string;
-  activeGender?: string;
   activeSort?: string;
   totalProducts?: number;
   catalogMinPrice?: number;
   catalogMaxPrice?: number;
 }
+
+const parseList = (str?: string): string[] =>
+  str ? str.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
 function ShopFiltersInner({
   categories,
@@ -37,7 +39,6 @@ function ShopFiltersInner({
   activeMinPrice,
   activeMaxPrice,
   activeInStock,
-  activeGender,
   activeSort = "default",
   totalProducts = 0,
   catalogMinPrice = 0,
@@ -54,24 +55,22 @@ function ShopFiltersInner({
 
   // Temporary drawer state before clicking "APPLY FILTERS"
   const [draftCategory, setDraftCategory] = useState<string | undefined>(activeCategory);
-  const [draftBrand, setDraftBrand] = useState<string | undefined>(activeBrand);
-  const [draftSize, setDraftSize] = useState<string | undefined>(activeSize);
+  const [draftBrands, setDraftBrands] = useState<string[]>(parseList(activeBrand));
+  const [draftSizes, setDraftSizes] = useState<string[]>(parseList(activeSize));
   const [draftColor, setDraftColor] = useState<string | undefined>(activeColor);
   const [draftMinPrice, setDraftMinPrice] = useState<string | undefined>(activeMinPrice);
   const [draftMaxPrice, setDraftMaxPrice] = useState<string | undefined>(activeMaxPrice);
   const [draftInStock, setDraftInStock] = useState<boolean>(activeInStock === "true");
-  const [draftGender, setDraftGender] = useState<string | undefined>(activeGender);
 
   // Sync draft states whenever active props change (e.g. browser back/forward navigation)
   useEffect(() => {
     setDraftCategory(activeCategory);
-    setDraftBrand(activeBrand);
-    setDraftSize(activeSize);
+    setDraftBrands(parseList(activeBrand));
+    setDraftSizes(parseList(activeSize));
     setDraftColor(activeColor);
     setDraftMinPrice(activeMinPrice);
     setDraftMaxPrice(activeMaxPrice);
     setDraftInStock(activeInStock === "true");
-    setDraftGender(activeGender);
   }, [
     activeCategory,
     activeBrand,
@@ -80,7 +79,6 @@ function ShopFiltersInner({
     activeMinPrice,
     activeMaxPrice,
     activeInStock,
-    activeGender,
   ]);
 
   const activeFilterCount = [
@@ -91,18 +89,16 @@ function ShopFiltersInner({
     activeMinPrice,
     activeMaxPrice,
     activeInStock === "true" ? "inStock" : undefined,
-    activeGender,
   ].filter(Boolean).length;
 
   const handleOpenDrawer = () => {
     setDraftCategory(activeCategory);
-    setDraftBrand(activeBrand);
-    setDraftSize(activeSize);
+    setDraftBrands(parseList(activeBrand));
+    setDraftSizes(parseList(activeSize));
     setDraftColor(activeColor);
     setDraftMinPrice(activeMinPrice);
     setDraftMaxPrice(activeMaxPrice);
     setDraftInStock(activeInStock === "true");
-    setDraftGender(activeGender);
     setDrawerOpen(true);
   };
 
@@ -115,10 +111,10 @@ function ShopFiltersInner({
     if (draftCategory) params.set("category", draftCategory);
     else params.delete("category");
 
-    if (draftBrand) params.set("brand", draftBrand);
+    if (draftBrands.length > 0) params.set("brand", draftBrands.join(","));
     else params.delete("brand");
 
-    if (draftSize) params.set("size", draftSize);
+    if (draftSizes.length > 0) params.set("size", draftSizes.join(","));
     else params.delete("size");
 
     if (draftColor) params.set("color", draftColor);
@@ -139,8 +135,7 @@ function ShopFiltersInner({
     if (draftInStock) params.set("inStock", "true");
     else params.delete("inStock");
 
-    if (draftGender) params.set("gender", draftGender);
-    else params.delete("gender");
+    params.delete("gender");
 
     // Use router.push to create a proper history entry for the applied filter state
     startTransition(() => {
@@ -151,13 +146,12 @@ function ShopFiltersInner({
 
   const handleClearAllInDrawer = () => {
     setDraftCategory(undefined);
-    setDraftBrand(undefined);
-    setDraftSize(undefined);
+    setDraftBrands([]);
+    setDraftSizes([]);
     setDraftColor(undefined);
     setDraftMinPrice(undefined);
     setDraftMaxPrice(undefined);
     setDraftInStock(false);
-    setDraftGender(undefined);
   };
 
   const handleSortChange = (value: string) => {
@@ -286,58 +280,47 @@ function ShopFiltersInner({
             </button>
           </div>
 
-          {/* GENDER / COLLECTION */}
-          <div className="space-y-2.5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
-              Department / Gender
-            </h3>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { label: "All", value: undefined },
-                { label: "Men", value: "MEN" },
-                { label: "Women", value: "WOMEN" },
-                { label: "Unisex", value: "UNISEX" },
-              ].map((g) => {
-                const isSelected = draftGender === g.value;
-                return (
-                  <button
-                    key={g.label}
-                    type="button"
-                    onClick={() => setDraftGender(g.value)}
-                    className={`py-2 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
-                      isSelected
-                        ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
-                        : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
-                    }`}
-                  >
-                    {g.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* BRANDS SECTION */}
           {brands.length > 0 && (
             <div className="space-y-2.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
-                Brand
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
+                  Brand {draftBrands.length > 0 && `(${draftBrands.length})`}
+                </h3>
+                {draftBrands.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDraftBrands([])}
+                    className="text-[11px] text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {brands.map((b) => {
-                  const isSelected = draftBrand?.toLowerCase() === b.toLowerCase();
+                  const isSelected = draftBrands.some(
+                    (item) => item.toLowerCase() === b.toLowerCase()
+                  );
                   return (
                     <button
                       key={b}
                       type="button"
-                      onClick={() => setDraftBrand(isSelected ? undefined : b)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
+                      onClick={() => {
+                        setDraftBrands((prev) =>
+                          isSelected
+                            ? prev.filter((item) => item.toLowerCase() !== b.toLowerCase())
+                            : [...prev, b]
+                        );
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer flex items-center gap-1.5 ${
                         isSelected
                           ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
                           : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
                       }`}
                     >
-                      {b}
+                      {isSelected && <Check className="w-3 h-3 text-[var(--color-sky)]" />}
+                      <span>{b}</span>
                     </button>
                   );
                 })}
@@ -460,17 +443,32 @@ function ShopFiltersInner({
           {/* SIZE SECTION */}
           {sizes.length > 0 && (
             <div className="space-y-2.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
-                Size (EU)
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-navy)]/70">
+                  Size (EU) {draftSizes.length > 0 && `(${draftSizes.length})`}
+                </h3>
+                {draftSizes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDraftSizes([])}
+                    className="text-[11px] text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-5 gap-2">
                 {sizes.map((sz) => {
-                  const isSelected = draftSize === sz;
+                  const isSelected = draftSizes.includes(sz);
                   return (
                     <button
                       key={sz}
                       type="button"
-                      onClick={() => setDraftSize(isSelected ? undefined : sz)}
+                      onClick={() => {
+                        setDraftSizes((prev) =>
+                          isSelected ? prev.filter((item) => item !== sz) : [...prev, sz]
+                        );
+                      }}
                       className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center transition-all border cursor-pointer ${
                         isSelected
                           ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"

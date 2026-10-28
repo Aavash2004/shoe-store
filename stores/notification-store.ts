@@ -16,6 +16,7 @@ interface NotificationState {
   markAllAsRead: () => void;
   addGuestOrderId: (orderId: string) => void;
   fetchNotifications: () => Promise<void>;
+  resetNotifications: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>()(
@@ -27,6 +28,17 @@ export const useNotificationStore = create<NotificationState>()(
       isLoading: false,
       readIds: [],
       guestOrderIds: [],
+
+      resetNotifications: () => {
+        set({
+          notifications: [],
+          unreadCount: 0,
+          isOpen: false,
+          isLoading: false,
+          readIds: [],
+          guestOrderIds: [],
+        });
+      },
 
       setIsOpen: (isOpen: boolean) => set({ isOpen }),
 
