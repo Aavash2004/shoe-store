@@ -66,7 +66,7 @@ export default function ReturnsPolicyPage() {
             <div className="space-y-3 text-xs">
               <p>
                 <strong>Step 1: Contact Concierge Support</strong><br />
-                Reach out to us at <a href="mailto:aavashbasnet7@gmail.com" className="font-semibold underline">aavashbasnet7@gmail.com</a> or message our helpline (+977 9861990722) with your <strong>Order Number</strong> and reason for exchange (e.g. need size EU 43 instead of EU 42).
+                Reach out to us at <a href="mailto:basnetaavash7@gmail.com" className="font-semibold underline">basnetaavash7@gmail.com</a> or message our helpline (+977 9861990722) with your <strong>Order Number</strong> and reason for exchange (e.g. need size EU 43 instead of EU 42).
               </p>
               <p>
                 <strong>Step 2: Courier Drop-off / Pickup</strong><br />

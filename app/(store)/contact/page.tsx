@@ -41,10 +41,10 @@ export default function ContactPage() {
                   <div>
                     <p className="font-bold text-[var(--color-navy)]">Email Us</p>
                     <a
-                      href="mailto:aavashbasnet7@gmail.com"
+                      href="mailto:basnetaavash7@gmail.com"
                       className="text-[var(--color-navy)]/70 hover:underline hover:text-[var(--color-sky)] break-all"
                     >
-                      aavashbasnet7@gmail.com
+                      basnetaavash7@gmail.com
                     </a>
                   </div>
                 </div>

@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 const resendApiKey = process.env.RESEND_API_KEY;
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "ABXV Store <onboarding@resend.dev>";
-const SUPPORT_DESTINATION_EMAIL = "aavashbasnet7@gmail.com";
+const SUPPORT_DESTINATION_EMAIL = process.env.SUPPORT_EMAIL || "basnetaavash7@gmail.com";
 
 export async function POST(req: Request) {
   try {
