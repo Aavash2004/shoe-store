@@ -1,8 +1,6 @@
 "use client";
 import { useState } from "react";
-import { signOut } from "next-auth/react";
-import { useWishlistStore } from "@/stores/wishlist-store";
-import { useNotificationStore } from "@/stores/notification-store";
+import { performLogout } from "@/lib/auth/logout";
 import {
   Dialog,
   DialogContent,
@@ -17,11 +15,7 @@ export function AdminLogoutButton() {
 
   async function handleConfirm() {
     setLoading(true);
-    try {
-      useWishlistStore.getState().clearWishlist();
-      useNotificationStore.getState().resetNotifications();
-    } catch {}
-    await signOut({ callbackUrl: "/" });
+    await performLogout("/");
   }
 
   return (

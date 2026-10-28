@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { performLogout } from "@/lib/auth/logout";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -74,7 +74,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
 
   async function handleLogout() {
     setLoggingOut(true);
-    await signOut({ callbackUrl: "/" });
+    await performLogout("/");
   }
 
   const isLinkActive = (href: string) => {

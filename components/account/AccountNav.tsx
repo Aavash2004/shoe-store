@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { performLogout } from "@/lib/auth/logout";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -19,7 +19,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useWishlistStore } from "@/stores/wishlist-store";
-import { useNotificationStore } from "@/stores/notification-store";
 
 import type { Route } from "next";
 
@@ -38,11 +37,7 @@ export function AccountNav() {
 
   async function handleLogout() {
     setLoading(true);
-    try {
-      useWishlistStore.getState().clearWishlist();
-      useNotificationStore.getState().resetNotifications();
-    } catch {}
-    await signOut({ callbackUrl: "/" });
+    await performLogout("/");
   }
 
   const navItems: NavItem[] = [

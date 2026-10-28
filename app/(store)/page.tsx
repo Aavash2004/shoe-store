@@ -186,7 +186,7 @@ export default async function HomePage() {
             </div>
 
             <Link
-              href="/shop"
+              href={"/shop?sort=newest" as Route}
               className="group inline-flex shrink-0 items-center gap-2 text-xs sm:text-sm font-bold text-[var(--color-navy)] transition-colors hover:text-[var(--color-sky)]"
             >
               <span>Explore All New Arrivals</span>

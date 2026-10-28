@@ -4,10 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { performLogout } from "@/lib/auth/logout";
 import { LogOut, Menu, X } from "lucide-react";
-import { useWishlistStore } from "@/stores/wishlist-store";
-import { useNotificationStore } from "@/stores/notification-store";
 import {
   Dialog,
   DialogContent,
@@ -35,11 +33,7 @@ export function AdminNav({ email }: { email: string }) {
 
   async function handleLogout() {
     setLoading(true);
-    try {
-      useWishlistStore.getState().clearWishlist();
-      useNotificationStore.getState().resetNotifications();
-    } catch {}
-    await signOut({ callbackUrl: "/" });
+    await performLogout("/");
   }
 
   return (

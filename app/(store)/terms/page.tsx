@@ -115,13 +115,6 @@ export default function TermsOfServicePage() {
         </svg>
       </div>
 
-      {/* Far Right Margin Decoration: 3 Progress Indicator Pills */}
-      <div className="pointer-events-none absolute right-6 top-1/2 z-0 hidden -translate-y-1/2 flex-col items-center gap-1.5 xl:flex">
-        <span className="h-5 w-1 rounded-full bg-[#FC563C] shadow-[0_0_8px_rgba(252,86,60,0.6)]" />
-        <span className="h-3 w-1 rounded-full bg-neutral-300" />
-        <span className="h-3 w-1 rounded-full bg-neutral-200" />
-      </div>
-
       {/* Right Subtle Geometric Watermark */}
       <div className="pointer-events-none absolute -right-24 top-40 z-0 select-none opacity-[0.03]">
         <svg
