@@ -67,39 +67,49 @@ export async function GET(request: NextRequest) {
       const firstItem = order.items[0]?.productName || "Footwear Item";
       const extraItems = order.items.length > 1 ? ` +${order.items.length - 1} more` : "";
 
-      // 1. Initial Order Placement Notification
-      notifications.push({
-        id: `notif-placed-${order.id}`,
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        type: "ORDER_PLACED",
-        title: `Order #${order.orderNumber} Placed`,
-        message: `${firstItem}${extraItems} · Total: ${order.currency} ${Number(order.total).toFixed(2)}`,
-        createdAt: order.createdAt.toISOString(),
-        link: `/order-confirmation/${order.id}`,
-        statusBadge: order.status,
-        statusColor: order.status === "DELIVERED" ? "emerald" : "blue",
-      });
-
-      // 2. Payment confirmed notification if paid
+      // 1. Single consolidated order placement / confirmation notification
       if (order.paymentStatus === "PAID") {
         notifications.push({
-          id: `notif-paid-${order.id}`,
+          id: `notif-order-${order.id}`,
           orderId: order.id,
           orderNumber: order.orderNumber,
           type: "PAYMENT_SUCCESS",
-          title: `Payment Confirmed · #${order.orderNumber}`,
-          message: `Payment of ${order.currency} ${Number(order.total).toFixed(2)} received via ${order.paymentMethod || "online checkout"}.`,
-          createdAt: order.updatedAt.toISOString(),
+          title: `Order #${order.orderNumber} Confirmed`,
+          message: `${firstItem}${extraItems} · Total: ${order.currency} ${Number(order.total).toFixed(2)} (Payment Confirmed)`,
+          createdAt: order.createdAt.toISOString(),
           link: `/order-confirmation/${order.id}`,
           statusBadge: "PAID",
           statusColor: "emerald",
         });
+      } else {
+        notifications.push({
+          id: `notif-order-${order.id}`,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          type: "ORDER_PLACED",
+          title: `Order #${order.orderNumber} Placed`,
+          message: `${firstItem}${extraItems} · Total: ${order.currency} ${Number(order.total).toFixed(2)} (${order.paymentMethod === "COD" ? "Cash on Delivery" : "Payment Pending"})`,
+          createdAt: order.createdAt.toISOString(),
+          link: `/order-confirmation/${order.id}`,
+          statusBadge: order.status,
+          statusColor: "blue",
+        });
       }
 
-      // 3. Status History Updates (e.g. SHIPPED, PROCESSING, DELIVERED)
+      // 2. Distinct post-order milestone updates (e.g. SHIPPED, DELIVERED, CANCELLED)
+      const seenMilestones = new Set<string>();
       for (const history of order.statusHistory) {
-        if (history.status === "PENDING") continue; // Already covered by placement
+        if (
+          history.status === "PENDING" ||
+          history.status === "PAID" ||
+          history.status === "CONFIRMED" ||
+          history.status === "PROCESSING"
+        ) {
+          continue; // Covered by placement notification
+        }
+
+        if (seenMilestones.has(history.status)) continue;
+        seenMilestones.add(history.status);
 
         let type: NotificationItem["type"] = "PROCESSING";
         let statusColor: NotificationItem["statusColor"] = "blue";
@@ -113,12 +123,13 @@ export async function GET(request: NextRequest) {
           type = "DELIVERED";
           statusColor = "emerald";
           title = `Order #${order.orderNumber} Delivered`;
-        } else if (history.status === "PAID") {
-          continue; // Already covered
+        } else if (history.status === "CANCELLED") {
+          statusColor = "amber";
+          title = `Order #${order.orderNumber} Cancelled`;
         }
 
         notifications.push({
-          id: `notif-history-${history.id}`,
+          id: `notif-${history.status.toLowerCase()}-${order.id}`,
           orderId: order.id,
           orderNumber: order.orderNumber,
           type,
@@ -132,14 +143,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. Default Store Announcement if notifications list is empty or minimal
+    // 3. Default Store Announcement if notifications list is empty
     if (notifications.length === 0) {
       notifications.push({
         id: "notif-welcome-atelier",
         type: "ANNOUNCEMENT",
         title: "Welcome to ABXV Footwear",
         message: "Explore our latest sneaker drops with complimentary express shipping on all orders.",
-        createdAt: new Date().toISOString(),
+        createdAt: "2025-01-01T00:00:00.000Z",
         link: "/shop",
         statusBadge: "ATELIER",
         statusColor: "purple",

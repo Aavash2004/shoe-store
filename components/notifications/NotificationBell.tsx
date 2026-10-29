@@ -46,7 +46,8 @@ function formatRelativeTime(dateString: string): string {
 export function NotificationBell() {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  // Default to "unread" so previously read notifications are never loaded with the new one
+  const [filter, setFilter] = useState<"unread" | "all">("unread");
   const { status } = useSession();
   const isLoggedIn = status === "authenticated";
 
@@ -58,13 +59,14 @@ export function NotificationBell() {
     toggleOpen,
     markAsRead,
     markAllAsRead,
+    clearReadNotifications,
     fetchNotifications,
     readIds,
+    guestOrderIds,
   } = useNotificationStore();
 
-  // Initial fetch and 30-second live polling (only when logged in)
+  // Initial fetch and 30-second live polling (for logged in users and guests with orders)
   useEffect(() => {
-    if (!isLoggedIn) return;
     fetchNotifications();
 
     const interval = setInterval(() => {
@@ -85,7 +87,14 @@ export function NotificationBell() {
       window.removeEventListener("order-updated", handleOrderEvent);
       window.removeEventListener("focus", handleOrderEvent);
     };
-  }, [isLoggedIn, fetchNotifications]);
+  }, [fetchNotifications]);
+
+  // When opening the notification center, if there are unread items, always focus on unread view
+  useEffect(() => {
+    if (isOpen && unreadCount > 0) {
+      setFilter("unread");
+    }
+  }, [isOpen, unreadCount]);
 
   // Click outside to close
   useEffect(() => {
@@ -116,10 +125,24 @@ export function NotificationBell() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, setIsOpen]);
 
+  // Helper to determine if an item is read with backward-compatible ID support
+  const isItemRead = (item: NotificationItem): boolean => {
+    if (readIds.includes(item.id)) return true;
+    if (item.id.startsWith("notif-order-")) {
+      const rawId = item.id.replace("notif-order-", "");
+      if (
+        readIds.includes(`notif-placed-${rawId}`) ||
+        readIds.includes(`notif-paid-${rawId}`)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const unreadNotifications = notifications.filter((n) => !isItemRead(n));
   const displayedNotifications =
-    filter === "unread"
-      ? notifications.filter((n) => !readIds.includes(n.id))
-      : notifications;
+    filter === "unread" ? unreadNotifications : notifications;
 
   const getNotificationIcon = (type: NotificationItem["type"]) => {
     switch (type) {
@@ -155,10 +178,10 @@ export function NotificationBell() {
         onClick={toggleOpen}
         aria-label={`Notifications (${unreadCount} unread)`}
         aria-expanded={isOpen}
-        className="relative rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1 transition-transform active:scale-95"
+        className="relative rounded-full text-[var(--color-navy)] hover:bg-[var(--color-sand)]/40 hover:text-[var(--color-navy)] focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] focus-visible:ring-offset-1 transition-transform active:scale-95 cursor-pointer"
       >
         <Bell className="h-5 w-5" strokeWidth={1.5} />
-        {isLoggedIn && unreadCount > 0 && (
+        {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#FC563C] px-1 text-[10px] font-bold leading-none text-white border-2 border-[var(--color-cream)] shadow-xs animate-in zoom-in-50">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
@@ -174,9 +197,13 @@ export function NotificationBell() {
               <h3 className="text-sm font-bold text-[var(--color-navy)]">
                 Notifications
               </h3>
-              {unreadCount > 0 && (
+              {unreadCount > 0 ? (
                 <span className="rounded-full bg-[#FC563C]/10 px-2 py-0.5 text-[11px] font-bold text-[#FC563C]">
                   {unreadCount} new
+                </span>
+              ) : (
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                  Caught up
                 </span>
               )}
             </div>
@@ -190,7 +217,7 @@ export function NotificationBell() {
                   title="Mark all as read"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
-                  <span>Mark read</span>
+                  <span>Mark all read</span>
                 </button>
               )}
               <button
@@ -204,53 +231,86 @@ export function NotificationBell() {
             </div>
           </div>
 
-          {/* Filter Pills */}
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--color-sand)]/40 bg-white">
-            <button
-              type="button"
-              onClick={() => setFilter("all")}
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${filter === "all"
-                  ? "bg-[var(--color-navy)] text-white shadow-xs"
-                  : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
+          {/* Filter Pills and Clean Options */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-sand)]/40 bg-white">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFilter("unread")}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                  filter === "unread"
+                    ? "bg-[var(--color-navy)] text-white shadow-xs"
+                    : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
                 }`}
-            >
-              All ({notifications.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter("unread")}
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${filter === "unread"
-                  ? "bg-[var(--color-navy)] text-white shadow-xs"
-                  : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
+              >
+                Unread ({unreadCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                  filter === "all"
+                    ? "bg-[var(--color-navy)] text-white shadow-xs"
+                    : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
                 }`}
-            >
-              Unread ({unreadCount})
-            </button>
+              >
+                All ({notifications.length})
+              </button>
+            </div>
+
+            {notifications.length > unreadCount && (
+              <button
+                type="button"
+                onClick={() => clearReadNotifications()}
+                className="text-[10px] font-medium text-[var(--color-navy)]/50 hover:text-[#FC563C] transition-colors cursor-pointer"
+                title="Clear read notifications from history"
+              >
+                Clear read
+              </button>
+            )}
           </div>
 
           {/* Notifications Scrollable List */}
           <div className="max-h-[380px] overflow-y-auto divide-y divide-[var(--color-sand)]/30">
             {displayedNotifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-sand)]/30 text-[var(--color-navy)]/50 mb-3">
-                  <Inbox className="h-6 w-6" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 mb-3 border border-emerald-100/60">
+                  {filter === "unread" ? (
+                    <CheckCircle2 className="h-6 w-6" />
+                  ) : (
+                    <Inbox className="h-6 w-6" />
+                  )}
                 </div>
                 <p className="text-xs font-bold text-[var(--color-navy)]">
-                  {filter === "unread" ? "No unread notifications" : "All caught up!"}
+                  {filter === "unread"
+                    ? "You're all caught up!"
+                    : "No notification history"}
                 </p>
-                <p className="mt-1 text-[11px] text-[var(--color-navy)]/60 max-w-[200px]">
-                  Updates on your shoe orders, tracking numbers, and delivery milestones will appear here.
+                <p className="mt-1 text-[11px] text-[var(--color-navy)]/60 max-w-[220px]">
+                  {filter === "unread"
+                    ? "No unread notifications. New order updates and shipping notices will appear here."
+                    : "Updates on your shoe orders, tracking numbers, and delivery milestones will appear here."}
                 </p>
+                {filter === "unread" && notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter("all")}
+                    className="mt-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-navy)]/5 px-3 py-1 text-xs font-semibold text-[var(--color-navy)] hover:bg-[var(--color-navy)]/10 transition-colors cursor-pointer"
+                  >
+                    View past notifications ({notifications.length})
+                  </button>
+                )}
               </div>
             ) : (
               displayedNotifications.map((item) => {
-                const isRead = readIds.includes(item.id);
+                const isRead = isItemRead(item);
                 return (
                   <div
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className={`group relative flex items-start gap-3 p-3.5 text-left transition-colors cursor-pointer hover:bg-[var(--color-cream)]/50 ${!isRead ? "bg-sky-50/40" : "bg-white"
-                      }`}
+                    className={`group relative flex items-start gap-3 p-3.5 text-left transition-colors cursor-pointer hover:bg-[var(--color-cream)]/50 ${
+                      !isRead ? "bg-sky-50/40" : "bg-white"
+                    }`}
                   >
                     {/* Notification Type Icon */}
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white border border-[var(--color-sand)] shadow-xs">
@@ -261,10 +321,11 @@ export function NotificationBell() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <span
-                          className={`text-xs font-bold truncate ${!isRead
+                          className={`text-xs font-bold truncate ${
+                            !isRead
                               ? "text-[var(--color-navy)]"
                               : "text-[var(--color-navy)]/80"
-                            }`}
+                          }`}
                         >
                           {item.title}
                         </span>
@@ -280,21 +341,42 @@ export function NotificationBell() {
                       <div className="mt-2 flex items-center justify-between">
                         {item.statusBadge ? (
                           <span
-                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${item.statusColor === "emerald"
+                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
+                              item.statusColor === "emerald"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : item.statusColor === "purple"
-                                  ? "bg-purple-100 text-purple-800"
-                                  : "bg-blue-100 text-blue-800"
-                              }`}
+                                ? "bg-purple-100 text-purple-800"
+                                : item.statusColor === "amber"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-blue-100 text-blue-800"
+                            }`}
                           >
                             {item.statusBadge}
                           </span>
-                        ) : <span />}
+                        ) : (
+                          <span />
+                        )}
 
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-navy)]/60 group-hover:text-[var(--color-navy)]">
-                          <span>Details</span>
-                          <ExternalLink className="h-3 w-3" />
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {!isRead && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAsRead(item.id);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-navy)]/60 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                              title="Mark as read"
+                            >
+                              <Check className="h-3 w-3" />
+                              <span>Read</span>
+                            </button>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-navy)]/60 group-hover:text-[var(--color-navy)]">
+                            <span>Details</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </span>
+                        </div>
                       </div>
                     </div>
 
