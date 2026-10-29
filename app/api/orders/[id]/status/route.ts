@@ -118,7 +118,32 @@ export async function GET(
 
     const isAuthorized = isOwner || isAdmin || isMatchingEmail;
 
-    // 4. Return ONLY status/paymentStatus unless owner or matching email (BUG-003 fix)
+    // 4. If order is still PENDING with Stripe, check Stripe directly to recover missed/delayed webhooks
+    if (
+      isAuthorized &&
+      order.paymentStatus === "PENDING" &&
+      order.paymentMethod === "STRIPE" &&
+      order.stripePaymentIntentId
+    ) {
+      try {
+        const { stripe, confirmStripePayment } = await import("@/lib/services/stripe");
+        const intent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+        if (intent.status === "succeeded") {
+          await confirmStripePayment(order.id, {
+            paymentIntentId: order.stripePaymentIntentId,
+            amount: intent.amount,
+            currency: intent.currency,
+            source: "order_status_poll",
+          });
+          order.paymentStatus = "PAID";
+          order.status = "PROCESSING";
+        }
+      } catch (e) {
+        console.warn("[Order Status] Passive Stripe check warning:", e);
+      }
+    }
+
+    // 5. Return ONLY status/paymentStatus unless owner or matching email (BUG-003 fix)
     if (!isAuthorized) {
       return NextResponse.json(
         {

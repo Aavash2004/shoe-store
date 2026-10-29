@@ -331,22 +331,6 @@ function TrackOrderInner() {
                   </span>
                 )}
               </Button>
-
-              {process.env.NODE_ENV !== "production" && (
-                <div className="pt-2 border-t border-[var(--color-sand)]/50 text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOrderNumber("SH-MVP0W7CG-2134");
-                      setEmail("admin@shoestore.com");
-                      fetchOrder("SH-MVP0W7CG-2134", "admin@shoestore.com");
-                    }}
-                    className="text-xs font-semibold text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] underline transition-colors cursor-pointer"
-                  >
-                    Quick Demo: Load Sample Order (SH-MVP0W7CG-2134)
-                  </button>
-                </div>
-              )}
             </form>
           </div>
         )}

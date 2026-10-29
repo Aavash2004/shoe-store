@@ -2,12 +2,44 @@ import Stripe from "stripe";
 import { decrementStockWithLock, InsufficientStockError } from "@/lib/checkout/stock";
 import * as Sentry from "@sentry/nextjs";
 
-// Lazily or safely instantiate Stripe client so build succeeds even if env is pending
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "sk_test_placeholder_key_for_build";
+// Dynamically resolve Stripe client so it reads process.env.STRIPE_SECRET_KEY at call time,
+// preventing static module evaluation from permanently locking in the placeholder build key.
+let _stripeClientInstance: Stripe | null = null;
+let _cachedKey: string | null = null;
 
-export const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2026-08-26.dahlia",
-  typescript: true,
+export function getStripeClient(): Stripe {
+  let currentKey = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!currentKey) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("dotenv").config();
+      currentKey = process.env.STRIPE_SECRET_KEY?.trim();
+    } catch {}
+  }
+  const effectiveKey = currentKey || "sk_test_placeholder_key_for_build";
+  if (!_stripeClientInstance || _cachedKey !== effectiveKey) {
+    _stripeClientInstance = new Stripe(effectiveKey, {
+      apiVersion: "2026-08-26.dahlia",
+      typescript: true,
+    });
+    _cachedKey = effectiveKey;
+  }
+  return _stripeClientInstance;
+}
+
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop, receiver) {
+    const client = getStripeClient();
+    const value = Reflect.get(client, prop, receiver);
+    if (typeof value === "function") {
+      return value.bind(client);
+    }
+    return value;
+  },
+  set(_target, prop, value) {
+    const client = getStripeClient();
+    return Reflect.set(client, prop, value);
+  },
 });
 
 /**

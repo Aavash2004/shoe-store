@@ -64,7 +64,8 @@ export function StripePaymentForm({
         if (onPaymentSuccess) {
           onPaymentSuccess();
         }
-        window.location.replace(returnUrl);
+        const destinationUrl = `${returnUrl}&payment_intent=${encodeURIComponent(paymentIntent.id)}`;
+        window.location.replace(destinationUrl);
       } else {
         window.location.replace(returnUrl);
       }

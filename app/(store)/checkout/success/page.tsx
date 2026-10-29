@@ -10,29 +10,32 @@ export default async function CheckoutSuccessPage({
   const targetId = orderId || order;
 
   // Verify PaymentIntent server-side with Stripe if present and confirm order idempotently
-  if (payment_intent && targetId) {
+  if (targetId) {
     try {
       const { prisma } = await import("@/lib/db/prisma");
       const orderRecord = await prisma.order.findUnique({
         where: { id: targetId },
-        select: { id: true, stripePaymentIntentId: true },
+        select: { id: true, stripePaymentIntentId: true, paymentStatus: true },
       });
 
-      // Confirm ONLY when the order's stored PaymentIntent id matches the retrieved one
-      if (orderRecord && orderRecord.stripePaymentIntentId === payment_intent) {
-        const intent = await stripe.paymentIntents.retrieve(payment_intent);
+      const piToVerify = payment_intent || orderRecord?.stripePaymentIntentId;
+
+      // Confirm when stored or provided PaymentIntent is present and order is not already paid
+      if (
+        orderRecord &&
+        orderRecord.paymentStatus !== "PAID" &&
+        piToVerify &&
+        (!payment_intent || orderRecord.stripePaymentIntentId === payment_intent)
+      ) {
+        const intent = await stripe.paymentIntents.retrieve(piToVerify);
         if (intent.status === "succeeded") {
           await confirmStripePayment(orderRecord.id, {
-            paymentIntentId: payment_intent,
+            paymentIntentId: piToVerify,
             amount: intent.amount,
             currency: intent.currency,
             source: "checkout_success",
           });
         }
-      } else {
-        console.warn(
-          `[Checkout Success] Mismatch or missing order: order ${targetId} stored PI "${orderRecord?.stripePaymentIntentId}" does not match provided "${payment_intent}". Confirmation skipped.`
-        );
       }
     } catch (err) {
       console.warn("[Checkout Success] PaymentIntent verification error:", err);
