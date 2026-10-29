@@ -110,6 +110,7 @@ export async function handleLatePayment(
     stripePaymentIntentId: string | null;
     cancelReason: string | null;
     couponId: string | null;
+    userId?: string | null;
     items: Array<{ variantId: string; quantity: number }>;
   },
   options?: ConfirmStripePaymentOptions
@@ -245,6 +246,14 @@ export async function handleLatePayment(
           note: `Late payment confirmed via Stripe (PI: ${piId}). Stock successfully re-reserved and order reinstated to PROCESSING.`,
         },
       });
+
+      // Clear logged-in user database cart upon late payment reinstatement
+      if (order.userId) {
+        const userCart = await tx.cart.findUnique({ where: { userId: order.userId } });
+        if (userCart) {
+          await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });
+        }
+      }
     });
 
     console.warn(
@@ -486,6 +495,14 @@ export async function confirmStripePayment(
           note: `Payment confirmed via Stripe${sourceStr} (${amountStr}PI: ${piId})`,
         },
       });
+
+      // Clear logged-in user database cart upon successful payment confirmation
+      if (order.userId) {
+        const userCart = await tx.cart.findUnique({ where: { userId: order.userId } });
+        if (userCart) {
+          await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });
+        }
+      }
     }
 
     return { count: updateRes.count, orderId: order.id };

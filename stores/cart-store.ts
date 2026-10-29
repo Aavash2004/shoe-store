@@ -144,6 +144,7 @@ function syncClearToServer() {
   inFlightSyncs.clear();
   fetch("/api/cart?clear=true", {
     method: "DELETE",
+    keepalive: true,
   }).catch(() => {});
 }
 
