@@ -20,6 +20,7 @@ import { formatCurrency } from "@/lib/constants/currencies";
 import { useCartStore } from "@/stores/cart-store";
 import { useNotificationStore } from "@/stores/notification-store";
 import { PrintInvoice, type InvoiceOrder } from "@/components/invoice/PrintInvoice";
+import { OrderConfirmationSkeleton } from "@/components/checkout/OrderConfirmationSkeleton";
 
 interface OrderItemData {
   id: string;
@@ -191,17 +192,7 @@ export default function OrderConfirmationPage({
   }
 
   if (loading) {
-    return (
-      <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center px-4 text-center">
-        <RefreshCw className="h-10 w-10 animate-spin text-[var(--color-navy)]/60 mb-4" />
-        <h2 className="text-xl font-bold text-[var(--color-navy)]">
-          Retrieving Order Details...
-        </h2>
-        <p className="mt-2 text-sm text-[var(--color-navy)]/60">
-          Communicating with order management system.
-        </p>
-      </div>
-    );
+    return <OrderConfirmationSkeleton />;
   }
 
   if (error || !order) {

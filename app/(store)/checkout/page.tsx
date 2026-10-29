@@ -50,6 +50,7 @@ import { calculateShipping } from "@/lib/checkout/shipping";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/services/stripe-client";
 import { StripePaymentForm } from "@/components/checkout/StripePaymentForm";
+import { OrderConfirmationSkeleton } from "@/components/checkout/OrderConfirmationSkeleton";
 import { calculateDiscountAndTotal } from "@/lib/checkout/discount";
 import { getOrderNumber } from "./actions";
 
@@ -158,6 +159,7 @@ export default function CheckoutPage() {
   }, []);
 
   const [loading, setLoading] = useState(false);
+  const [isNavigatingToConfirmation, setIsNavigatingToConfirmation] = useState(false);
   const [error, setError] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
@@ -410,6 +412,7 @@ export default function CheckoutPage() {
           return;
         }
         // Clear cart before redirecting
+        setIsNavigatingToConfirmation(true);
         clearCart();
         // Redirect browser to Khalti payment gateway
         window.location.href = result.paymentUrl;
@@ -451,6 +454,7 @@ export default function CheckoutPage() {
         }
       }
 
+      setIsNavigatingToConfirmation(true);
       clearCart();
 
       router.push(`/order-confirmation/${result.order.id}`);
@@ -503,6 +507,10 @@ export default function CheckoutPage() {
         </StoreContainer>
       </div>
     );
+  }
+
+  if (isNavigatingToConfirmation) {
+    return <OrderConfirmationSkeleton />;
   }
 
   if (items.length === 0) {
@@ -614,7 +622,10 @@ export default function CheckoutPage() {
                     orderNumber={stripeData.orderNumber}
                     amount={stripeData.amount}
                     currency={stripeData.currency}
-                    onPaymentSuccess={() => clearCart()}
+                    onPaymentSuccess={() => {
+                      setIsNavigatingToConfirmation(true);
+                      clearCart();
+                    }}
                   />
                 </Elements>
               </section>
