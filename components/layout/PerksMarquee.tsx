@@ -3,7 +3,7 @@ import { ShieldCheck, Truck, RotateCcw, Sparkles, Award } from "lucide-react";
 const perks = [
   {
     icon: Truck,
-    label: "FREE SHIPPING OVER $75",
+    label: "FREE SHIPPING OVER $150",
   },
   {
     icon: RotateCcw,

@@ -78,9 +78,8 @@ export const useNotificationStore = create<NotificationState>()(
             queryParams.set("orderIds", guestOrderIds.join(","));
           }
 
-          const url = `/api/notifications${
-            queryParams.toString() ? `?${queryParams.toString()}` : ""
-          }`;
+          const url = `/api/notifications${queryParams.toString() ? `?${queryParams.toString()}` : ""
+            }`;
 
           const res = await fetch(url);
           if (!res.ok) {

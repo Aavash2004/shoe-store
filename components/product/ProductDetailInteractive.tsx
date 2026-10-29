@@ -378,7 +378,7 @@ export function ProductDetailInteractive({
         </div>
 
         <p className="text-center text-xs text-[var(--color-navy)]/50">
-          Free shipping on orders over $100
+          Free shipping on orders over $150
         </p>
       </div>
 

@@ -86,18 +86,16 @@ export function AccountNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 focus-visible:outline-none ${
-                  active
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 focus-visible:outline-none ${active
                     ? "bg-[var(--color-navy)] text-white shadow-xs"
                     : "text-[var(--color-navy)]/65 hover:text-[var(--color-navy)] hover:bg-white/60 active:scale-95"
-                }`}
+                  }`}
               >
                 <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? "text-[var(--color-sky)]" : "text-[var(--color-navy)]/50"}`} />
                 <span>{item.name}</span>
                 {item.name === "Wishlist" && wishlistCount > 0 && (
-                  <span className={`flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold shadow-xs ${
-                    active ? "bg-[#FC563C] text-white" : "bg-[var(--color-navy)] text-white"
-                  }`}>
+                  <span className={`flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9px] font-bold shadow-xs ${active ? "bg-[#FC563C] text-white" : "bg-[var(--color-navy)] text-white"
+                    }`}>
                     {wishlistCount > 99 ? "99+" : wishlistCount}
                   </span>
                 )}
@@ -141,24 +139,21 @@ export function AccountNav() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] ${
-                    active
+                  className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-navy)] ${active
                       ? "bg-[var(--color-navy)] text-white shadow-xs"
                       : "text-[#6E7575] hover:bg-white/80 hover:text-[var(--color-navy)]"
-                  }`}
+                    }`}
                 >
-                  <div className={`p-1.5 rounded-xl transition-colors ${
-                    active
+                  <div className={`p-1.5 rounded-xl transition-colors ${active
                       ? "bg-white/15 text-[var(--color-sky)]"
                       : "bg-[var(--color-sand)]/40 text-[#6E7575] group-hover:text-[var(--color-navy)] group-hover:bg-[var(--color-sand)]/70"
-                  }`}>
+                    }`}>
                     <Icon className="w-3.5 h-3.5" />
                   </div>
                   <span className="flex-1 font-medium">{item.name}</span>
                   {item.name === "Wishlist" && wishlistCount > 0 && (
-                    <span className={`flex h-4.5 min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold shadow-xs ${
-                      active ? "bg-[#FC563C] text-white" : "bg-[var(--color-navy)] text-white"
-                    }`}>
+                    <span className={`flex h-4.5 min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold shadow-xs ${active ? "bg-[#FC563C] text-white" : "bg-[var(--color-navy)] text-white"
+                      }`}>
                       {wishlistCount > 99 ? "99+" : wishlistCount}
                     </span>
                   )}

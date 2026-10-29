@@ -180,11 +180,10 @@ function ShopFiltersInner({
           <button
             type="button"
             onClick={handleOpenDrawer}
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
-              activeFilterCount > 0
-                ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
-                : "bg-[var(--color-cream-alt)] text-[var(--color-navy)] border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
-            }`}
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${activeFilterCount > 0
+              ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
+              : "bg-[var(--color-cream-alt)] text-[var(--color-navy)] border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
+              }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             <span>Filters</span>
@@ -229,9 +228,8 @@ function ShopFiltersInner({
 
       {/* Slide-over Filter Drawer Panel */}
       <div
-        className={`fixed top-0 right-0 z-50 h-full w-full sm:w-[420px] bg-[var(--color-cream)] border-l border-[var(--color-sand)] shadow-2xl transition-transform duration-300 ease-in-out flex flex-col ${
-          drawerOpen ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed top-0 right-0 z-50 h-full w-full sm:w-[420px] bg-[var(--color-cream)] border-l border-[var(--color-sand)] shadow-2xl transition-transform duration-300 ease-in-out flex flex-col ${drawerOpen ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         {/* Drawer Header */}
         <div className="flex items-center justify-between p-5 border-b border-[var(--color-sand)]">
@@ -268,14 +266,12 @@ function ShopFiltersInner({
               role="switch"
               aria-checked={draftInStock}
               onClick={() => setDraftInStock(!draftInStock)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                draftInStock ? "bg-emerald-600" : "bg-stone-300"
-              }`}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${draftInStock ? "bg-emerald-600" : "bg-stone-300"
+                }`}
             >
               <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                  draftInStock ? "translate-x-5" : "translate-x-0"
-                }`}
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${draftInStock ? "translate-x-5" : "translate-x-0"
+                  }`}
               />
             </button>
           </div>
@@ -313,11 +309,10 @@ function ShopFiltersInner({
                             : [...prev, b]
                         );
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer flex items-center gap-1.5 ${
-                        isSelected
-                          ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
-                          : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer flex items-center gap-1.5 ${isSelected
+                        ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
+                        : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
+                        }`}
                     >
                       {isSelected && <Check className="w-3 h-3 text-[var(--color-sky)]" />}
                       <span>{b}</span>
@@ -399,11 +394,10 @@ function ShopFiltersInner({
                       setDraftMinPrice(bracket.min);
                       setDraftMaxPrice(bracket.max);
                     }}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium border cursor-pointer transition-colors ${
-                      isActiveBracket
-                        ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)]"
-                        : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/70 border-[var(--color-sand)] hover:bg-[var(--color-sand)]/30"
-                    }`}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium border cursor-pointer transition-colors ${isActiveBracket
+                      ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)]"
+                      : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/70 border-[var(--color-sand)] hover:bg-[var(--color-sand)]/30"
+                      }`}
                   >
                     {bracket.label}
                   </button>
@@ -426,11 +420,10 @@ function ShopFiltersInner({
                       key={cat}
                       type="button"
                       onClick={() => setDraftCategory(isSelected ? undefined : cat)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
-                        isSelected
-                          ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
-                          : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer ${isSelected
+                        ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
+                        : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
+                        }`}
                     >
                       {cat}
                     </button>
@@ -469,11 +462,10 @@ function ShopFiltersInner({
                           isSelected ? prev.filter((item) => item !== sz) : [...prev, sz]
                         );
                       }}
-                      className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center transition-all border cursor-pointer ${
-                        isSelected
-                          ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
-                          : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
-                      }`}
+                      className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center transition-all border cursor-pointer ${isSelected
+                        ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
+                        : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
+                        }`}
                     >
                       {sz}
                     </button>
@@ -497,11 +489,10 @@ function ShopFiltersInner({
                       key={clr}
                       type="button"
                       onClick={() => setDraftColor(isSelected ? undefined : clr)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
-                        isSelected
-                          ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
-                          : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border cursor-pointer ${isSelected
+                        ? "bg-[var(--color-navy)] text-[var(--color-cream)] border-[var(--color-navy)] shadow-xs"
+                        : "bg-[var(--color-cream-alt)] text-[var(--color-navy)]/80 border-[var(--color-sand)] hover:border-[var(--color-navy)]/40"
+                        }`}
                     >
                       {clr}
                     </button>

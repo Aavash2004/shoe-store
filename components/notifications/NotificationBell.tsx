@@ -209,22 +209,20 @@ export function NotificationBell() {
             <button
               type="button"
               onClick={() => setFilter("all")}
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                filter === "all"
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${filter === "all"
                   ? "bg-[var(--color-navy)] text-white shadow-xs"
                   : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
-              }`}
+                }`}
             >
               All ({notifications.length})
             </button>
             <button
               type="button"
               onClick={() => setFilter("unread")}
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                filter === "unread"
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${filter === "unread"
                   ? "bg-[var(--color-navy)] text-white shadow-xs"
                   : "text-[var(--color-navy)]/60 hover:text-[var(--color-navy)] hover:bg-[var(--color-sand)]/30"
-              }`}
+                }`}
             >
               Unread ({unreadCount})
             </button>
@@ -251,9 +249,8 @@ export function NotificationBell() {
                   <div
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className={`group relative flex items-start gap-3 p-3.5 text-left transition-colors cursor-pointer hover:bg-[var(--color-cream)]/50 ${
-                      !isRead ? "bg-sky-50/40" : "bg-white"
-                    }`}
+                    className={`group relative flex items-start gap-3 p-3.5 text-left transition-colors cursor-pointer hover:bg-[var(--color-cream)]/50 ${!isRead ? "bg-sky-50/40" : "bg-white"
+                      }`}
                   >
                     {/* Notification Type Icon */}
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white border border-[var(--color-sand)] shadow-xs">
@@ -264,11 +261,10 @@ export function NotificationBell() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <span
-                          className={`text-xs font-bold truncate ${
-                            !isRead
+                          className={`text-xs font-bold truncate ${!isRead
                               ? "text-[var(--color-navy)]"
                               : "text-[var(--color-navy)]/80"
-                          }`}
+                            }`}
                         >
                           {item.title}
                         </span>
@@ -284,13 +280,12 @@ export function NotificationBell() {
                       <div className="mt-2 flex items-center justify-between">
                         {item.statusBadge ? (
                           <span
-                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
-                              item.statusColor === "emerald"
+                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${item.statusColor === "emerald"
                                 ? "bg-emerald-100 text-emerald-800"
                                 : item.statusColor === "purple"
-                                ? "bg-purple-100 text-purple-800"
-                                : "bg-blue-100 text-blue-800"
-                            }`}
+                                  ? "bg-purple-100 text-purple-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }`}
                           >
                             {item.statusBadge}
                           </span>
