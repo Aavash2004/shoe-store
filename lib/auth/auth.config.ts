@@ -19,6 +19,10 @@ export const authConfig: NextAuthConfig = {
         token.name = user.name;
         token.role = (user as any).role;
       }
+      // Ensure token.iat is always a valid numeric timestamp for staff session age & invalidation
+      if (typeof token.iat !== "number") {
+        token.iat = Math.floor(Date.now() / 1000);
+      }
       return token;
     },
     async session({ session, token }) {
@@ -27,6 +31,7 @@ export const authConfig: NextAuthConfig = {
         session.user.email = (token.email as string) || session.user.email;
         session.user.name = (token.name as string) || session.user.name;
         session.user.role = (token.role as string) || session.user.role || "CUSTOMER";
+        (session as any).iat = typeof token.iat === "number" ? token.iat : undefined;
       }
       return session;
     },

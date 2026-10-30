@@ -30,17 +30,19 @@ export async function POST(request: NextRequest) {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
+    // Same error for all cases — don't reveal whether the email is STAFF, ADMIN, or CUSTOMER
     return NextResponse.json({ error: "Email already in use" }, { status: 409 });
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // CRITICAL: Always hardcode CUSTOMER. Public signup can never produce STAFF or ADMIN.
   const user = await prisma.user.create({
     data: {
       name,
       email,
       password: hashedPassword,
-      role: "CUSTOMER", // Explicitly hardcode CUSTOMER role
+      role: "CUSTOMER",
     },
   });
 

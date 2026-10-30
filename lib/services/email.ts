@@ -437,6 +437,19 @@ export async function sendOrderConfirmationEmail(orderId: string) {
   }
 }
 
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>'"]/g, (tag) => {
+    const chars: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "'": "&#39;",
+      '"': "&quot;",
+    };
+    return chars[tag] || tag;
+  });
+}
+
 /**
  * Send Shipping / Status Update email
  */
@@ -461,6 +474,7 @@ export async function sendShippingUpdateEmail(orderId: string, statusNote?: stri
     }
 
     const recipientName = order.user?.name || order.guestName || "Valued Customer";
+    const safeNote = statusNote ? escapeHtml(statusNote) : null;
 
     const html = wrapEmailHtml(
       `Update on Order #${order.orderNumber}`,
@@ -471,7 +485,7 @@ export async function sendShippingUpdateEmail(orderId: string, statusNote?: stri
       <div style="background-color: #0f141e; border: 1px solid #283347; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
         <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;">Order Number: <strong style="color: #ffffff;">#${order.orderNumber}</strong></p>
         <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;">Current Status: <strong style="color: #38bdf8;">${order.status}</strong></p>
-        ${statusNote ? `<p style="margin: 0; font-size: 13px; color: #e2e8f0; background-color: #1a2233; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #38bdf8;">Note: ${statusNote}</p>` : ""}
+        ${safeNote ? `<p style="margin: 0; font-size: 13px; color: #e2e8f0; background-color: #1a2233; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #38bdf8;">Note: ${safeNote}</p>` : ""}
       </div>
 
       <div style="text-align: center; margin: 28px 0;">

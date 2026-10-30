@@ -18,6 +18,7 @@ enum UserRole {
   USER
   ADMIN
   CUSTOMER
+  STAFF
 }
 
 enum PaymentStatus {
@@ -45,6 +46,11 @@ model User {
   phone         String?
   password      String?
   role          UserRole  @default(CUSTOMER)
+
+  // Staff lifecycle fields
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
+  passwordChangedAt  DateTime?
 
   accounts Account[]
   sessions Session[]

@@ -15,6 +15,7 @@ import {
   Ticket,
   Star,
   Users,
+  ShieldCheck,
   LogOut,
   Menu,
   X,
@@ -45,6 +46,7 @@ const NAV_ITEMS = [
   { href: "/admin/coupons", label: "Coupons", icon: Ticket },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
   { href: "/admin/customers", label: "Customers", icon: Users },
+  { href: "/admin/staff", label: "Staff", icon: ShieldCheck },
 ];
 
 export function AdminSidebar({ user }: AdminSidebarProps) {

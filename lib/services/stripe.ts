@@ -14,7 +14,7 @@ export function getStripeClient(): Stripe {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("dotenv").config();
       currentKey = process.env.STRIPE_SECRET_KEY?.trim();
-    } catch {}
+    } catch { }
   }
   const effectiveKey = currentKey || "sk_test_placeholder_key_for_build";
   if (!_stripeClientInstance || _cachedKey !== effectiveKey) {
@@ -110,7 +110,6 @@ export async function handleLatePayment(
     stripePaymentIntentId: string | null;
     cancelReason: string | null;
     couponId: string | null;
-    userId?: string | null;
     items: Array<{ variantId: string; quantity: number }>;
   },
   options?: ConfirmStripePaymentOptions
@@ -187,7 +186,7 @@ export async function handleLatePayment(
           `A late Stripe payment (${piId}) arrived for cancelled order #${order.orderNumber} (reason: ${order.cancelReason}), but the automatic refund failed: ${refundErr.message}. Order placed in MANUAL_REVIEW.`,
           { orderId: order.id, paymentIntentId: piId, error: refundErr.message }
         );
-      } catch {}
+      } catch { }
 
       Sentry.captureException(refundErr, {
         extra: {
@@ -246,14 +245,6 @@ export async function handleLatePayment(
           note: `Late payment confirmed via Stripe (PI: ${piId}). Stock successfully re-reserved and order reinstated to PROCESSING.`,
         },
       });
-
-      // Clear logged-in user database cart upon late payment reinstatement
-      if (order.userId) {
-        const userCart = await tx.cart.findUnique({ where: { userId: order.userId } });
-        if (userCart) {
-          await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });
-        }
-      }
     });
 
     console.warn(
@@ -435,7 +426,7 @@ export async function confirmStripePayment(
           `Order #${order.orderNumber} received Stripe payment ${options.paymentIntentId || order.stripePaymentIntentId} with mismatch: expected ${order.currency} ${expectedSmallestUnit} smallest unit, received ${options.currency?.toUpperCase()} ${options.amount}. Placed in MANUAL_REVIEW.`,
           { orderId: order.id, expected: expectedSmallestUnit, received: options.amount }
         );
-      } catch {}
+      } catch { }
 
       Sentry.captureMessage(
         `Stripe payment amount mismatch for order #${order.orderNumber}`,
@@ -495,14 +486,6 @@ export async function confirmStripePayment(
           note: `Payment confirmed via Stripe${sourceStr} (${amountStr}PI: ${piId})`,
         },
       });
-
-      // Clear logged-in user database cart upon successful payment confirmation
-      if (order.userId) {
-        const userCart = await tx.cart.findUnique({ where: { userId: order.userId } });
-        if (userCart) {
-          await tx.cartItem.deleteMany({ where: { cartId: userCart.id } });
-        }
-      }
     }
 
     return { count: updateRes.count, orderId: order.id };

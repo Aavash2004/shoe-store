@@ -1,7 +1,12 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/auth.config";
-import { sanitizeCallbackUrl, evaluateAdminRouteAccess } from "@/lib/auth/authorization";
+import {
+  sanitizeCallbackUrl,
+  evaluateAdminRouteAccess,
+  evaluateStaffRouteAccess,
+  isStaffSession,
+} from "@/lib/auth/authorization";
 
 const { auth } = NextAuth(authConfig);
 
@@ -21,6 +26,9 @@ const proxy = auth((req) => {
     userRole === "ADMIN" &&
     (!configuredAdminEmail || (!!userEmail && userEmail === configuredAdminEmail));
 
+  // Cheap JWT-only check for STAFF role (no DB hit in middleware)
+  const isStaff = isLoggedIn && isStaffSession(req.auth);
+
   // Redirect legacy /auth/login to /login
   if (pathname === "/auth/login") {
     const loginUrl = new URL("/login", req.nextUrl.origin);
@@ -35,6 +43,12 @@ const proxy = auth((req) => {
     if (isLoggedIn) {
       if (isAdmin) {
         return NextResponse.redirect(new URL("/admin", req.nextUrl.origin), {
+          headers: requestHeaders,
+        });
+      }
+      // Staff who visit /login get redirected to staff portal
+      if (isStaff) {
+        return NextResponse.redirect(new URL("/staff/orders", req.nextUrl.origin), {
           headers: requestHeaders,
         });
       }
@@ -64,11 +78,41 @@ const proxy = auth((req) => {
     }
   }
 
-  // Admin routes & ADMIN_LOGIN_PATH protection
+  // ============================================================
+  // STAFF ROUTES — cheap JWT role check only, real gate is in layout/server actions
+  // ============================================================
+  if (pathname === "/staff" || pathname.startsWith("/staff/")) {
+    // Block ADMIN from being routed here via /staff (they use /admin)
+    // Actually: allow ADMIN to access /staff/* for oversight
+    const staffDecision = evaluateStaffRouteAccess({
+      pathname,
+      isLoggedIn,
+      isStaff,
+      isAdmin,
+    });
+
+    if (staffDecision.action === "404") {
+      return new NextResponse(null, { status: 404, headers: requestHeaders });
+    }
+
+    if (staffDecision.action === "redirect") {
+      return NextResponse.redirect(new URL(staffDecision.target, req.nextUrl.origin), {
+        headers: requestHeaders,
+      });
+    }
+
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+  }
+
+  // ============================================================
+  // ADMIN ROUTES — STAFF is explicitly blocked (isAdmin is false for STAFF)
+  // ============================================================
   const adminDecision = evaluateAdminRouteAccess({
     pathname,
     isLoggedIn,
-    isAdmin,
+    isAdmin, // false for STAFF role, so they get 404
     adminLoginPath: process.env.ADMIN_LOGIN_PATH || "/admin/login",
   });
 

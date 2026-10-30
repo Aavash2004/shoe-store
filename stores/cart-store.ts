@@ -144,8 +144,7 @@ function syncClearToServer() {
   inFlightSyncs.clear();
   fetch("/api/cart?clear=true", {
     method: "DELETE",
-    keepalive: true,
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 export const useCartStore = create<CartState>()(
@@ -319,10 +318,10 @@ export const useCartStore = create<CartState>()(
           items: get().items.map((i) =>
             i.variantId === variantId
               ? {
-                  ...i,
-                  stock,
-                  quantity: Math.min(Math.max(1, i.quantity), stock),
-                }
+                ...i,
+                stock,
+                quantity: Math.min(Math.max(1, i.quantity), stock),
+              }
               : i
           ),
         });
