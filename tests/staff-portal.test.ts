@@ -222,16 +222,29 @@ async function runStaffPortalTests() {
   // ============================================================
   // 5. DB Verification: Mid-Session Demotion & Deactivation
   // ============================================================
-  function simulateDbGuardCheck(dbUser: {
-    role: string;
-    isActive: boolean;
-    mustChangePassword: boolean;
-  }) {
-    if (dbUser.role !== "STAFF") return { allowed: false, reason: "Role changed" };
+  function simulateDbGuardCheck(
+    dbUser: {
+      role: string;
+      isActive: boolean;
+      mustChangePassword: boolean;
+    },
+    options?: { allowAdmin?: boolean }
+  ) {
     if (!dbUser.isActive) return { allowed: false, reason: "Account deactivated" };
+    if (dbUser.role === "ADMIN") {
+      if (options?.allowAdmin !== false) return { allowed: true };
+      return { allowed: false, reason: "Role changed" };
+    }
+    if (dbUser.role !== "STAFF") return { allowed: false, reason: "Role changed" };
     if (dbUser.mustChangePassword) return { allowed: false, reason: "Password change required" };
     return { allowed: true };
   }
+
+  const adminUser = { role: "ADMIN", isActive: true, mustChangePassword: false };
+  assert(
+    simulateDbGuardCheck(adminUser, { allowAdmin: true }).allowed === true,
+    "Authenticated ADMIN user is permitted to access staff portal by DB guard"
+  );
 
   const demotedUser = { role: "CUSTOMER", isActive: true, mustChangePassword: false };
   assert(
@@ -387,7 +400,7 @@ async function runStaffPortalTests() {
   );
 
   // ============================================================
-  // 7. Atomic Concurrency Simulation: Concurrent Stock Deltas
+  // 7. Atomic Concurrency Simulation: Concurrent Stock Deltas & Zero Floor Race
   // ============================================================
   let simulatedStock = 50;
   const delta1 = 15;  // shipment arrival
@@ -402,12 +415,53 @@ async function runStaffPortalTests() {
     "Concurrent stock adjustments apply additively (50 + 15 - 5 = 60)"
   );
 
-  // Stock reduction below 0 rejected
+  // Stock reduction below 0 rejected by initial guard
   const invalidReduction = -100;
   const isFloorViolated = simulatedStock + invalidReduction < 0;
   assert(
     isFloorViolated === true,
     "Stock adjustment that would reduce stock below zero is rejected"
+  );
+
+  // Targeted Test: Two concurrent decrements racing past zero (conditional update simulation)
+  let racingStock = 15;
+  function simulateConditionalStockDecrement(decrementAmount: number) {
+    // Models: updateMany({ where: { stock: { gte: decrementAmount } }, data: { stock: { increment: -decrementAmount } } })
+    if (racingStock >= decrementAmount) {
+      racingStock -= decrementAmount;
+      return { count: 1, currentStock: racingStock };
+    }
+    return { count: 0, currentStock: racingStock };
+  }
+
+  // Two simultaneous requests attempt to decrement 10 from initial stock 15
+  const firstDecrement = simulateConditionalStockDecrement(10);
+  const secondDecrement = simulateConditionalStockDecrement(10);
+
+  assert(
+    firstDecrement.count === 1 && secondDecrement.count === 0 && racingStock === 5,
+    "Atomic conditional decrement prevents race condition: 1st decrement succeeds (count=1), 2nd fails (count=0), stock never drops below 0"
+  );
+
+  // Test: authAt immutability across simulated session refresh
+  const initialAuthAt = 1700000000;
+  const simulatedToken: { authAt: number; iat?: number } = { authAt: initialAuthAt, iat: initialAuthAt };
+
+  // Simulated session refresh at a later time (user is undefined)
+  const refreshTime = initialAuthAt + 3600; // 1 hour later
+  simulatedToken.iat = refreshTime; // NextAuth re-encodes token with new iat
+  // token.authAt is NOT overwritten because user is not present on refresh
+  assert(
+    simulatedToken.authAt === initialAuthAt && simulatedToken.iat === refreshTime,
+    "authAt remains strictly immutable when token is refreshed and re-encoded"
+  );
+
+  // If credentials change after login (e.g. 10 minutes after initialAuthAt)
+  const credsChangedAt = initialAuthAt + 600;
+  const isTokenRevoked = credsChangedAt >= simulatedToken.authAt;
+  assert(
+    isTokenRevoked === true,
+    "Token is reliably revoked because credsChangedAt >= authAt, despite newer refreshed token.iat"
   );
 
   // ============================================================

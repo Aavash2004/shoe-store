@@ -182,7 +182,7 @@ export async function staffUpdateOrderStatus(payload: {
   if (newStatus === "SHIPPED") {
     try {
       const { sendShippingUpdateEmail } = await import("@/lib/services/email");
-      await sendShippingUpdateEmail(orderId, note);
+      await sendShippingUpdateEmail(orderId, { note, carrier, trackingNumber });
     } catch (emailErr) {
       console.warn("[Staff Order Status] Failed to dispatch email notification:", emailErr);
     }

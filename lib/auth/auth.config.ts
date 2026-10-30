@@ -18,10 +18,9 @@ export const authConfig: NextAuthConfig = {
         token.email = user.email;
         token.name = user.name;
         token.role = (user as any).role;
-      }
-      // Ensure token.iat is always a valid numeric timestamp for staff session age & invalidation
-      if (typeof token.iat !== "number") {
-        token.iat = Math.floor(Date.now() / 1000);
+        // authAt is stamped ONCE at login time when user is present.
+        // It never mutates on session refreshes / token re-encodings.
+        token.authAt = Math.floor(Date.now() / 1000);
       }
       return token;
     },
@@ -31,7 +30,16 @@ export const authConfig: NextAuthConfig = {
         session.user.email = (token.email as string) || session.user.email;
         session.user.name = (token.name as string) || session.user.name;
         session.user.role = (token.role as string) || session.user.role || "CUSTOMER";
-        (session as any).iat = typeof token.iat === "number" ? token.iat : undefined;
+        const numericAuthAt =
+          typeof token.authAt === "number"
+            ? token.authAt
+            : typeof token.iat === "number"
+            ? token.iat
+            : undefined;
+        (session.user as any).authAt = numericAuthAt;
+        (session as any).authAt = numericAuthAt;
+        (session.user as any).iat = typeof token.iat === "number" ? token.iat : numericAuthAt;
+        (session as any).iat = typeof token.iat === "number" ? token.iat : numericAuthAt;
       }
       return session;
     },

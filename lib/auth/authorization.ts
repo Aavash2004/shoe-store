@@ -120,12 +120,13 @@ interface StaffDbCheckResult {
 
 /**
  * Verifies a staff session against the database.
- * Checks: user exists, role is still STAFF, isActive, passwordChangedAt vs token iat, session age.
+ * Checks: user exists, role is still STAFF (or ADMIN if allowAdmin is true), isActive, passwordChangedAt vs token authAt, session age.
  * Returns the result without throwing so callers can decide how to handle it.
  */
 async function verifyStaffFromDb(
   session: { user?: { id?: string; email?: string | null; role?: string } } | null | undefined,
-  tokenIat?: number
+  tokenAuthAt?: number,
+  options?: { allowAdmin?: boolean }
 ): Promise<StaffDbCheckResult> {
   if (!session?.user) {
     return { valid: false, reason: "No session" };
@@ -136,11 +137,6 @@ async function verifyStaffFromDb(
     return { valid: false, reason: "No valid user identifier" };
   }
 
-  // Token iat must be a valid number — fail closed if missing or tampered
-  if (typeof tokenIat !== "number" || isNaN(tokenIat)) {
-    return { valid: false, reason: "Missing or invalid session token timestamp" };
-  }
-
   const dbUser = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -149,6 +145,7 @@ async function verifyStaffFromDb(
       isActive: true,
       mustChangePassword: true,
       passwordChangedAt: true,
+      email: true,
     },
   });
 
@@ -156,26 +153,48 @@ async function verifyStaffFromDb(
     return { valid: false, reason: "User not found" };
   }
 
+  if (!dbUser.isActive) {
+    return { valid: false, reason: "Account deactivated" };
+  }
+
+  // Allow ADMIN to access staff portal by default (unless explicitly disabled)
+  if ((dbUser.role as string) === "ADMIN") {
+    if (options?.allowAdmin !== false && isAdminSession(session)) {
+      return {
+        valid: true,
+        dbUser: {
+          id: dbUser.id,
+          role: dbUser.role,
+          isActive: dbUser.isActive,
+          mustChangePassword: false,
+        },
+      };
+    }
+    return { valid: false, reason: "Role changed" };
+  }
+
   // Role must still be STAFF in DB (catches mid-session demotion)
   if ((dbUser.role as string) !== "STAFF") {
     return { valid: false, reason: "Role changed" };
   }
 
-  if (!dbUser.isActive) {
-    return { valid: false, reason: "Account deactivated" };
+  // tokenAuthAt represents the immutable login moment stamped when credentials were verified
+  // Fail closed if missing or invalid
+  if (typeof tokenAuthAt !== "number" || isNaN(tokenAuthAt)) {
+    return { valid: false, reason: "Missing or invalid session authentication timestamp" };
   }
 
-  // Enforce session max age (10 hours)
-  const sessionAgeS = Math.floor(Date.now() / 1000) - tokenIat;
+  // Enforce session max age (10 hours) hard cap from original sign-in (not sliding on refresh)
+  const sessionAgeS = Math.floor(Date.now() / 1000) - tokenAuthAt;
   if (sessionAgeS > STAFF_SESSION_MAX_AGE_S) {
     return { valid: false, reason: "Session expired" };
   }
 
-  // Check if credentials changed after token was issued (code regeneration or password reset)
+  // Check if credentials changed after authentication (code regeneration, password change, or deactivation)
   // >= ensures that a token issued in the exact same second as a credential change is invalidated
   if (dbUser.passwordChangedAt) {
     const changedAtS = Math.floor(dbUser.passwordChangedAt.getTime() / 1000);
-    if (changedAtS >= tokenIat) {
+    if (changedAtS >= tokenAuthAt) {
       return { valid: false, reason: "Credentials changed" };
     }
   }
@@ -192,23 +211,36 @@ async function verifyStaffFromDb(
 }
 
 /**
- * Ensures user is authenticated, is an active STAFF member, and has completed
+ * Ensures user is authenticated, is an active STAFF member (or ADMIN), and has completed
  * their password change. Reads role and status from the DB, not the JWT.
  *
  * Options:
  *  - allowMustChangePassword: if true, skips the mustChangePassword check.
  *    Used only by the password-change endpoint itself.
+ *  - allowAdmin: if true (default), permits active ADMIN users to view/act on staff portal.
  *
- * Throws on failure. Server action errors are sanitized to prevent enumeration.
+ * Throws on failure. Server action errors are sanitized in production to prevent enumeration.
  */
-export async function requireStaff(options?: { allowMustChangePassword?: boolean }) {
+export async function requireStaff(options?: {
+  allowMustChangePassword?: boolean;
+  allowAdmin?: boolean;
+}) {
   const session = await requireAuth();
-  const tokenIat = (session as any).iat;
+  const tokenAuthAt =
+    (session as any).authAt ??
+    (session.user as any)?.authAt ??
+    (session as any).iat ??
+    (session.user as any)?.iat;
 
-  const check = await verifyStaffFromDb(session, tokenIat);
+  const check = await verifyStaffFromDb(session, tokenAuthAt, options);
   if (!check.valid) {
-    console.warn(`[requireStaff] Access rejected for ${session.user?.id}: ${check.reason}`);
-    throw new Error("Forbidden: Access denied");
+    // Sanitize log: avoid recording user identifiers or secrets in application logs
+    console.warn(`[requireStaff] Access rejected: ${check.reason}`);
+    throw new Error(
+      process.env.NODE_ENV !== "production"
+        ? `Forbidden: Access denied (${check.reason})`
+        : "Forbidden: Access denied"
+    );
   }
 
   if (!options?.allowMustChangePassword && check.dbUser!.mustChangePassword) {
@@ -221,7 +253,10 @@ export async function requireStaff(options?: { allowMustChangePassword?: boolean
 /**
  * API route variant of requireStaff. Returns status codes instead of throwing.
  */
-export async function requireStaffApi(options?: { allowMustChangePassword?: boolean }) {
+export async function requireStaffApi(options?: {
+  allowMustChangePassword?: boolean;
+  allowAdmin?: boolean;
+}) {
   const session = await auth();
   if (!session || !session.user) {
     return {
@@ -232,15 +267,22 @@ export async function requireStaffApi(options?: { allowMustChangePassword?: bool
     };
   }
 
-  const tokenIat = (session as any).iat;
-  const check = await verifyStaffFromDb(session, tokenIat);
+  const tokenAuthAt =
+    (session as any).authAt ??
+    (session.user as any)?.authAt ??
+    (session as any).iat ??
+    (session.user as any)?.iat;
+  const check = await verifyStaffFromDb(session, tokenAuthAt, options);
 
   if (!check.valid) {
-    console.warn(`[requireStaffApi] Access rejected for ${session.user?.id}: ${check.reason}`);
+    console.warn(`[requireStaffApi] Access rejected: ${check.reason}`);
     return {
       authorized: false as const,
       status: 403,
-      error: "Forbidden: Access denied",
+      error:
+        process.env.NODE_ENV !== "production"
+          ? `Forbidden: Access denied (${check.reason})`
+          : "Forbidden: Access denied",
       session: null,
     };
   }

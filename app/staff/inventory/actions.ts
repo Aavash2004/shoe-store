@@ -61,17 +61,37 @@ export async function staffAdjustStock(payload: {
         throw new Error("Product variant not found");
       }
 
-      if (existing.stock + delta < 0) {
-        throw new Error(
-          `Cannot reduce stock by ${Math.abs(delta)}. Current stock is ${existing.stock}.`
-        );
+      // For negative deltas (reduction), enforce zero-floor atomically in the SQL write
+      // This prevents race conditions where concurrent decrements read before either writes
+      if (delta < 0) {
+        const requiredStock = Math.abs(delta);
+        const updateResult = await tx.productVariant.updateMany({
+          where: {
+            id: variantId,
+            stock: { gte: requiredStock },
+          },
+          data: {
+            stock: { increment: delta },
+          },
+        });
+
+        if (updateResult.count === 0) {
+          throw new Error(
+            `Insufficient stock to reduce by ${requiredStock}. Stock may have been modified by another action.`
+          );
+        }
+      } else {
+        await tx.productVariant.update({
+          where: { id: variantId },
+          data: {
+            stock: { increment: delta },
+          },
+        });
       }
 
-      const updated = await tx.productVariant.update({
+      const updated = await tx.productVariant.findUniqueOrThrow({
         where: { id: variantId },
-        data: {
-          stock: { increment: delta },
-        },
+        select: { stock: true },
       });
 
       await tx.adminActivityLog.create({

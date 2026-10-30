@@ -27,16 +27,17 @@ async function main() {
           email: adminEmail,
           password: hashedPassword,
           role: "ADMIN",
+          isActive: true,
         },
       });
       console.log(`Admin account created: ${adminEmail}`);
     } else {
-      if (existingAdmin.role !== "ADMIN") {
+      if (existingAdmin.role !== "ADMIN" || !existingAdmin.isActive) {
         await prisma.user.update({
           where: { email: adminEmail },
-          data: { role: "ADMIN" },
+          data: { role: "ADMIN", isActive: true },
         });
-        console.log(`Updated existing user ${adminEmail} to ADMIN role`);
+        console.log(`Updated existing user ${adminEmail} to active ADMIN role`);
       } else {
         console.log(`Admin account already exists: ${adminEmail}`);
       }

@@ -49,9 +49,13 @@ export default async function StaffLayout({
   // For STAFF users: verify against DB (role, isActive, passwordChangedAt, session age)
   if (isStaff) {
     const userId = (session.user as any).id;
-    const tokenIat = (session as any).iat;
+    const tokenAuthAt =
+      (session as any).authAt ??
+      (session.user as any)?.authAt ??
+      (session as any).iat ??
+      (session.user as any)?.iat;
 
-    if (!userId || typeof tokenIat !== "number") {
+    if (!userId || typeof tokenAuthAt !== "number") {
       redirect("/staff/login" as any);
     }
 
@@ -76,16 +80,16 @@ export default async function StaffLayout({
       redirect("/staff/login" as any);
     }
 
-    // Session expired (10 hours)
-    const sessionAgeS = Math.floor(Date.now() / 1000) - tokenIat;
+    // Enforce hard cap session age (10 hours) from login timestamp
+    const sessionAgeS = Math.floor(Date.now() / 1000) - tokenAuthAt;
     if (sessionAgeS > 10 * 60 * 60) {
       redirect("/staff/login" as any);
     }
 
-    // Password was changed after or during token issue (code regeneration)
+    // Password was changed after or during authentication (code regeneration)
     if (dbUser.passwordChangedAt) {
       const changedAtS = Math.floor(dbUser.passwordChangedAt.getTime() / 1000);
-      if (changedAtS >= tokenIat) {
+      if (changedAtS >= tokenAuthAt) {
         redirect("/staff/login" as any);
       }
     }

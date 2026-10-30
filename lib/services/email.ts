@@ -453,7 +453,16 @@ function escapeHtml(str: string): string {
 /**
  * Send Shipping / Status Update email
  */
-export async function sendShippingUpdateEmail(orderId: string, statusNote?: string) {
+export async function sendShippingUpdateEmail(
+  orderId: string,
+  shippingDetails?:
+    | {
+        note?: string;
+        carrier?: string;
+        trackingNumber?: string;
+      }
+    | string
+) {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -474,17 +483,29 @@ export async function sendShippingUpdateEmail(orderId: string, statusNote?: stri
     }
 
     const recipientName = order.user?.name || order.guestName || "Valued Customer";
-    const safeNote = statusNote ? escapeHtml(statusNote) : null;
+
+    const note =
+      typeof shippingDetails === "string" ? shippingDetails : shippingDetails?.note;
+    const carrier =
+      typeof shippingDetails === "object" ? shippingDetails?.carrier : undefined;
+    const trackingNumber =
+      typeof shippingDetails === "object" ? shippingDetails?.trackingNumber : undefined;
+
+    const safeNote = note ? escapeHtml(note) : null;
+    const safeCarrier = carrier ? escapeHtml(carrier) : null;
+    const safeTracking = trackingNumber ? escapeHtml(trackingNumber) : null;
 
     const html = wrapEmailHtml(
       `Update on Order #${order.orderNumber}`,
       `
       <h1 style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0 0 8px 0;">Order Status Update</h1>
-      <p style="color: #cbd5e1; font-size: 14px; margin: 0 0 20px 0;">Hello ${recipientName}, your order status has been updated to <strong style="color: #38bdf8;">${order.status}</strong>.</p>
+      <p style="color: #cbd5e1; font-size: 14px; margin: 0 0 20px 0;">Hello ${escapeHtml(recipientName)}, your order status has been updated to <strong style="color: #38bdf8;">${order.status}</strong>.</p>
       
       <div style="background-color: #0f141e; border: 1px solid #283347; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
         <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;">Order Number: <strong style="color: #ffffff;">#${order.orderNumber}</strong></p>
         <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;">Current Status: <strong style="color: #38bdf8;">${order.status}</strong></p>
+        ${safeCarrier ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;">Carrier: <strong style="color: #ffffff;">${safeCarrier}</strong></p>` : ""}
+        ${safeTracking ? `<p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;">Tracking Number: <code style="color: #38bdf8; font-family: monospace;">${safeTracking}</code></p>` : ""}
         ${safeNote ? `<p style="margin: 0; font-size: 13px; color: #e2e8f0; background-color: #1a2233; padding: 10px 14px; border-radius: 6px; border-left: 3px solid #38bdf8;">Note: ${safeNote}</p>` : ""}
       </div>
 
@@ -496,6 +517,7 @@ export async function sendShippingUpdateEmail(orderId: string, statusNote?: stri
       `
     );
 
+    // Subject uses ONLY orderNumber and enum status — user input is never included in subject
     return sendTransactionalEmail({
       to: recipientEmail,
       subject: `Order #${order.orderNumber} Status: ${order.status} - ABXV Footwear`,

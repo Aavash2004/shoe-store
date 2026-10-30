@@ -51,6 +51,9 @@ function normalizeKey(prefix: string, value: string): string {
   return `rl:login:failed:${prefix}:${value.trim().toLowerCase()}`;
 }
 
+let consecutiveRedisErrors = 0;
+const MAX_CONSECUTIVE_REDIS_ERRORS = 3;
+
 /**
  * Checks if either the IP or email has exceeded max failed attempts.
  */
@@ -70,6 +73,8 @@ export async function checkLoginLockout(
         redisClient.ttl(emailKey),
       ]);
 
+      consecutiveRedisErrors = 0; // Reset on successful communication
+
       const ipFailed = (ipCount ?? 0) >= MAX_FAILED_ATTEMPTS;
       const emailFailed = (emailCount ?? 0) >= MAX_FAILED_ATTEMPTS;
 
@@ -79,7 +84,16 @@ export async function checkLoginLockout(
       }
       return { isLockedOut: false, retryAfterSeconds: 0 };
     } catch (err) {
-      console.warn("[RateLimit] Redis get error, using memory fallback:", err);
+      consecutiveRedisErrors++;
+      console.warn(`[RateLimit] Redis error (failures: ${consecutiveRedisErrors}):`, err);
+      // In production, fail-closed if Redis is down/unreachable to prevent unthrottled brute force
+      if (
+        process.env.NODE_ENV === "production" &&
+        consecutiveRedisErrors >= MAX_CONSECUTIVE_REDIS_ERRORS
+      ) {
+        console.error("🚨 [RateLimit FAIL-CLOSED] Redis service unavailable. Blocking login attempts for defense.");
+        return { isLockedOut: true, retryAfterSeconds: 60 };
+      }
     }
   }
 
